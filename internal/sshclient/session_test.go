@@ -293,14 +293,13 @@ func TestRunTimeoutAndNetworkCleanupExactlyOnceMatrix(t *testing.T) {
 			t.Run(test.name, func(t *testing.T) {
 				local := terminal.NewFake(terminal.Size{Columns: 80, Rows: 24})
 				local.QueueResize()
-				ctx := context.Background()
-				cancel := func() {}
+				var ctx context.Context = context.Background()
+				triggerTimeout := func() {}
 				if test.timeout {
-					var cancelContext context.CancelFunc
-					ctx, cancelContext = context.WithTimeout(ctx, time.Millisecond)
-					cancel = cancelContext
+					deadline := newSC016Context()
+					ctx = deadline
+					triggerTimeout = func() { deadline.trigger(context.DeadlineExceeded) }
 				}
-				defer cancel()
 				var sessionCloses, transportCloses, connectionCloses, authCloses atomic.Int32
 				closed := make(chan struct{})
 				remote := &fakeSession{
@@ -308,6 +307,7 @@ func TestRunTimeoutAndNetworkCleanupExactlyOnceMatrix(t *testing.T) {
 						if !test.timeout {
 							return test.waitErr
 						}
+						triggerTimeout()
 						<-closed
 						return context.DeadlineExceeded
 					},
