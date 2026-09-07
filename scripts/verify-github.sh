@@ -57,6 +57,12 @@ check_equal 'description' 'A terminal-native SSH client with a TUI' \
 check_equal 'visibility' "$expected_visibility" "$($gh_bin api "repos/$repository" --jq '.visibility')"
 check_equal 'topics' 'cli,go,ssh,ssh-client,terminal,tui' \
   "$($gh_bin api "repos/$repository/topics" --jq '.names | sort | join(",")')"
+check_equal 'Actions policy' true \
+  "$($gh_bin api "repos/$repository/actions/permissions" --jq '.enabled and (.allowed_actions == "selected") and (.sha_pinning_required == true)')"
+check_equal 'selected Actions policy' true \
+  "$($gh_bin api "repos/$repository/actions/permissions/selected-actions" --jq '.github_owned_allowed and .verified_allowed and (.patterns_allowed == ["cachix/install-nix-action@*"])')"
+check_equal 'workflow permissions' true \
+  "$($gh_bin api "repos/$repository/actions/permissions/workflow" --jq '(.default_workflow_permissions == "read") and (.can_approve_pull_request_reviews == false)')"
 
 for feature in secret_scanning secret_scanning_push_protection; do
   feature_status=$(
@@ -75,11 +81,26 @@ for feature in secret_scanning secret_scanning_push_protection; do
   esac
 done
 
-"$gh_bin" api "repos/$repository/private-vulnerability-reporting" >/dev/null
+if ! "$gh_bin" api "repos/$repository/private-vulnerability-reporting" >/dev/null 2>&1; then
+  if [ "$expected_visibility" = private ]; then
+    printf 'warning: private vulnerability reporting is unavailable before publication\n' >&2
+  else
+    printf 'verification failed: private vulnerability reporting is not enabled\n' >&2
+    exit 1
+  fi
+fi
 "$gh_bin" api "repos/$repository/vulnerability-alerts" >/dev/null
+ruleset_id=$(
+  "$gh_bin" api "repos/$repository/rulesets" \
+    --jq '.[] | select(.name == "Protect main") | .id'
+)
+[ -n "$ruleset_id" ] || {
+  printf 'verification failed: Protect main ruleset is missing\n' >&2
+  exit 1
+}
 rules_ok=$(
-  "$gh_bin" api "repos/$repository/rulesets" --jq \
-    'map(select(.name == "Protect main")) | .[0] | (.enforcement == "active") and (any(.rules[]; .type == "deletion")) and (any(.rules[]; .type == "non_fast_forward")) and (any(.rules[]; .type == "pull_request" and .parameters.required_approving_review_count == 0 and .parameters.required_review_thread_resolution == true)) and (any(.rules[]; .type == "required_status_checks" and any(.parameters.required_status_checks[]; .context == "CI / required")))'
+  "$gh_bin" api "repos/$repository/rulesets/$ruleset_id" --jq \
+    '(.name == "Protect main") and (.enforcement == "active") and (any(.rules[]; .type == "deletion")) and (any(.rules[]; .type == "non_fast_forward")) and (any(.rules[]; .type == "pull_request" and .parameters.required_approving_review_count == 0 and .parameters.required_review_thread_resolution == true)) and (any(.rules[]; .type == "required_status_checks" and any(.parameters.required_status_checks[]; (.context == "required") and (.integration_id == 15368))))'
 )
 check_equal 'main ruleset' true "$rules_ok"
 
