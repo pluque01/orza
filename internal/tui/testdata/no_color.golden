@@ -1,0 +1,15 @@
+Orza  [READY]
+Catalog  /
+
+> alpha  alice@alpha.example:22  [agent]
+
+Details
+Path: /alpha
+ID: 11111111111111111111111111111111
+Revision: 1
+Endpoint: alpha.example:22
+User: alice
+Method: agent
+
+f folder  n connection  enter open  e edit  m move  d delete  c connect
+r reload  ? help  q quit

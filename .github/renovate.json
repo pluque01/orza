@@ -1,0 +1,93 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "enabledManagers": [
+    "gomod",
+    "github-actions",
+    "nix",
+    "custom.regex"
+  ],
+  "dependencyDashboard": true,
+  "minimumReleaseAge": "3 days",
+  "prConcurrentLimit": 5,
+  "branchConcurrentLimit": 5,
+  "automerge": false,
+  "platformAutomerge": false,
+  "vulnerabilityAlerts": {
+    "enabled": false
+  },
+  "separateMajorMinor": true,
+  "separateMultipleMajor": true,
+  "prBodyNotes": [
+    "Old and new versions are listed in the update table above. Every affected manifest, lock, workflow, and generated vendor file is listed on the pull request Files changed tab. This proposal uses ordinary CI and requires explicit maintainer approval."
+  ],
+  "packageRules": [
+    {
+      "description": "Regenerate the complete Go module and vendor graph",
+      "matchManagers": ["gomod"],
+      "postUpdateOptions": ["gomodTidy"],
+      "gomodSkipVendor": false
+    },
+    {
+      "description": "Group compatible Go updates only with Go updates",
+      "matchManagers": ["gomod"],
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+      "groupName": "compatible Go dependencies"
+    },
+    {
+      "description": "Group compatible Actions updates and preserve SHA pins and version comments",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+      "groupName": "compatible GitHub Actions",
+      "rangeStrategy": "pin"
+    },
+    {
+      "description": "Group compatible native Nix updates without mixing security data",
+      "matchManagers": ["nix"],
+      "matchPackageNames": ["!nixpkgs", "!vulndb", "!golang/vulndb"],
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+      "groupName": "compatible Nix dependencies"
+    },
+    {
+      "description": "Keep nixpkgs updates independent",
+      "matchManagers": ["nix"],
+      "matchPackageNames": ["nixpkgs"],
+      "groupName": null
+    },
+    {
+      "description": "Keep vulnerability database updates independent",
+      "matchManagers": ["custom.regex"],
+      "matchPackageNames": ["golang/vulndb"],
+      "groupName": null,
+      "postUpgradeTasks": {
+        "commands": ["nix flake lock --update-input vulndb"],
+        "fileFilters": ["flake.nix", "flake.lock"],
+        "executionMode": "update"
+      }
+    },
+    {
+      "description": "Avoid duplicate native Nix proposals for the explicit vulndb revision",
+      "matchManagers": ["nix"],
+      "matchPackageNames": ["vulndb", "golang/vulndb"],
+      "enabled": false
+    },
+    {
+      "description": "Isolate every major and require dashboard approval",
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true,
+      "groupName": null
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Fallback only for the explicit vulndb commit in flake.nix",
+      "managerFilePatterns": ["/^flake\\.nix$/"],
+      "matchStrings": [
+        "url\\s*=\\s*\"github:golang/vulndb/(?<currentDigest>[0-9a-f]{40})\";"
+      ],
+      "depNameTemplate": "golang/vulndb",
+      "packageNameTemplate": "golang/vulndb",
+      "datasourceTemplate": "github-commits"
+    }
+  ]
+}

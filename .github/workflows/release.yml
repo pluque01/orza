@@ -1,0 +1,181 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  eligibility:
+    name: release eligibility
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      go-version: ${{ steps.release.outputs.go-version }}
+    steps:
+      - name: Check out complete source history
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate tag, toolchain, and main ancestry
+        id: release
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_REVISION: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || {
+            printf 'release eligibility: tag must be exact vMAJOR.MINOR.PATCH without leading zeroes\n' >&2
+            exit 1
+          }
+          go_version=$(awk -F= '$1 == "GO_VERSION" { print $2 }' .github/release.env)
+          [[ "$go_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            printf 'release eligibility: .github/release.env has no exact Go version\n' >&2
+            exit 1
+          }
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$RELEASE_REVISION" refs/remotes/origin/main || {
+            printf 'release eligibility: tagged revision is not contained in origin/main\n' >&2
+            exit 1
+          }
+          printf 'version=%s\n' "${RELEASE_TAG#v}" >>"$GITHUB_OUTPUT"
+          printf 'go-version=%s\n' "$go_version" >>"$GITHUB_OUTPUT"
+      - name: Require successful CI and no published duplicate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_REVISION: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          passed=$(gh api -H 'Accept: application/vnd.github+json' \
+            "repos/$REPOSITORY/commits/$RELEASE_REVISION/check-runs" \
+            --jq '[.check_runs[] | select(.name == "required" and .status == "completed" and .conclusion == "success")] | length')
+          [ "$passed" -ge 1 ] || {
+            printf 'release eligibility: required CI check is absent or failed for %s\n' "$RELEASE_REVISION" >&2
+            exit 1
+          }
+          existing=$(gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft' 2>/dev/null || true)
+          [ "$existing" != false ] || {
+            printf 'release eligibility: a published release already exists for %s\n' "$RELEASE_TAG" >&2
+            exit 1
+          }
+          if [ "$existing" = true ]; then
+            printf 'release eligibility: stale draft will be replaced after all builds pass\n'
+          fi
+
+  build:
+    name: build (${{ matrix.target }})
+    needs: eligibility
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-amd64
+            runner: ubuntu-24.04
+            goos: linux
+            goarch: amd64
+            cgo: '0'
+          - target: linux-arm64
+            runner: ubuntu-24.04
+            goos: linux
+            goarch: arm64
+            cgo: '0'
+          - target: windows-amd64
+            runner: ubuntu-24.04
+            goos: windows
+            goarch: amd64
+            cgo: '0'
+          - target: windows-arm64
+            runner: ubuntu-24.04
+            goos: windows
+            goarch: arm64
+            cgo: '0'
+          - target: darwin-amd64
+            runner: macos-15-intel
+            goos: darwin
+            goarch: amd64
+            cgo: '1'
+          - target: darwin-arm64
+            runner: macos-15
+            goos: darwin
+            goarch: arm64
+            cgo: '1'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install the pinned Go toolchain
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version: ${{ needs.eligibility.outputs.go-version }}
+          cache: false
+      - name: Build vendored versioned executable
+        env:
+          CGO_ENABLED: ${{ matrix.cgo }}
+          GOARCH: ${{ matrix.goarch }}
+          GOOS: ${{ matrix.goos }}
+          GOTOOLCHAIN: local
+          RELEASE_VERSION: ${{ needs.eligibility.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          executable=build/orza
+          if [ "$GOOS" = windows ]; then executable=build/orza.exe; fi
+          go build -mod=vendor -trimpath -buildvcs=true \
+            -ldflags "-X main.version=$RELEASE_VERSION" -o "$executable" ./cmd/orza
+      - name: Retain compiled target for one day
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: compiled-${{ matrix.target }}
+          path: build/orza*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: verify and publish
+    needs: [eligibility, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Check out release tooling
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Download all six compiled targets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: compiled-*
+          path: builds
+      - name: Assemble, verify, and publish the complete release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_REVISION: ${{ github.sha }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          for target in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd64 windows-arm64; do
+            executable=orza
+            if [[ "$target" == windows-* ]]; then executable=orza.exe; fi
+            bash scripts/package-release.sh --tag "$RELEASE_TAG" --target "$target" \
+              --binary "builds/compiled-$target/$executable" --output dist
+          done
+          bash scripts/verify-release.sh --tag "$RELEASE_TAG" --directory dist --write-manifest
+          bash scripts/publish-release.sh --tag "$RELEASE_TAG" --revision "$RELEASE_REVISION" --directory dist

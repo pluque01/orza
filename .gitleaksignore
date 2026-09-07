@@ -1,0 +1,14 @@
+# Reviewed non-secret UI/test literals.
+internal/tui/actions.go:generic-api-key:196
+tests/integration/security_test.go:generic-api-key:81
+
+# Generated modernc SQLite Windows API names and public constants.
+vendor/modernc.org/sqlite/lib/sqlite_g_0000000000060000.go:generic-api-key:1203
+vendor/modernc.org/sqlite/lib/sqlite_g_0000000000060000.go:generic-api-key:1285
+vendor/modernc.org/sqlite/lib/sqlite_g_0000000000060000.go:generic-api-key:8387
+vendor/modernc.org/sqlite/lib/sqlite_g_0000000000060000.go:generic-api-key:29283
+vendor/modernc.org/sqlite/lib/sqlite_g_0000000000060000.go:generic-api-key:31257
+vendor/modernc.org/sqlite/lib/sqlite_g_0000000000060000.go:generic-api-key:74005
+vendor/modernc.org/sqlite/lib/sqlite_g_0000000000060000.go:generic-api-key:75630
+vendor/modernc.org/sqlite/lib/sqlite_g_0000000000060000.go:generic-api-key:83686
+vendor/modernc.org/sqlite/lib/sqlite_g_0000000000060000.go:generic-api-key:116326

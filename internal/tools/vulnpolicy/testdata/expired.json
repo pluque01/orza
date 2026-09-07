@@ -1,0 +1,10 @@
+[
+  {
+    "id": "GO-2026-5972",
+    "owner": "security-maintainer",
+    "rationale": "The locked toolchain did not contain a compatible correction.",
+    "mitigation": "Review exposure on every database update.",
+    "issue": "https://example.invalid/issues/5972",
+    "expires": "2026-09-07"
+  }
+]

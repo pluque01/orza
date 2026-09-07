@@ -1,0 +1,15 @@
+# Sole-maintainer ownership for publication and supply-chain controls.
+/.github/ @pluque01
+/scripts/ @pluque01
+/flake.nix @pluque01
+/flake.lock @pluque01
+/go.mod @pluque01
+/go.sum @pluque01
+/vendor/ @pluque01
+/.gitleaks.toml @pluque01
+/.vulnerability-exceptions.json @pluque01
+/cmd/vulncheck-policy/ @pluque01
+/internal/tools/vulnpolicy/ @pluque01
+/SECURITY.md @pluque01
+/CONTRIBUTING.md @pluque01
+/LICENSE @pluque01

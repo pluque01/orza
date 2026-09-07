@@ -1,0 +1,18 @@
+[
+  {
+    "id": "GO-2026-5972",
+    "owner": "security-maintainer",
+    "rationale": "The locked toolchain does not yet contain a compatible correction.",
+    "mitigation": "Review exposure on every database update.",
+    "issue": "https://example.invalid/issues/5972",
+    "expires": "2026-10-04"
+  },
+  {
+    "id": "GO-2026-5972",
+    "owner": "security-maintainer",
+    "rationale": "Duplicate synthetic record.",
+    "mitigation": "Review exposure on every database update.",
+    "issue": "https://example.invalid/issues/5972",
+    "expires": "2026-10-04"
+  }
+]

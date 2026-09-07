@@ -1,0 +1,24 @@
+Orza  [READY]
+Catalog  /
+
+  alpha  alice@alpha.example:22  [agent]
+> beta  (default)@beta.example:2202  [key]
+
+Details
+Path: /beta
+ID: 22222222222222222222222222222222
+Revision: 3
+Endpoint: beta.example:2202
+User: (default)
+Method: key
+Identity: ~/.ssh/id_ed25519
+
+Help
+up/k, down/j  move selection
+enter          open folder or connection details
+f / n          new folder / connection
+e / m / d      edit / move / delete selected
+c              connect selected connection
+esc            parent folder
+r              reload catalog
+?, esc         close help  q, ctrl+c quit

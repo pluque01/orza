@@ -1,0 +1,4 @@
+title = "Orza publication secret scanning"
+
+[extend]
+useDefault = true

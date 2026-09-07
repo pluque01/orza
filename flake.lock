@@ -1,0 +1,62 @@
+{
+  "nodes": {
+    "goNixpkgs": {
+      "locked": {
+        "lastModified": 1786683672,
+        "narHash": "sha256-axQZUhZtd5WIndO8Av8nAVytN+Eae7w2iAp8tPu2KZc=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "a5d32f8c86e7ca9388fd8b75758168f30174b218",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "a5d32f8c86e7ca9388fd8b75758168f30174b218",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1788645589,
+        "narHash": "sha256-efzwl1LfOTAneLY06gmqeYS4vroDR1utvBqstsdvZyQ=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "8b6d0ac8759bbc2499386ef5bcd7f11ee7f7ff52",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "8b6d0ac8759bbc2499386ef5bcd7f11ee7f7ff52",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "goNixpkgs": "goNixpkgs",
+        "nixpkgs": "nixpkgs",
+        "vulndb": "vulndb"
+      }
+    },
+    "vulndb": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1785255188,
+        "narHash": "sha256-D6MMH8oYWj4iKpQFFNumipA5/ps4ZN2DfNgP0Sn5XqM=",
+        "owner": "golang",
+        "repo": "vulndb",
+        "rev": "4a2cb55ee69f6a16c07b5b551676eca8f2065019",
+        "type": "github"
+      },
+      "original": {
+        "owner": "golang",
+        "repo": "vulndb",
+        "rev": "4a2cb55ee69f6a16c07b5b551676eca8f2065019",
+        "type": "github"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
