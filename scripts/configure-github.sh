@@ -21,7 +21,9 @@ ruleset='{"name":"Protect main","target":"branch","enforcement":"active","condit
 "$gh_bin" api --method PUT "repos/$repository/topics" \
   -f 'names[]=cli' -f 'names[]=go' -f 'names[]=ssh' -f 'names[]=ssh-client' \
   -f 'names[]=terminal' -f 'names[]=tui' >/dev/null
-"$gh_bin" api --method PUT "repos/$repository/private-vulnerability-reporting" >/dev/null
+if ! "$gh_bin" api --method PUT "repos/$repository/private-vulnerability-reporting" >/dev/null 2>&1; then
+  printf 'warning: private vulnerability reporting is unavailable; enable it after publication\n' >&2
+fi
 "$gh_bin" api --method PUT "repos/$repository/vulnerability-alerts" >/dev/null
 
 # Private repositories without the relevant GitHub plan may reject these controls.

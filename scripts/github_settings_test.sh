@@ -14,7 +14,7 @@ export gh_log curl_log
 stub_command gh <<'EOF'
 printf '%s\n' '---' >>"$gh_log"
 for argument in "$@"; do printf '<%s>\n' "$argument" >>"$gh_log"; done
-if [[ " $* " == *" --method POST "* && " $* " == *"repos/pluque01/orza/rulesets"* ]]; then
+if [[ " $* " == *" --input - "* && " $* " == *"repos/pluque01/orza/rulesets"* ]]; then
   payload=$(cat)
   printf '<payload=%s>\n' "$payload" >>"$gh_log"
 fi
@@ -24,10 +24,13 @@ if [ "$query" = '.description' ]; then printf 'A terminal-native SSH client with
 if [ "$query" = '.visibility' ]; then printf '%s\n' "${mock_visibility:-private}"; exit; fi
 if [ "$query" = '.names | sort | join(",")' ]; then printf 'cli,go,ssh,ssh-client,terminal,tui\n'; exit; fi
 if [[ "$query" == '.security_and_analysis.'* ]]; then printf 'enabled\n'; exit; fi
-if [[ "$query" == *'select(.name == "Protect main") | .id'* ]]; then exit; fi
+if [[ "$query" == *'select(.name == "Protect main") | .id'* ]]; then printf '123\n'; exit; fi
 if [[ "$query" == *'Protect main'* ]]; then printf 'true\n'; exit; fi
 case "$*" in
-  *'/private-vulnerability-reporting'*) printf 'enabled\n' ;;
+  *'/private-vulnerability-reporting'*)
+    [ "${mock_private_reporting:-enabled}" = enabled ] || exit 1
+    printf 'enabled\n'
+    ;;
   *'/vulnerability-alerts'*) printf 'enabled\n' ;;
   *'/rulesets'*)
     printf '%s\n' '[{"name":"Protect main","enforcement":"active","rules":[{"type":"deletion"},{"type":"non_fast_forward"},{"type":"pull_request","parameters":{"required_approving_review_count":0,"required_review_thread_resolution":true}},{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"CI / required"}]}}]}]'
@@ -72,6 +75,19 @@ assert_not_contains "$configure_calls" '<visibility='
 assert_contains "$(<"$curl_log")" 'https://api.github.com/repos/pluque01/orza'
 export mock_visibility=public mock_http_status=200
 "$script_dir/verify-github.sh" --expect-visibility public
+
+export mock_visibility=private mock_http_status=404 mock_private_reporting=unavailable
+output=$("$script_dir/configure-github.sh" 2>&1)
+assert_contains "$output" 'private vulnerability reporting is unavailable'
+output=$("$script_dir/verify-github.sh" --expect-visibility private 2>&1)
+assert_contains "$output" 'private vulnerability reporting is unavailable before publication'
+export mock_visibility=public mock_http_status=200
+set +e
+"$script_dir/verify-github.sh" --expect-visibility public >/dev/null 2>&1
+unavailable_public_status=$?
+set -e
+assert_eq 1 "$unavailable_public_status"
+unset mock_private_reporting
 
 marker=$TEST_TMPDIR/hostile-side-effect
 export ORZA_REPOSITORY="pluque01/orza;touch $marker"

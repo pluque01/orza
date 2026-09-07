@@ -75,11 +75,26 @@ for feature in secret_scanning secret_scanning_push_protection; do
   esac
 done
 
-"$gh_bin" api "repos/$repository/private-vulnerability-reporting" >/dev/null
+if ! "$gh_bin" api "repos/$repository/private-vulnerability-reporting" >/dev/null 2>&1; then
+  if [ "$expected_visibility" = private ]; then
+    printf 'warning: private vulnerability reporting is unavailable before publication\n' >&2
+  else
+    printf 'verification failed: private vulnerability reporting is not enabled\n' >&2
+    exit 1
+  fi
+fi
 "$gh_bin" api "repos/$repository/vulnerability-alerts" >/dev/null
+ruleset_id=$(
+  "$gh_bin" api "repos/$repository/rulesets" \
+    --jq '.[] | select(.name == "Protect main") | .id'
+)
+[ -n "$ruleset_id" ] || {
+  printf 'verification failed: Protect main ruleset is missing\n' >&2
+  exit 1
+}
 rules_ok=$(
-  "$gh_bin" api "repos/$repository/rulesets" --jq \
-    'map(select(.name == "Protect main")) | .[0] | (.enforcement == "active") and (any(.rules[]; .type == "deletion")) and (any(.rules[]; .type == "non_fast_forward")) and (any(.rules[]; .type == "pull_request" and .parameters.required_approving_review_count == 0 and .parameters.required_review_thread_resolution == true)) and (any(.rules[]; .type == "required_status_checks" and any(.parameters.required_status_checks[]; .context == "CI / required")))'
+  "$gh_bin" api "repos/$repository/rulesets/$ruleset_id" --jq \
+    '(.name == "Protect main") and (.enforcement == "active") and (any(.rules[]; .type == "deletion")) and (any(.rules[]; .type == "non_fast_forward")) and (any(.rules[]; .type == "pull_request" and .parameters.required_approving_review_count == 0 and .parameters.required_review_thread_resolution == true)) and (any(.rules[]; .type == "required_status_checks" and any(.parameters.required_status_checks[]; .context == "CI / required")))'
 )
 check_equal 'main ruleset' true "$rules_ok"
 
