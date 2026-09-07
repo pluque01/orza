@@ -36,7 +36,7 @@ case "$*" in
     ;;
   *'/vulnerability-alerts'*) printf 'enabled\n' ;;
   *'/rulesets'*)
-    printf '%s\n' '[{"name":"Protect main","enforcement":"active","rules":[{"type":"deletion"},{"type":"non_fast_forward"},{"type":"pull_request","parameters":{"required_approving_review_count":0,"required_review_thread_resolution":true}},{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"CI / required"}]}}]}]'
+    printf '%s\n' '[{"name":"Protect main","enforcement":"active","rules":[{"type":"deletion"},{"type":"non_fast_forward"},{"type":"pull_request","parameters":{"required_approving_review_count":0,"required_review_thread_resolution":true}},{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"required","integration_id":15368}]}}]}]'
     ;;
   *'/topics'*) printf '%s\n' '{"names":["cli","go","ssh","ssh-client","terminal","tui"]}' ;;
   *'repos/pluque01/orza'*) printf '%s\n' '{"name":"orza","description":"A terminal-native SSH client with a TUI","visibility":"private"}' ;;
@@ -73,7 +73,7 @@ assert_contains "$configure_calls" '<security_and_analysis[secret_scanning][stat
 assert_contains "$configure_calls" '<security_and_analysis[secret_scanning_push_protection][status]=enabled>'
 assert_contains "$configure_calls" '<repos/pluque01/orza/rulesets>'
 assert_contains "$configure_calls" '"required_approving_review_count":0'
-assert_contains "$configure_calls" '"CI / required"'
+assert_contains "$configure_calls" '"context":"required","integration_id":15368'
 assert_contains "$configure_calls" '"type":"non_fast_forward"'
 assert_contains "$configure_calls" '"type":"deletion"'
 assert_not_contains "$configure_calls" '<visibility='

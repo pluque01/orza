@@ -100,7 +100,7 @@ ruleset_id=$(
 }
 rules_ok=$(
   "$gh_bin" api "repos/$repository/rulesets/$ruleset_id" --jq \
-    '(.name == "Protect main") and (.enforcement == "active") and (any(.rules[]; .type == "deletion")) and (any(.rules[]; .type == "non_fast_forward")) and (any(.rules[]; .type == "pull_request" and .parameters.required_approving_review_count == 0 and .parameters.required_review_thread_resolution == true)) and (any(.rules[]; .type == "required_status_checks" and any(.parameters.required_status_checks[]; .context == "CI / required")))'
+    '(.name == "Protect main") and (.enforcement == "active") and (any(.rules[]; .type == "deletion")) and (any(.rules[]; .type == "non_fast_forward")) and (any(.rules[]; .type == "pull_request" and .parameters.required_approving_review_count == 0 and .parameters.required_review_thread_resolution == true)) and (any(.rules[]; .type == "required_status_checks" and any(.parameters.required_status_checks[]; (.context == "required") and (.integration_id == 15368))))'
 )
 check_equal 'main ruleset' true "$rules_ok"
 

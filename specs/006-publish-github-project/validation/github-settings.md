@@ -31,7 +31,8 @@
 
 Ruleset `Protect main` is active for the default branch with no bypass actors. It blocks deletion and
 non-fast-forward pushes, requires pull requests with resolved conversations and zero approvals for the
-single-maintainer state, requires branches to be current, and requires `CI / required`.
+single-maintainer state, requires branches to be current, and requires the `required` check from the
+GitHub Actions integration. GitHub presents that aggregate check under the `CI` workflow.
 
 ## Hosted CI
 
