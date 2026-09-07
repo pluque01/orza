@@ -1,7 +1,7 @@
 # Quality Gate Results
 
 **Date:** 2026-09-07
-**Overall status:** local reproducible checks passed; Git/hosted validation pending
+**Overall status:** local reproducible checks and Git validation passed; hosted validation pending
 
 ## Passed
 
@@ -19,6 +19,8 @@
 - `gitleaks dir --redact --config .gitleaks.toml .` (no leaks found)
 - Pinned vulnerability policy through the Nix flake
 - Live vulnerability policy through `scripts/check-vulnerabilities.sh live`
+- `scripts/check-vendor.sh` in `nix develop` after the initial commit
+- `scripts/prepublish.sh --repository . --history new` in `nix develop`
 
 The direct Go checks ran inside `nix develop`; the host environment does not expose `go` on `PATH`.
 The reproducible environment reports `go version go1.26.6 linux/amd64`. The complete
@@ -39,12 +41,18 @@ A regression fixture covers this protocol behavior.
 
 No vulnerability exception was added.
 
+## Git Validation
+
+- A new `main` history was initialized because no authoritative Git history was supplied.
+- Root commit `badb0159f566ae580a26ce13048e5fdf40fe5631` was created with the authorized author identity.
+- The committed dependency graph regenerates without changes, and the all-ref history scan passes.
+
 ## Not Run
 
-- Clean-checkout vendor regeneration and history scanning require Git metadata, which is not present.
 - Hosted CI, native Darwin release builds, GitHub repository settings, and release publication require
   a connected private repository and authenticated GitHub access.
 
-The vulnerability blocker is resolved. Tasks T048-T055 still require the clean Git history, hosted
-checks, participant study, repository-owner authorization, and public release evidence specified by
-the task plan. No public visibility or release operation was attempted.
+The vulnerability blocker and local publication gates are resolved. Tasks T051-T055 still require
+private GitHub configuration, hosted checks, the participant study, repository-owner authorization,
+and public release evidence specified by the task plan. No public visibility or release operation was
+attempted.
