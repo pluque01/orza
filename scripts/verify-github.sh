@@ -57,6 +57,12 @@ check_equal 'description' 'A terminal-native SSH client with a TUI' \
 check_equal 'visibility' "$expected_visibility" "$($gh_bin api "repos/$repository" --jq '.visibility')"
 check_equal 'topics' 'cli,go,ssh,ssh-client,terminal,tui' \
   "$($gh_bin api "repos/$repository/topics" --jq '.names | sort | join(",")')"
+check_equal 'Actions policy' true \
+  "$($gh_bin api "repos/$repository/actions/permissions" --jq '.enabled and (.allowed_actions == "selected") and (.sha_pinning_required == true)')"
+check_equal 'selected Actions policy' true \
+  "$($gh_bin api "repos/$repository/actions/permissions/selected-actions" --jq '.github_owned_allowed and .verified_allowed and (.patterns_allowed == ["cachix/install-nix-action@*"])')"
+check_equal 'workflow permissions' true \
+  "$($gh_bin api "repos/$repository/actions/permissions/workflow" --jq '(.default_workflow_permissions == "read") and (.can_approve_pull_request_reviews == false)')"
 
 for feature in secret_scanning secret_scanning_push_protection; do
   feature_status=$(

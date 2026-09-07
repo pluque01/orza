@@ -20,7 +20,8 @@
 - Default branch: `main`
 - Description: `A terminal-native SSH client with a TUI`
 - Topics: `cli`, `go`, `ssh`, `ssh-client`, `terminal`, `tui`
-- GitHub Actions: enabled, restricted to GitHub-owned and verified-creator actions
+- GitHub Actions: enabled, restricted to GitHub-owned and verified-creator actions, with the required
+  `cachix/install-nix-action@*` action explicitly allowed
 - Full-length action SHA requirement: enabled
 - Default workflow permissions: read-only
 - Workflow pull-request approval permission: disabled

@@ -14,7 +14,7 @@ export gh_log curl_log
 stub_command gh <<'EOF'
 printf '%s\n' '---' >>"$gh_log"
 for argument in "$@"; do printf '<%s>\n' "$argument" >>"$gh_log"; done
-if [[ " $* " == *" --input - "* && " $* " == *"repos/pluque01/orza/rulesets"* ]]; then
+if [[ " $* " == *" --input - "* ]]; then
   payload=$(cat)
   printf '<payload=%s>\n' "$payload" >>"$gh_log"
 fi
@@ -23,6 +23,9 @@ if [ "$query" = '.name' ]; then printf 'orza\n'; exit; fi
 if [ "$query" = '.description' ]; then printf 'A terminal-native SSH client with a TUI\n'; exit; fi
 if [ "$query" = '.visibility' ]; then printf '%s\n' "${mock_visibility:-private}"; exit; fi
 if [ "$query" = '.names | sort | join(",")' ]; then printf 'cli,go,ssh,ssh-client,terminal,tui\n'; exit; fi
+if [[ "$query" == *'.sha_pinning_required == true'* ]]; then printf 'true\n'; exit; fi
+if [[ "$query" == *'cachix/install-nix-action@*'* ]]; then printf 'true\n'; exit; fi
+if [[ "$query" == *'.default_workflow_permissions == "read"'* ]]; then printf 'true\n'; exit; fi
 if [[ "$query" == '.security_and_analysis.'* ]]; then printf 'enabled\n'; exit; fi
 if [[ "$query" == *'select(.name == "Protect main") | .id'* ]]; then printf '123\n'; exit; fi
 if [[ "$query" == *'Protect main'* ]]; then printf 'true\n'; exit; fi
@@ -62,6 +65,10 @@ for topic in cli go ssh ssh-client terminal tui; do
 done
 assert_contains "$configure_calls" '<repos/pluque01/orza/private-vulnerability-reporting>'
 assert_contains "$configure_calls" '<repos/pluque01/orza/vulnerability-alerts>'
+assert_contains "$configure_calls" '<repos/pluque01/orza/actions/permissions>'
+assert_contains "$configure_calls" '"sha_pinning_required":true'
+assert_contains "$configure_calls" '"patterns_allowed":["cachix/install-nix-action@*"]'
+assert_contains "$configure_calls" '"default_workflow_permissions":"read"'
 assert_contains "$configure_calls" '<security_and_analysis[secret_scanning][status]=enabled>'
 assert_contains "$configure_calls" '<security_and_analysis[secret_scanning_push_protection][status]=enabled>'
 assert_contains "$configure_calls" '<repos/pluque01/orza/rulesets>'
