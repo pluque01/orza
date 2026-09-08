@@ -2,7 +2,8 @@
 
 **Date:** 2026-09-07
 **Repository:** `github.com/pluque01/orza`
-**Visibility:** private
+**Initial validation visibility:** private
+**Current visibility:** public as of 2026-09-08
 
 ## Private Push
 
@@ -54,4 +55,11 @@ GitHub Actions integration. GitHub presents that aggregate check under the `CI` 
 - Re-run configuration and public verification immediately after the explicitly authorized visibility
   change so GitHub can enable the public-repository security features.
 
-No visibility change, tag, or release was performed.
+## Public Transition
+
+- The owner explicitly authorized MIT distribution, public visibility, and release `v0.1.0`.
+- Public verification enabled and confirmed Secret Scanning, Push Protection, and Private
+  Vulnerability Reporting; the earlier private-account limitations no longer apply.
+- Anonymous API access and HTTPS clone passed at revision
+  `316f15b8db11152af3df919c47521e777166d7ec`.
+- Final release evidence is recorded in `public-release.md`.
