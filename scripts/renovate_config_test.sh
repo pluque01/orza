@@ -23,8 +23,10 @@ for manager in gomod github-actions nix; do
   jq -e --arg manager "$manager" '.enabledManagers | index($manager) != null' "$config" >/dev/null ||
     fail "missing manager: $manager"
 done
-jq -e '.packageRules[] | select(.matchManagers == ["gomod"] and (.postUpdateOptions | index("gomodTidy")) and .gomodSkipVendor == false)' "$config" >/dev/null ||
+jq -e '.packageRules[] | select(.matchManagers == ["gomod"] and (.postUpdateOptions | index("gomodTidy")))' "$config" >/dev/null ||
   fail 'Go updates must tidy and regenerate committed vendor source'
+jq -e '(has("gomodSkipVendor") == false) and ([.packageRules[] | select(has("gomodSkipVendor"))] | length == 0)' "$config" >/dev/null ||
+  fail 'obsolete gomodSkipVendor configuration must not be used'
 
 for manager in gomod github-actions; do
   jq -e --arg manager "$manager" '.packageRules[] | select(.matchManagers == [$manager] and .groupName != null and (.matchUpdateTypes | index("minor")) and (.matchUpdateTypes | index("patch")))' "$config" >/dev/null ||
@@ -36,6 +38,8 @@ jq -e '.packageRules[] | select((.matchUpdateTypes | index("major")) and .depend
   fail 'major updates must be isolated behind dashboard approval'
 jq -e '.packageRules[] | select(.matchManagers == ["github-actions"] and .rangeStrategy == "pin")' "$config" >/dev/null ||
   fail 'Actions must remain immutably pinned'
+jq -e '[.packageRules[] | select(has("rangeStrategy") and has("matchUpdateTypes"))] | length == 0' "$config" >/dev/null ||
+  fail 'rangeStrategy and matchUpdateTypes must be configured in separate rules'
 
 jq -e '.packageRules[] | select(.matchManagers == ["nix"] and (.matchPackageNames | index("nixpkgs")) and .groupName == null)' "$config" >/dev/null ||
   fail 'nixpkgs must be handled separately'
@@ -43,8 +47,10 @@ jq -e '.packageRules[] | select(.matchManagers == ["custom.regex"] and (.matchPa
   fail 'vulndb must be separate and refresh flake.lock'
 jq -e '.packageRules[] | select(.matchManagers == ["nix"] and (.matchPackageNames | index("vulndb")) and .enabled == false)' "$config" >/dev/null ||
   fail 'native Nix vulndb discovery must not duplicate the narrow fallback'
-jq -e '.customManagers | length == 1 and .[0].managerFilePatterns == ["/^flake\\.nix$/"] and .[0].depNameTemplate == "golang/vulndb" and .[0].datasourceTemplate == "github-commits"' "$config" >/dev/null ||
+jq -e '.customManagers | length == 1 and .[0].managerFilePatterns == ["/^flake\\.nix$/"] and .[0].depNameTemplate == "golang/vulndb" and .[0].packageNameTemplate == "https://github.com/golang/vulndb" and .[0].datasourceTemplate == "git-refs" and .[0].currentValueTemplate == "master"' "$config" >/dev/null ||
   fail 'the vulndb fallback must be narrowly scoped to flake.nix'
+jq -e '.customManagers[0].matchStrings[] | contains("(?<currentDigest>")' "$config" >/dev/null ||
+  fail 'the vulndb fallback must capture the current digest'
 
 notes=$(jq -r '.prBodyNotes[]' "$config")
 assert_contains "$notes" 'Old and new versions'

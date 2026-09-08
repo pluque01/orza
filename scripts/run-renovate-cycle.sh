@@ -26,7 +26,7 @@ if ! gh api --silent --method POST "repos/$RENOVATE_REPOSITORY/git/refs" \
 fi
 
 printf 'dependencies: acquired UTC week marker %s; it will be retained on success or failure\n' "$week_tag"
-if ! nix develop --command renovate --platform=github --require-config=required "$RENOVATE_REPOSITORY"; then
+if ! nix develop --command renovate --platform=github --require-config=required --config-validation-error=true "$RENOVATE_REPOSITORY"; then
   printf 'dependencies: stage=renovate failed; repository=%s; marker=%s retained; inspect this workflow step and run manual full dry-run\n' \
     "$RENOVATE_REPOSITORY" "$week_tag" >&2
   exit 1

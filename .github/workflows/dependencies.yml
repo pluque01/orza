@@ -50,4 +50,4 @@ jobs:
       - name: Discover updates locally without a token
         env:
           LOG_LEVEL: info
-        run: nix develop --command renovate --platform=local --dry-run=full --require-config=required
+        run: nix develop --command renovate --platform=local --dry-run=full --require-config=required --config-validation-error=true

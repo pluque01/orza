@@ -24,8 +24,7 @@
     {
       "description": "Regenerate the complete Go module and vendor graph",
       "matchManagers": ["gomod"],
-      "postUpdateOptions": ["gomodTidy"],
-      "gomodSkipVendor": false
+      "postUpdateOptions": ["gomodTidy"]
     },
     {
       "description": "Group compatible Go updates only with Go updates",
@@ -34,10 +33,14 @@
       "groupName": "compatible Go dependencies"
     },
     {
-      "description": "Group compatible Actions updates and preserve SHA pins and version comments",
+      "description": "Group compatible Actions updates",
       "matchManagers": ["github-actions"],
       "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
-      "groupName": "compatible GitHub Actions",
+      "groupName": "compatible GitHub Actions"
+    },
+    {
+      "description": "Preserve Actions SHA pins and version comments",
+      "matchManagers": ["github-actions"],
       "rangeStrategy": "pin"
     },
     {
@@ -85,9 +88,10 @@
       "matchStrings": [
         "url\\s*=\\s*\"github:golang/vulndb/(?<currentDigest>[0-9a-f]{40})\";"
       ],
+      "currentValueTemplate": "master",
       "depNameTemplate": "golang/vulndb",
-      "packageNameTemplate": "golang/vulndb",
-      "datasourceTemplate": "github-commits"
+      "packageNameTemplate": "https://github.com/golang/vulndb",
+      "datasourceTemplate": "git-refs"
     }
   ]
 }
