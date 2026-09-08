@@ -25,7 +25,7 @@ assert_contains "$workflow" 'RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}'
 assert_eq 1 "$(printf '%s\n' "$workflow" | grep -c 'secrets.RENOVATE_TOKEN')"
 assert_contains "$workflow" 'RENOVATE_ALLOWED_COMMANDS:'
 assert_contains "$workflow" '^nix flake lock --update-input vulndb$'
-assert_contains "$workflow" '--platform=local --dry-run=full --require-config=required'
+assert_contains "$workflow" '--platform=local --dry-run=full --require-config=required --config-validation-error=true'
 assert_not_contains "$workflow" 'cancel-in-progress: true'
 assert_not_contains "$workflow" 'pull_request_target:'
 assert_not_contains "$workflow" 'contents: write'
@@ -51,6 +51,7 @@ cycle=$(<"$script_dir/run-renovate-cycle.sh")
 assert_contains "$cycle" '::add-mask::'
 assert_contains "$cycle" 'date -u +%G-W%V'
 assert_contains "$cycle" 'marker='
+assert_contains "$cycle" '--config-validation-error=true'
 assert_not_contains "$cycle" 'set -x'
 assert_not_contains "$workflow" 'printenv'
 

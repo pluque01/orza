@@ -72,6 +72,9 @@ assert_contains "$failed" 'marker=automation/renovate/2026-W40 retained'
 failed_rerun=$(run_cycle) || fail 'failed-cycle rerun was not a no-op'
 assert_contains "$failed_rerun" 'already exists; no mutation performed'
 assert_eq 5 "$(wc -l <"$calls" | tr -d ' ')"
+while IFS= read -r call; do
+  assert_contains "$call" '--config-validation-error=true'
+done <"$calls"
 
 # Deterministic proposal simulation proves the repository-wide ceiling and proposal contract.
 open=0
