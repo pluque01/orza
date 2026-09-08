@@ -2,7 +2,8 @@
 
 ## Status And Privacy
 
-**Status:** not run. This file is an empty study record and makes no claim about participant results.
+**Status:** waived by the repository owner on 2026-09-08. The study was not run and this record makes
+no claim about participant results or usability thresholds.
 
 Recruit exactly 10 people who did not implement feature 006. Randomly assign study IDs `P01` through
 `P10`; do not record names, contact details, employer, account names, IP addresses, SSH endpoints,
@@ -64,20 +65,21 @@ personal detail.
 | P09 | | | | | | | | | | |
 | P10 | | | | | | | | | | |
 
-## Empty Aggregate Record
+## Waived Aggregate Record
 
-Complete this section only after all 10 participant rows are recorded and checked. Until then, the
-aggregate state remains `not run`; blank numerators are not zero and are not results.
+No participant rows were completed. Blank numerators are not zero and are not results. The owner
+accepted proceeding without the human usability evidence required by SC-005 and the timed-newcomer
+portion of SC-009; automated and static README checks remain applicable.
 
 | Field | Value |
 |---|---|
-| Study state | `not run` |
-| Sessions completed | |
-| Linux / macOS / Windows paths completed | |
-| Install + version + help within 10 minutes | |
-| Correct trigger, six targets, and blocker within 15 minutes | |
-| Checksum limitation identified | |
-| Safe TUI cancellation/exit identified | |
-| Catalog-preserving removal identified | |
-| Acceptance outcome | |
-| Documentation blocker categories and counts | |
+| Study state | `waived by owner; not run` |
+| Sessions completed | `0; no outcome inferred` |
+| Linux / macOS / Windows paths completed | `not measured` |
+| Install + version + help within 10 minutes | `not measured` |
+| Correct trigger, six targets, and blocker within 15 minutes | `not measured` |
+| Checksum limitation identified | `not measured` |
+| Safe TUI cancellation/exit identified | `not measured` |
+| Catalog-preserving removal identified | `not measured` |
+| Acceptance outcome | `waived; unverified` |
+| Documentation blocker categories and counts | `not measured` |
