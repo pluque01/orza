@@ -82,7 +82,7 @@ func sc007ClosedSurfaces(t testing.TB) []sc007ClosedSurface {
 	}
 
 	form := validConnectionForm()
-	form.inputs[fieldAuth].SetValue(string(app.AuthMethodKey))
+	form.setAuthMethod(app.AuthMethodKey)
 	form.syncDependencies()
 	formLines, _ := form.content(styles)
 
@@ -217,8 +217,8 @@ func TestSC007ScaleDetailsFormActionsAndHelpOverflowAcrossTwelveSizes(t *testing
 				formModel, _ := newSC007ScaleModel(t)
 				selectSCNode(formModel, snapshot.rootID)
 				updateModel(formModel, keyPress("n"))
-				formModel.form.inputs[fieldAuth].SetValue(string(method))
-				formModel.form.baseline[fieldAuth] = string(method)
+				formModel.form.setAuthMethod(method)
+				formModel.form.baselineAuth = method
 				formModel.form.inputs[fieldName].SetValue(strings.Repeat("focused-field-value-", 12))
 				formModel.form.syncDependencies()
 

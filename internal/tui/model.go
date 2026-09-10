@@ -309,10 +309,14 @@ func (m *Model) handleOperationKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 func (m *Model) currentHelpLines() []string {
 	if m.screen == screenConnectionForm {
-		return append([]string{
+		lines := []string{
 			"Connection form Help",
 			"Tab Next  Shift+Tab/F2 Previous  Ctrl+S Save  Esc Cancel  Ctrl+C Quit",
-		}, actionHelpLines(connectionFormActionDescriptors)...)
+		}
+		if m.form != nil && m.form.focusedField() == fieldAuth {
+			lines = append(lines, "Left/Right cycles Agent, Key, and Password")
+		}
+		return append(lines, actionHelpLines(connectionFormActionDescriptors)...)
 	}
 	return actionHelpLines(m.currentActionDescriptors())
 }
@@ -1103,7 +1107,7 @@ func (m *Model) saveForm() tea.Cmd {
 		if destination != nil && destination.Path != m.form.inputs[fieldFolder].Value() {
 			destination = nil
 		}
-		return m.createCommand(request, m.form.remember, destination)
+		return m.createCommand(request, m.form.passwordVisible() && m.form.remember, destination)
 	}
 	request, changed := m.form.updateRequest()
 	if !changed {
@@ -1113,7 +1117,7 @@ func (m *Model) saveForm() tea.Cmd {
 		}
 		return nil
 	}
-	return m.updateCommand(request, m.form.remember)
+	return m.updateCommand(request, m.form.passwordVisible() && m.form.remember)
 }
 
 func (m *Model) destinationNameTaken(destination *app.Folder, name string) bool {
@@ -1883,7 +1887,13 @@ func (m *Model) browserShell(layout layoutState) string {
 			context.state = actionStateConflict
 			actions = packActions(status, actionsFor(context), layout.actions.contentWidth(), layout.actions.contentHeight())
 		} else {
-			actions = packActions(status, connectionFormActionDescriptors, layout.actions.contentWidth(), layout.actions.contentHeight())
+			formActions := connectionFormActionDescriptors
+			if m.form != nil && m.form.focusedField() == fieldAuth {
+				formActions = append(append([]actionDescriptor(nil), formActions...),
+					actionDescriptor{id: actionLeft, key: "Left/Right", label: "Change method", category: actionCategoryNavigation, priority: actionPriorityNavigation},
+				)
+			}
+			actions = packActions(status, formActions, layout.actions.contentWidth(), layout.actions.contentHeight())
 		}
 	} else {
 		actions = packActions(status, actionsFor(context), layout.actions.contentWidth(), layout.actions.contentHeight())

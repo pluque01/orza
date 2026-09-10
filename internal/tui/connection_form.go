@@ -30,18 +30,26 @@ var formLabels = [...]string{
 	"Name", "Folder", "Host", "Port", "User", "Method", "Identity file", "Remember password", "Save",
 }
 
+var authenticationMethods = [...]app.AuthMethod{
+	app.AuthMethodAgent, app.AuthMethodKey, app.AuthMethodPassword,
+}
+
+var authenticationMethodLabels = [...]string{"Agent", "Key", "Password"}
+
 type connectionForm struct {
-	inputs      [fieldCount]textField
-	focus       connectionField
-	errors      map[connectionField]string
-	formError   string
-	original    *app.Connection
-	baseline    [fieldCount]string
-	remember    bool
-	destination *app.Folder
-	viewport    viewportState
-	width       int
-	height      int
+	inputs       [fieldCount]textField
+	focus        connectionField
+	errors       map[connectionField]string
+	formError    string
+	original     *app.Connection
+	baseline     [fieldCount]string
+	authMethod   app.AuthMethod
+	baselineAuth app.AuthMethod
+	remember     bool
+	destination  *app.Folder
+	viewport     viewportState
+	width        int
+	height       int
 }
 
 func newConnectionForm(connection *app.Connection) *connectionForm {
@@ -52,11 +60,14 @@ func newConnectionForm(connection *app.Connection) *connectionForm {
 		height:   21,
 	}
 	for field := fieldName; field <= fieldIdentity; field++ {
+		if field == fieldAuth {
+			continue
+		}
 		form.inputs[field] = newTextField()
 	}
 	form.inputs[fieldFolder].SetValue("/")
 	form.inputs[fieldPort].SetValue(strconv.Itoa(int(domain.DefaultSSHPort)))
-	form.inputs[fieldAuth].SetValue(string(app.AuthMethodAgent))
+	form.authMethod = app.AuthMethodAgent
 	if connection != nil {
 		copy := *connection
 		form.original = &copy
@@ -69,18 +80,46 @@ func newConnectionForm(connection *app.Connection) *connectionForm {
 		form.inputs[fieldHost].SetValue(connection.Host)
 		form.inputs[fieldPort].SetValue(strconv.Itoa(int(connection.Port)))
 		form.inputs[fieldUsername].SetValue(connection.Username)
-		form.inputs[fieldAuth].SetValue(string(connection.AuthMethod))
+		form.authMethod = connection.AuthMethod
 		form.inputs[fieldIdentity].SetValue(connection.IdentityFile)
 	}
 	for field := fieldName; field <= fieldIdentity; field++ {
+		if field == fieldAuth {
+			continue
+		}
 		form.baseline[field] = form.inputs[field].Value()
 	}
+	form.baselineAuth = form.authMethod
 	form.setDimensions(form.width, form.height)
 	form.setFocus(fieldName)
 	return form
 }
 
 func (f *connectionForm) focusedField() connectionField { return f.focus }
+
+func (f *connectionForm) selectedAuthMethod() app.AuthMethod { return f.authMethod }
+
+func (f *connectionForm) setAuthMethod(method app.AuthMethod) {
+	for _, candidate := range authenticationMethods {
+		if method == candidate {
+			f.authMethod = method
+			f.syncDependencies()
+			return
+		}
+	}
+}
+
+func (f *connectionForm) authMethodView() string {
+	parts := make([]string, 0, len(authenticationMethods))
+	for index, method := range authenticationMethods {
+		label := authenticationMethodLabels[index]
+		if method == f.authMethod {
+			label = "[" + label + "]"
+		}
+		parts = append(parts, label)
+	}
+	return strings.Join(parts, " ")
+}
 
 func (f *connectionForm) setDestination(folder app.Folder) {
 	copy := folder
@@ -117,6 +156,9 @@ func (f *connectionForm) setDimensions(width, height int) {
 	labelWidth := formLabelWidth(f.width)
 	inputWidth := max(0, f.width-4-labelWidth-1)
 	for field := fieldName; field <= fieldIdentity; field++ {
+		if field == fieldAuth {
+			continue
+		}
 		f.inputs[field].SetWidth(inputWidth)
 	}
 }
@@ -129,13 +171,16 @@ func (f *connectionForm) setFormError(message string) { f.formError = message }
 
 func (f *connectionForm) setFocus(field connectionField) {
 	for current := fieldName; current <= fieldIdentity; current++ {
+		if current == fieldAuth {
+			continue
+		}
 		f.inputs[current].Blur()
 	}
 	if field == fieldFolder {
 		field = fieldHost
 	}
 	f.focus = field
-	if field <= fieldIdentity && field != fieldFolder {
+	if field <= fieldIdentity && field != fieldFolder && field != fieldAuth {
 		f.inputs[field].Focus()
 	}
 }
@@ -166,25 +211,27 @@ func (f *connectionForm) update(msg tea.Msg) tea.Cmd {
 		case f.focus == fieldRemember && keyMsg.String() == "space":
 			f.remember = !f.remember
 			return nil
-		case f.focus == fieldAuth && !f.inputs[fieldAuth].HasSelection() && !keyMsg.Key().Mod.Contains(tea.ModShift) && (keyMsg.String() == "left" || keyMsg.String() == "right"):
-			methods := []app.AuthMethod{app.AuthMethodAgent, app.AuthMethodKey, app.AuthMethodPassword}
+		case f.focus == fieldAuth && keyMsg.Key().Mod == 0 && (keyMsg.String() == "left" || keyMsg.String() == "right"):
 			index := 0
-			for current := range methods {
-				if string(methods[current]) == f.inputs[fieldAuth].Value() {
+			for current := range authenticationMethods {
+				if authenticationMethods[current] == f.authMethod {
 					index = current
 				}
 			}
 			if keyMsg.String() == "left" {
-				index = (index + len(methods) - 1) % len(methods)
+				index = (index + len(authenticationMethods) - 1) % len(authenticationMethods)
 			} else {
-				index = (index + 1) % len(methods)
+				index = (index + 1) % len(authenticationMethods)
 			}
-			f.inputs[fieldAuth].SetValue(string(methods[index]))
-			f.syncDependencies()
+			f.setAuthMethod(authenticationMethods[index])
+			delete(f.errors, fieldAuth)
+			f.formError = ""
+			return nil
+		case f.focus == fieldAuth:
 			return nil
 		}
 	}
-	if f.focus <= fieldIdentity && f.focus != fieldFolder {
+	if f.focus <= fieldIdentity && f.focus != fieldFolder && f.focus != fieldAuth {
 		cmd := f.inputs[f.focus].Update(msg)
 		if f.focus == fieldAuth {
 			f.syncDependencies()
@@ -203,11 +250,11 @@ func (f *connectionForm) syncDependencies() {
 }
 
 func (f *connectionForm) identityVisible() bool {
-	return app.AuthMethod(strings.TrimSpace(f.inputs[fieldAuth].Value())) == app.AuthMethodKey
+	return f.authMethod == app.AuthMethodKey
 }
 
 func (f *connectionForm) passwordVisible() bool {
-	return app.AuthMethod(strings.TrimSpace(f.inputs[fieldAuth].Value())) == app.AuthMethodPassword
+	return f.authMethod == app.AuthMethodPassword
 }
 
 func (f *connectionForm) validate() bool {
@@ -223,10 +270,7 @@ func (f *connectionForm) validate() bool {
 	if err != nil || port == 0 {
 		f.errors[fieldPort] = "enter a port from 1 to 65535"
 	}
-	method, methodErr := domain.ParseAuthMethod(strings.TrimSpace(f.inputs[fieldAuth].Value()))
-	if methodErr != nil {
-		f.errors[fieldAuth] = "choose agent, key, or password"
-	}
+	method, methodErr := domain.ParseAuthMethod(string(f.authMethod))
 	if strings.TrimSpace(f.inputs[fieldHost].Value()) == "" {
 		f.errors[fieldHost] = "enter a host"
 	}
@@ -252,8 +296,11 @@ func (f *connectionForm) dirty() bool {
 	if f.remember {
 		return true
 	}
+	if f.authMethod != f.baselineAuth {
+		return true
+	}
 	for field := fieldName; field <= fieldIdentity; field++ {
-		if field == fieldFolder {
+		if field == fieldFolder || field == fieldAuth {
 			continue
 		}
 		if f.inputs[field].Value() != f.baseline[field] {
@@ -270,7 +317,7 @@ func (f *connectionForm) createRequest() (app.CreateConnectionRequest, bool) {
 		return app.CreateConnectionRequest{}, false
 	}
 	port, _ := strconv.ParseUint(f.inputs[fieldPort].Value(), 10, 16)
-	method := app.AuthMethod(strings.TrimSpace(f.inputs[fieldAuth].Value()))
+	method := f.authMethod
 	identity := ""
 	if method == app.AuthMethodKey {
 		identity = f.inputs[fieldIdentity].Value()
@@ -318,7 +365,7 @@ func (f *connectionForm) updateRequest() (app.UpdateConnectionRequest, bool) {
 		value := uint16(port)
 		request.Port = &value
 	}
-	method := app.AuthMethod(strings.TrimSpace(f.inputs[fieldAuth].Value()))
+	method := f.authMethod
 	if method != original.AuthMethod {
 		request.AuthMethod = &method
 	}
@@ -329,7 +376,7 @@ func (f *connectionForm) updateRequest() (app.UpdateConnectionRequest, bool) {
 	if identity != original.IdentityFile {
 		request.IdentityFile = &identity
 	}
-	changed := request.Name != nil || request.Host != nil || request.Port != nil || request.Username != nil || request.AuthMethod != nil || request.IdentityFile != nil || f.remember
+	changed := request.Name != nil || request.Host != nil || request.Port != nil || request.Username != nil || request.AuthMethod != nil || request.IdentityFile != nil || f.passwordVisible() && f.remember
 	return request, changed
 }
 
@@ -342,7 +389,7 @@ func (f *connectionForm) view(style styles, dimensions ...int) string {
 
 func (f *connectionForm) project(style styles) viewportProjection {
 	lines, activeLine := f.content(style)
-	if f.errors[f.focus] != "" || f.focus <= fieldIdentity && f.inputs[f.focus].Error() != "" {
+	if f.errors[f.focus] != "" || f.focus <= fieldIdentity && f.focus != fieldAuth && f.inputs[f.focus].Error() != "" {
 		return projectActiveBlock(lines, activeLine-1, activeLine, f.height, f.width)
 	}
 	if f.focus == fieldSave && f.formError != "" {
@@ -397,10 +444,13 @@ func (f *connectionForm) content(style styles) ([]string, int) {
 	activeLine := 0
 	labelWidth := formLabelWidth(f.width)
 	for _, field := range f.visibleFields() {
-		invalid := f.errors[field] != "" || f.inputs[field].Error() != ""
+		invalid := f.errors[field] != "" || field != fieldAuth && f.inputs[field].Error() != ""
 		semantics := itemSemantics{focused: field == f.focus, invalid: invalid, primary: field == fieldSave}
 		line := ""
 		switch field {
+		case fieldAuth:
+			label := safeText(formLabels[field]+":", labelWidth)
+			line = style.item(fmt.Sprintf("%-*s %s", labelWidth, label, f.authMethodView()), semantics)
 		case fieldRemember:
 			checked := " "
 			if f.remember {
@@ -421,7 +471,7 @@ func (f *connectionForm) content(style styles) ([]string, int) {
 		}
 		lines = append(lines, line)
 		message := f.errors[field]
-		if message == "" {
+		if message == "" && field != fieldAuth {
 			message = f.inputs[field].Error()
 		}
 		if message != "" {
@@ -431,6 +481,6 @@ func (f *connectionForm) content(style styles) ([]string, int) {
 			}
 		}
 	}
-	lines = append(lines, "Tab Next  Shift+Tab/F2 Previous  Ctrl+S Save  Esc Cancel  F1 Help")
+	lines = append(lines, "Left/Right Change method  Tab Next  Shift+Tab/F2 Previous  Ctrl+S Save  Esc Cancel  F1 Help")
 	return lines, activeLine
 }

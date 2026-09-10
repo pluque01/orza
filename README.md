@@ -486,7 +486,7 @@ when Actions omits lower-priority options it shows `Hidden actions — ? Help` i
 | `Tab` / `Shift-Tab` | Switch Tree/Details focus, or move through form controls. |
 | `F2` | Move to the previous form control when Shift-Tab is unavailable. |
 | `F1` | Open Help while an editable field owns printable keys. |
-| Left / Right | Cycle authentication methods while that field is focused. |
+| Left / Right | Cycle the visible `Agent`, `Key`, and `Password` method selector while Method is focused. |
 | Space | Toggle password remembering while that control is focused. |
 | `Ctrl-S` | Save a form. |
 | `y` | Explicitly confirm a destructive or connection action. |
@@ -534,9 +534,18 @@ input/output outside the application's control. Process cleanup can restore the 
 controlled buffers on normal cancellation and handled termination, but `SIGKILL`, host compromise,
 terminal recording, and scrollback are outside that guarantee.
 
+### Authentication Method Selector
+
+Create and edit forms show `Agent`, `Key`, and `Password` simultaneously; a new connection starts with
+`Agent` selected. While Method has focus, Left/Right cycles those choices and typing, deletion, and paste
+do not change the selection. `Key` shows `Identity file`; `Password` shows `Remember password`, initially
+unchecked. Switching methods retains those in-form drafts until save or cancel, but only the final method's
+applicable configuration is validated or saved. A retained Remember choice never requests or stores a
+password unless Password is selected when saving.
+
 ### Text And Secret Paste
 
-All connection text fields and the folder-name field accept terminal-native bracketed paste. Paste is
+Connection text fields (excluding the closed Method selector) and the folder-name field accept terminal-native bracketed paste. Paste is
 inserted at the cursor or replaces a Shift+arrow selection as one operation. CR, LF, NEL, `U+2028`, and
 `U+2029` are removed; other control characters reject the whole payload without changing value,
 cursor, or selection. Normal fields are limited to 4,096 Unicode runes. The application disables the

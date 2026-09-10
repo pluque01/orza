@@ -526,8 +526,8 @@ func TestSC003CreateEditConditionalFormTraversalTwentyRuns(t *testing.T) {
 					if model.form == nil || model.form.focusedField() != fieldName || model.modal.isOpen() {
 						t.Fatalf("run %d: %s %s did not begin in Details/Name", run, flow.name, auth.method)
 					}
-					model.form.inputs[fieldAuth].SetValue(string(auth.method))
-					model.form.baseline[fieldAuth] = string(auth.method)
+					model.form.setAuthMethod(auth.method)
+					model.form.baselineAuth = auth.method
 					model.form.syncDependencies()
 
 					forward := []connectionField{model.form.focusedField()}
@@ -600,7 +600,7 @@ func TestSC003SaveFailuresPreserveAllFormValuesTwentyRuns(t *testing.T) {
 					model.form.inputs[fieldHost].SetValue("preserved.example")
 					model.form.inputs[fieldPort].SetValue("2202")
 					model.form.inputs[fieldUsername].SetValue("preserved-user")
-					model.form.inputs[fieldAuth].SetValue(string(app.AuthMethodAgent))
+					model.form.setAuthMethod(app.AuthMethodAgent)
 					model.form.inputs[fieldIdentity].SetValue("/hidden-but-preserved/key")
 					model.form.remember = false
 					model.form.setFocus(fieldHost)
@@ -646,7 +646,7 @@ func TestSC003SaveFailuresPreserveAllFormValuesTwentyRuns(t *testing.T) {
 				model.form.inputs[fieldHost].SetValue("preserved.example")
 				model.form.inputs[fieldPort].SetValue("0")
 				model.form.inputs[fieldUsername].SetValue("preserved-user")
-				model.form.inputs[fieldAuth].SetValue(string(app.AuthMethodKey))
+				model.form.setAuthMethod(app.AuthMethodKey)
 				model.form.inputs[fieldIdentity].SetValue("/preserved/key")
 				model.form.setFocus(fieldPort)
 				before := scAllFormValuesSnapshot(model)
@@ -781,8 +781,8 @@ func TestSC004SC005ExactGeometryAndResizePreservationTwentyRuns(t *testing.T) {
 			states = append(states, stateCase{flow.name + "-" + string(method), func(f scCatalogFixture) *Model {
 				selectSCNode(f.model, flow.selection(f))
 				updateModel(f.model, keyPress(flow.key))
-				f.model.form.inputs[fieldAuth].SetValue(string(method))
-				f.model.form.baseline[fieldAuth] = string(method)
+				f.model.form.setAuthMethod(method)
+				f.model.form.baselineAuth = method
 				f.model.form.syncDependencies()
 				last := f.model.form.visibleFields()[len(f.model.form.visibleFields())-1]
 				f.model.form.setFocus(last)

@@ -8,6 +8,8 @@
 # allowlisted backend values are dynamic and therefore never belong here.
 
 term	action.back	Back
+term	authentication.agent	Agent
+term	authentication.key	Key
 term	action.cancel	Cancel
 term	action.connect	Connect
 term	action.delete	Delete
@@ -52,6 +54,7 @@ copy	"? Help"
 copy	"? Help  q Quit"
 copy	"?/Esc Close"
 copy	"Action: "
+copy	"Agent"
 copy	"Action: permanently delete connection"
 copy	"Action: permanently delete the folder subtree"
 copy	"Actions"
@@ -127,6 +130,7 @@ copy	"Initial load"
 copy	"Input is read by the terminal with echo disabled and is not retained by the TUI.\n"
 copy	"Input rejected: maximum length exceeded"
 copy	"Kind"
+copy	"Key"
 copy	"Known fingerprint: "
 copy	"LOADING"
 copy	"Last row"
@@ -200,7 +204,10 @@ copy	"TARGET NO LONGER EXISTS"
 copy	"TUI service is unavailable"
 copy	"Tab"
 copy	"Tab Next  Shift+Tab/F2 Previous  Ctrl+S Save  Esc Cancel  Ctrl+C Quit"
-copy	"Tab Next  Shift+Tab/F2 Previous  Ctrl+S Save  Esc Cancel  F1 Help"
+copy	"Left/Right"
+copy	"Change method"
+copy	"Left/Right cycles Agent, Key, and Password"
+copy	"Left/Right Change method  Tab Next  Shift+Tab/F2 Previous  Ctrl+S Save  Esc Cancel  F1 Help"
 copy	"Tab/Shift+Tab"
 copy	"Target: "
 copy	"Technical detail: "
@@ -242,7 +249,6 @@ copy	"catalog operation"
 copy	"change at least one field before saving"
 copy	"change the name before saving"
 copy	"check host, user, and authentication fields"
-copy	"choose agent, key, or password"
 copy	"create connection"
 copy	"create folder"
 copy	"d Detail"

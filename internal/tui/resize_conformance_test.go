@@ -409,7 +409,7 @@ func newResizeConformanceDirtyForm(t *testing.T) *Model {
 	form.inputs[fieldHost].SetValue("dirty.production.test")
 	form.inputs[fieldPort].SetValue("2202")
 	form.inputs[fieldUsername].SetValue("dirty-deploy")
-	form.inputs[fieldAuth].SetValue(string(app.AuthMethodKey))
+	form.setAuthMethod(app.AuthMethodKey)
 	form.inputs[fieldIdentity].SetValue("/keys/dirty_ed25519")
 	form.remember = true
 	form.setFocus(fieldHost)

@@ -13,7 +13,7 @@ import (
 )
 
 func TestConnectionNormalControlsManualPasteEquivalenceCorpus(t *testing.T) {
-	fields := []connectionField{fieldName, fieldHost, fieldPort, fieldUsername, fieldAuth, fieldIdentity}
+	fields := []connectionField{fieldName, fieldHost, fieldPort, fieldUsername, fieldIdentity}
 	positions := []string{"start", "middle", "selection"}
 	for _, field := range fields {
 		for payloadName, payload := range normalEquivalencePayloads() {
@@ -70,9 +70,52 @@ func validConnectionForm() *connectionForm {
 	form.inputs[fieldHost].SetValue("host.test")
 	form.inputs[fieldPort].SetValue("22")
 	form.inputs[fieldUsername].SetValue("deploy")
-	form.inputs[fieldAuth].SetValue(string(app.AuthMethodAgent))
+	form.setAuthMethod(app.AuthMethodAgent)
 	form.inputs[fieldIdentity].SetValue("/tmp/id_ed25519")
 	return form
+}
+
+func TestConnectionFormAuthenticationSelector(t *testing.T) {
+	form := validConnectionForm()
+	form.setFocus(fieldAuth)
+	if got := form.authMethodView(); got != "[Agent] Key Password" {
+		t.Fatalf("initial selector = %q", got)
+	}
+	for _, test := range []struct {
+		key  string
+		want app.AuthMethod
+	}{
+		{"left", app.AuthMethodPassword},
+		{"right", app.AuthMethodAgent},
+		{"right", app.AuthMethodKey},
+	} {
+		form.update(keyPress(test.key))
+		if got := form.selectedAuthMethod(); got != test.want {
+			t.Fatalf("%s selected %q, want %q", test.key, got, test.want)
+		}
+	}
+	before := form.selectedAuthMethod()
+	for _, msg := range []tea.Msg{
+		tea.KeyPressMsg(tea.Key{Code: tea.KeyExtended, Text: "password"}),
+		keyPress("backspace"),
+		modifiedKey(tea.KeyLeft, tea.ModShift),
+		tea.PasteMsg{Content: "agent\n"},
+	} {
+		form.update(msg)
+		if got := form.selectedAuthMethod(); got != before {
+			t.Fatalf("selector changed to %q after %T", got, msg)
+		}
+	}
+}
+
+func TestConnectionFormAuthenticationSelectorInitializesEdits(t *testing.T) {
+	for _, method := range authenticationMethods {
+		connection := app.Connection{Node: app.Node{ID: "11111111111111111111111111111111", Name: "node", Path: "/node", Revision: 1}, Host: "host.test", Port: 22, AuthMethod: method}
+		form := newConnectionForm(&connection)
+		if got := form.selectedAuthMethod(); got != method {
+			t.Fatalf("edit method = %q, want %q", got, method)
+		}
+	}
 }
 
 func prepareTextField(field *textField, position string) {
@@ -120,14 +163,12 @@ func TestConnectionFormFocusValidationDependenciesAndDiscard(t *testing.T) {
 		t.Fatal("changed form can be discarded without confirmation")
 	}
 
-	form.inputs[fieldAuth].SetValue(string(app.AuthMethodKey))
-	form.syncDependencies()
+	form.setAuthMethod(app.AuthMethodKey)
 	if !form.identityVisible() {
 		t.Fatal("key authentication did not reveal identity field")
 	}
 	form.inputs[fieldIdentity].SetValue("~/.ssh/id_old")
-	form.inputs[fieldAuth].SetValue(string(app.AuthMethodAgent))
-	form.syncDependencies()
+	form.setAuthMethod(app.AuthMethodAgent)
 	if form.identityVisible() || form.inputs[fieldIdentity].Value() != "~/.ssh/id_old" {
 		t.Fatal("changing method erased or retained visibility of prior key configuration")
 	}
@@ -147,8 +188,7 @@ func TestConnectionFormCanonicalConditionalFocusOrder(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			form := newConnectionForm(nil)
-			form.inputs[fieldAuth].SetValue(string(test.method))
-			form.syncDependencies()
+			form.setAuthMethod(test.method)
 			if got := form.focusableFields(); !reflect.DeepEqual(got, test.want) {
 				t.Fatalf("focusable fields = %v, want %v", got, test.want)
 			}
@@ -183,18 +223,16 @@ func TestConnectionFormCanonicalConditionalFocusOrder(t *testing.T) {
 
 func TestConnectionFormConditionalFallbackAndF2Previous(t *testing.T) {
 	form := newConnectionForm(nil)
-	form.inputs[fieldAuth].SetValue(string(app.AuthMethodKey))
+	form.setAuthMethod(app.AuthMethodKey)
 	form.setFocus(fieldIdentity)
-	form.inputs[fieldAuth].SetValue(string(app.AuthMethodAgent))
-	form.syncDependencies()
+	form.setAuthMethod(app.AuthMethodAgent)
 	if form.focusedField() != fieldAuth {
 		t.Fatalf("hidden Identity focus = %v, want Method", form.focusedField())
 	}
 
-	form.inputs[fieldAuth].SetValue(string(app.AuthMethodPassword))
+	form.setAuthMethod(app.AuthMethodPassword)
 	form.setFocus(fieldRemember)
-	form.inputs[fieldAuth].SetValue(string(app.AuthMethodKey))
-	form.syncDependencies()
+	form.setAuthMethod(app.AuthMethodKey)
 	if form.focusedField() != fieldAuth {
 		t.Fatalf("hidden Remember focus = %v, want Method", form.focusedField())
 	}
@@ -358,7 +396,7 @@ func TestEditFormBuildsPinnedRequestAndConflictRemainsRecoverable(t *testing.T) 
 func TestRememberedCreateRejectsDestinationMutationBetweenPreflightAndWrite(t *testing.T) {
 	destination := testFolder("11111111111111111111111111111111", "00000000000000000000000000000001", "/destination", 4)
 	form := validConnectionForm()
-	form.inputs[fieldAuth].SetValue(string(app.AuthMethodPassword))
+	form.setAuthMethod(app.AuthMethodPassword)
 	form.setDestination(destination)
 	request, ok := form.createRequest()
 	if !ok || request.ExpectedParent == nil || *request.ExpectedParent != destination.Revision || request.ExpectedParentPath != destination.Path {

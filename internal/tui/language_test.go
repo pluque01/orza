@@ -21,6 +21,8 @@ import (
 // review rather than being silently regenerated from source.
 var controlledTerms = map[string]string{
 	"action.back":             "Back",
+	"authentication.agent":    "Agent",
+	"authentication.key":      "Key",
 	"action.cancel":           "Cancel",
 	"action.connect":          "Connect",
 	"action.delete":           "Delete",
