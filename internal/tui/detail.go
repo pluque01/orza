@@ -75,7 +75,6 @@ func (state detailState) withTarget(snapshot catalogSnapshot, targetID app.NodeI
 	}
 
 	next.fields = []detailField{
-		{label: "Kind", value: next.heading},
 		{label: "Name", value: detailSafeValue(node.node.Name)},
 		{label: "Path", value: next.path},
 	}
@@ -133,25 +132,40 @@ func (state detailState) withOffset(offset int) detailState {
 	return state
 }
 
-func (state detailState) content(width int) []string {
-	lines := make([]string, 0, len(state.fields)+max(1, len(state.directConnections)))
+func (state detailState) content(width int, semanticStyles ...styles) []string {
+	style := newStyles(true)
+	if len(semanticStyles) != 0 {
+		style = semanticStyles[0]
+	}
+	fields := make([]displayField, 0, len(state.fields)+len(state.directConnections))
 	for _, field := range state.fields {
-		lines = append(lines, safeText(field.label+": "+field.value, width))
+		fields = append(fields, displayField{
+			label: detailSafeValue(field.label),
+			value: detailSafeValue(field.value),
+		})
 	}
-	if state.kind == detailKindConnection {
-		return lines
+	if state.kind != detailKindConnection {
+		for _, connection := range state.directConnections {
+			fields = append(fields, displayField{
+				label: detailSafeValue(connection.name),
+				value: detailSafeValue(connection.endpoint),
+			})
+		}
 	}
-	if len(state.directConnections) == 0 {
-		return append(lines, safeText(detailEmptyConnections, width))
+
+	lines := make([]string, 0, 1+len(fields)+1)
+	if badge := style.contentBadge(state.heading); badge != "" {
+		lines = append(lines, badge)
 	}
-	for _, connection := range state.directConnections {
-		lines = append(lines, safeText(connection.name+": "+connection.endpoint, width))
+	lines = append(lines, newStructuredFieldGroup(fields, 0, width, false).render(style)...)
+	if state.kind != detailKindConnection && len(state.directConnections) == 0 {
+		lines = append(lines, safeText(detailEmptyConnections, width))
 	}
 	return lines
 }
 
-func (state detailState) project(rows, width int) viewportProjection {
-	return state.viewport.project(state.content(width), rows, width, noActiveLine)
+func (state detailState) project(rows, width int, semanticStyles ...styles) viewportProjection {
+	return state.viewport.project(state.content(width, semanticStyles...), rows, width, noActiveLine)
 }
 
 func detailSafeValue(value string) string {

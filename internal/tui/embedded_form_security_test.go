@@ -104,3 +104,29 @@ func TestEmbeddedConnectionFormSecretCanaryNeverProjectsThroughValidationOrResiz
 		}
 	}
 }
+
+func TestDetailNeverProjectsCredentialReferencesOrSecretCanaries(t *testing.T) {
+	const (
+		credentialCanary = "credential-reference-never-render"
+		secretCanary     = "secret-password-never-render"
+	)
+	root := testFolder("root", "", "/", 1)
+	connection := testConnection("connection", root.ID, "/safe", 1)
+	connection.Host = "safe.test"
+	connection.CredentialRef = credentialCanary + ":" + secretCanary
+	snapshot := newCatalogSnapshot(root, 1)
+	_ = snapshot.addChildren(root.ID, app.ListChildrenResult{Connections: []app.Connection{connection}})
+	state, ok := newDetailState(snapshot, connection.ID)
+	if !ok {
+		t.Fatal("detail target rejected")
+	}
+
+	for _, style := range []styles{newStyles(true), newStyles(false)} {
+		for _, width := range []int{24, 40, 80} {
+			view := strings.Join(state.project(20, width, style).lines, "\n")
+			if strings.Contains(view, credentialCanary) || strings.Contains(view, secretCanary) {
+				t.Fatalf("Details projected credential or secret at width %d: %q", width, view)
+			}
+		}
+	}
+}

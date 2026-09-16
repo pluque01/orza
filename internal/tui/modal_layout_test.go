@@ -2,11 +2,78 @@ package tui
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/pluque01/orza/internal/app"
 )
+
+func TestModalCapturedTargetsWrapCompletelyWithoutDisplacingControls(t *testing.T) {
+	long := "/" + strings.Repeat("captured-segment/", 20) + "final"
+	tests := []struct {
+		name  string
+		state modalState
+	}{
+		{name: "connect", state: modalState{kind: modalKindConnectConfirmation, payload: connectConfirmationPayload{confirmation: newConnectConfirmation(testConnection("connection", syntheticRootID, long, 7))}}},
+		{name: "delete connection", state: modalState{kind: modalKindDeleteConnection, payload: deleteConnectionPayload{confirmation: newDeleteConfirmation(deleteScopeForModalLayout(long))}}},
+		{name: "delete folder", state: modalState{kind: modalKindDeleteFolder, payload: deleteFolderPayload{confirmation: newFolderDeleteConfirmation(folderDeleteScopeForModalLayout(long))}}},
+		{name: "unsaved", state: modalState{kind: modalKindUnsavedChanges, payload: unsavedChangesPayload{intent: unsavedIntentQuit, target: long}}},
+		{name: "operation error", state: modalState{kind: modalKindOperationError, payload: operationErrorPayload{modal: newErrorModal("reload catalog", long, errModalClosed)}}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			lines, active := modalContent(test.state, newStyles(true), 20, nil)
+			bodyEnd := modalPriorityStart(lines)
+			if bodyEnd < 0 {
+				t.Fatalf("modal has no fixed controls: %#v", lines)
+			}
+			joined := strings.Join(lines[:bodyEnd], "")
+			if !strings.Contains(strings.ReplaceAll(joined, " ", ""), long) || strings.Contains(joined, safeTextEllipsis) {
+				t.Fatalf("captured target was not wrapped completely: %q", joined)
+			}
+			projection := projectModalViewport(test.state, lines, 8, 20, active)
+			projected := strings.Join(projection.lines, "\n")
+			if !strings.Contains(projected, "Cancel") && !strings.Contains(projected, "Back") {
+				t.Fatalf("fixed cancel/back control was displaced: %#v", projection.lines)
+			}
+		})
+	}
+}
+
+func TestModalControlInventoryAndPriorityRemainFixed(t *testing.T) {
+	want := map[modalKind][]string{
+		modalKindFolderCreate:        {modalControlLine("Ctrl+S/Enter Save  Esc Cancel  F1 Help")},
+		modalKindFolderEdit:          {modalControlLine("Ctrl+S/Enter Save  Esc Cancel  F1 Help")},
+		modalKindMovePicker:          {modalControlLine("Enter Move  Esc Cancel  ? Help")},
+		modalKindDeleteConnection:    {modalControlLine("y Confirm"), modalControlLine("Enter/Esc Cancel"), modalControlLine("? Help")},
+		modalKindDeleteFolder:        {modalControlLine("y Confirm"), modalControlLine("Enter/Esc Cancel"), modalControlLine("? Help")},
+		modalKindConnectConfirmation: {modalControlLine("y Confirm"), modalControlLine("Enter/Esc Cancel"), modalControlLine("? Help")},
+		modalKindUnsavedChanges:      {modalControlLine("s Save"), modalControlLine("d Discard"), modalControlLine("Esc Cancel")},
+		modalKindHelp:                {modalControlLine("?/Esc Close")},
+		modalKindOperationError:      {modalControlLine("r Reload"), modalControlLine("b/Esc Back"), modalControlLine("q Quit"), modalControlLine("? Help")},
+		modalKindSSHFailure:          {modalControlLine("d Detail"), modalControlLine("r Retry"), modalControlLine("e Edit"), modalControlLine("b/Esc Back"), modalControlLine("q Quit"), modalControlLine("? Help")},
+	}
+	for _, test := range feature008ModalCases() {
+		t.Run(string(test.kind), func(t *testing.T) {
+			state := modalState{kind: test.kind, payload: test.payload}
+			lines, _ := modalContent(state, newStyles(true), 80, nil)
+			start := modalPriorityStart(lines)
+			if start < 0 || !reflect.DeepEqual(lines[start:], want[test.kind]) {
+				t.Fatalf("controls for %s = %#v, want %#v", test.kind, lines[max(0, start):], want[test.kind])
+			}
+		})
+	}
+}
+
+func deleteScopeForModalLayout(path string) app.ConnectionDeleteScope {
+	return app.ConnectionDeleteScope{ID: "connection", Path: path, Host: "prod.test", Revision: 7}
+}
+
+func folderDeleteScopeForModalLayout(path string) app.FolderDeleteScope {
+	return app.FolderDeleteScope{ID: "folder", Path: path, Revision: 7}
+}
 
 func TestUS4CenteredOverlayBoundsBackgroundUnicodeAndReduced(t *testing.T) {
 	for _, size := range [][2]int{{80, 24}, {60, 12}, {40, 12}} {

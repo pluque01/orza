@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode"
 
 	"github.com/pluque01/orza/internal/app"
 )
@@ -36,20 +37,20 @@ func TestSSHFailureModalRendersSafeProjectionMatrix(t *testing.T) {
 			modal := newSSHFailureModal(attempt, failure)
 			view := strings.Join(sshFailureLines(modal, 80), "\n")
 			for _, want := range []string{
-				"SSH startup failed", test.summary, "Category: " + string(test.category),
-				"Path: /work/prod", "Endpoint: prod.test:2202", "Stage: " + string(test.stage),
-				"Recommendation: " + test.recommendation,
+				"SSH startup failed", "Summary " + test.summary, "Category " + string(test.category),
+				"Path /work/prod", "Endpoint prod.test:2202", "ID/revision captured/7", "Stage " + string(test.stage),
+				"Recommendation " + test.recommendation,
 			} {
-				if !strings.Contains(view, want) {
+				if !renderedTextContains(view, want) {
 					t.Fatalf("view omitted %q: %q", want, view)
 				}
 			}
-			if modal.detailVisible || strings.Contains(view, "Technical detail:") || strings.Contains(view, "wrapped-private-canary") {
+			if modal.detailVisible || strings.Contains(view, "Technical detail") || strings.Contains(view, "wrapped-private-canary") {
 				t.Fatalf("detail was visible or cause leaked by default: %q", view)
 			}
 			modal.detailVisible = true
 			expanded := strings.Join(sshFailureLines(modal, 80), "\n")
-			if failure.TechnicalDetail != "" && !strings.Contains(expanded, "Technical detail: "+failure.TechnicalDetail) {
+			if failure.TechnicalDetail != "" && !renderedTextContains(expanded, "Technical detail "+failure.TechnicalDetail) {
 				t.Fatalf("expanded view omitted safe detail: %q", expanded)
 			}
 			if strings.Contains(expanded, "wrapped-private-canary") {
@@ -67,8 +68,11 @@ func TestSSHFailureModalFallbackNoColorAndCapturedTarget(t *testing.T) {
 	model.installSSHFailure(modal)
 	view := model.View().Content
 
-	for _, want := range []string{"Category: unexpected", "Path: /captured", "Endpoint: [2001:db8::1]:22", "Stage: unknown", "Check the configuration or retry."} {
-		if !strings.Contains(view, want) {
+	if !strings.Contains(view, "[SSH Failure]") {
+		t.Fatalf("fallback view omitted SSH Failure badge: %q", view)
+	}
+	for _, want := range []string{"Category unexpected", "Path /captured", "Endpoint [2001:db8::1]:22", "Stage unknown", "Recommendation Check the configuration or retry."} {
+		if !renderedTextContains(view, want) {
 			t.Fatalf("fallback view omitted %q: %q", want, view)
 		}
 	}
@@ -125,7 +129,12 @@ func TestSessionFailureRoutingAndCompletionToModelUpdate(t *testing.T) {
 func TestGeneralErrorModalRemainsUnchanged(t *testing.T) {
 	modal := newErrorModal("move", "/prod", app.ErrConflict)
 	view := strings.Join(operationErrorLines(modal, 80), "\n")
-	if strings.Contains(view, "SSH startup failed") || !strings.Contains(view, "Recoverable operation error") || !strings.Contains(view, "r Reload") {
+	for _, want := range []string{"Operation move", "Target /prod", "Cause Stale version was never overwritten. The connection changed.", "r Reload"} {
+		if !renderedTextContains(view, want) {
+			t.Fatalf("general modal omitted %q: %q", want, view)
+		}
+	}
+	if strings.Contains(view, "SSH startup failed") || strings.Contains(view, "Recoverable operation error") {
 		t.Fatalf("general modal behavior changed: %q", view)
 	}
 }
@@ -182,9 +191,21 @@ func TestIncompletePreActiveFailureUsesSafeDiagnosticFallback(t *testing.T) {
 	}
 	updateModel(model, sessionFinishedMsg{id: 4, result: result})
 	view := model.View().Content
-	if model.activeSSHFailure() == nil || !strings.Contains(view, "Category: unexpected") || !strings.Contains(view, "Stage: unknown") || strings.Contains(view, "Recoverable operation error") {
+	if model.activeSSHFailure() == nil || !strings.Contains(view, "[SSH Failure]") || !renderedTextContains(view, "Category unexpected") || !renderedTextContains(view, "Stage unknown") || strings.Contains(view, "Recoverable operation error") {
 		t.Fatalf("incomplete startup result did not use safe fallback: %q", view)
 	}
+}
+
+func renderedTextContains(rendered, want string) bool {
+	compact := func(value string) string {
+		return strings.Map(func(r rune) rune {
+			if unicode.IsSpace(r) {
+				return -1
+			}
+			return r
+		}, value)
+	}
+	return strings.Contains(compact(rendered), compact(want))
 }
 
 func allowedDetail(category app.SSHFailureReason) string {

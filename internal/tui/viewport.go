@@ -123,15 +123,44 @@ func roundMulDiv(a, b, divisor int) int {
 func viewportTruncateLines(lines []string, width int) []string {
 	truncated := make([]string, len(lines))
 	for index, line := range lines {
-		for _, label := range []string{"Target: ", "ID: "} {
-			if strings.HasPrefix(line, label) {
-				line = label + safeText(strings.TrimPrefix(line, label), max(0, width-len(label)))
-				break
-			}
-		}
-		truncated[index] = viewportEllipsis(line, width)
+		truncated[index] = viewportEllipsis(viewportSafeLine(line), width)
 	}
 	return truncated
+}
+
+// viewportSafeLine preserves application SGR styling while making every other
+// control-bearing or invalid text sequence visible and inert.
+func viewportSafeLine(line string) string {
+	var projected strings.Builder
+	plainStart := 0
+	for offset := 0; offset < len(line); {
+		end := sgrSequenceEnd(line, offset)
+		if end == offset {
+			offset++
+			continue
+		}
+		projected.WriteString(safeText(line[plainStart:offset], int(^uint(0)>>1)))
+		projected.WriteString(line[offset:end])
+		offset = end
+		plainStart = end
+	}
+	projected.WriteString(safeText(line[plainStart:], int(^uint(0)>>1)))
+	return projected.String()
+}
+
+func sgrSequenceEnd(line string, offset int) int {
+	if offset < 0 || offset+2 > len(line) || line[offset] != '\x1b' || line[offset+1] != '[' {
+		return offset
+	}
+	for end := offset + 2; end < len(line); end++ {
+		if line[end] == 'm' {
+			return end + 1
+		}
+		if line[end] < 0x20 || line[end] > 0x3f {
+			return offset
+		}
+	}
+	return offset
 }
 
 func viewportMaximumOffset(contentLength, rows int) int {

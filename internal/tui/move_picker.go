@@ -98,11 +98,16 @@ func (p *movePicker) destination() *app.Folder {
 	return &p.targets[p.selected].folder
 }
 
-func (p *movePicker) modalLines(width int) ([]string, int) {
-	lines := []string{"Move destination"}
-	lines = append(lines, projectedModalLine("Source: ", p.source.Path, width))
-	revision := "/" + fmt.Sprint(p.source.Revision)
-	lines = append(lines, projectedModalLineWithSuffix("ID/revision: ", string(p.source.ID), revision, width))
+func (p *movePicker) modalLines(width int, semanticStyles ...styles) ([]string, int) {
+	style := newStyles(true)
+	if len(semanticStyles) != 0 {
+		style = semanticStyles[0]
+	}
+	fields := []displayField{
+		{label: "Source", value: safeText(p.source.Path, int(^uint(0)>>1))},
+		{label: "ID/revision", value: safeText(fmt.Sprintf("%s/%d", p.source.ID, p.source.Revision), int(^uint(0)>>1))},
+	}
+	lines := newStructuredFieldGroup(fields, 0, width, false).render(style)
 	active := len(lines) + p.selected
 	for index, target := range p.targets {
 		marker := "  "

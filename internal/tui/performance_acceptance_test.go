@@ -32,11 +32,25 @@ func TestUS5PerformanceAcceptance1100NodeFixture(t *testing.T) {
 	if got := len(snapshot.nodes); got != 1101 {
 		t.Fatalf("fixture nodes = %d, want root + 100 folders + 1000 connections", got)
 	}
+	var connectionID app.NodeID
+	for _, childID := range snapshot.children[detailFolder] {
+		if snapshot.nodes[childID].connection != nil {
+			connectionID = childID
+			break
+		}
+	}
+	if connectionID == "" {
+		t.Fatal("fixture detail folder has no connection")
+	}
 
 	model := New(Config{Width: 80, Height: 24, NoColor: true})
 	model.browser.setSnapshot(*snapshot, "")
 	model.syncDetail()
 	model.ownedSelectionID = model.browser.selectedID
+	panelModel := New(Config{Width: 80, Height: 24, NoColor: true})
+	panelModel.browser.setSnapshot(*snapshot, "")
+	panelModel.syncDetail()
+	panelModel.ownedSelectionID = panelModel.browser.selectedID
 
 	local := []struct {
 		name  string
@@ -57,6 +71,36 @@ func TestUS5PerformanceAcceptance1100NodeFixture(t *testing.T) {
 		}, run: func(int) {
 			updateModel(model, keyPress("tab"))
 			_ = model.View().Content
+		}},
+		{name: "help", setup: func(int) {
+			panelModel.modal = modalState{}
+			panelModel.browser.selectedID = snapshot.rootID
+			panelModel.ownedSelectionID = snapshot.rootID
+			panelModel.focusOwner = focusOwnerTree
+			panelModel.width, panelModel.height = 80, 24
+			panelModel.syncDetail()
+		}, run: func(int) {
+			updateModel(panelModel, keyPress("?"))
+			if panelModel.modal.kind != modalKindHelp {
+				t.Fatal("help operation did not open Help")
+			}
+			_ = panelModel.View().Content
+		}},
+		{name: "connection confirmation", setup: func(int) {
+			panelModel.modal = modalState{}
+			panelModel.browser.selectedID = connectionID
+			panelModel.browser.expandAncestors(connectionID)
+			panelModel.browser.rebuildRows()
+			panelModel.ownedSelectionID = connectionID
+			panelModel.focusOwner = focusOwnerTree
+			panelModel.width, panelModel.height = 80, 24
+			panelModel.syncDetail()
+		}, run: func(int) {
+			updateModel(panelModel, keyPress("c"))
+			if panelModel.modal.kind != modalKindConnectConfirmation {
+				t.Fatal("connection confirmation operation did not open confirmation")
+			}
+			_ = panelModel.View().Content
 		}},
 		{name: "scroll", setup: func(int) {
 			model.browser.selectedID = detailFolder

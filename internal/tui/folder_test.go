@@ -6,8 +6,110 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/pluque01/orza/internal/app"
 )
+
+func TestFolderFormsReuseModalBadgeAndSharedFieldHierarchy(t *testing.T) {
+	destination := app.Folder{Node: app.Node{ID: "destination", Kind: app.NodeKindFolder, Name: "team", Path: "/team", Revision: 5}}
+	original := app.Folder{Node: app.Node{ID: "original", Kind: app.NodeKindFolder, Name: "source", Path: "/team/source", Revision: 7}}
+
+	tests := []struct {
+		name       string
+		kind       modalKind
+		form       *folderForm
+		payload    func(*folderForm) any
+		badge      string
+		values     []string
+		forbidden  []string
+		lineCount  int
+		activeLine int
+	}{
+		{
+			name: "create", kind: modalKindFolderCreate, form: newFolderForm(nil, app.ItemSelector{ID: destination.ID}),
+			payload: func(form *folderForm) any { return folderCreatePayload{form: form} }, badge: "[Create Folder]",
+			values: []string{"/team", "destination", "draft"}, forbidden: []string{"Create folder", "Target:", "Destination ID:", "Name:"}, lineCount: 4, activeLine: 2,
+		},
+		{
+			name: "edit", kind: modalKindFolderEdit, form: newFolderForm(&original, app.ItemSelector{}),
+			payload: func(form *folderForm) any { return folderEditPayload{form: form} }, badge: "[Edit Folder]",
+			values: []string{"/team/source", "original/7", "source"}, forbidden: []string{"Edit folder", "Target:", "ID/revision:", "Name:"}, lineCount: 4, activeLine: 2,
+		},
+	}
+	tests[0].form.setDestination(destination)
+	tests[0].form.input.SetValue("draft")
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			plainLines, active := test.form.modalLines(80, newStyles(true))
+			coloredLines, coloredActive := test.form.modalLines(80, newStyles(false))
+			plain := strings.Join(plainLines, "\n")
+			colored := strings.Join(coloredLines, "\n")
+			if got := ansi.Strip(colored); got != plain {
+				t.Fatalf("color semantics = %q, want %q", got, plain)
+			}
+			if !strings.Contains(colored, "\x1b[90m") {
+				t.Fatalf("descriptive labels were not muted: %q", colored)
+			}
+			if len(plainLines) != test.lineCount || active != test.activeLine || coloredActive != active {
+				t.Fatalf("lines/active = %d/%d/%d, want %d/%d/%d: %#v", len(plainLines), active, coloredActive, test.lineCount, test.activeLine, test.activeLine, plainLines)
+			}
+			for _, value := range test.values {
+				if !strings.Contains(plain, value) {
+					t.Fatalf("folder form omitted captured value %q: %q", value, plain)
+				}
+			}
+			valueColumn := -1
+			for index, value := range test.values {
+				column := strings.Index(plainLines[index], value)
+				if column < 0 || valueColumn >= 0 && column != valueColumn {
+					t.Fatalf("folder values are not aligned: column %d, want %d in %#v", column, valueColumn, plainLines)
+				}
+				valueColumn = column
+			}
+			for _, forbidden := range test.forbidden {
+				if strings.Contains(plain, forbidden) {
+					t.Fatalf("folder form retained duplicate heading or colon label %q: %q", forbidden, plain)
+				}
+			}
+			if !strings.HasPrefix(plainLines[active], "> ") || plainLines[len(plainLines)-1] != "Ctrl+S/Enter Save  Esc Cancel  F1 Help" {
+				t.Fatalf("folder focus/control contract changed: %#v", plainLines)
+			}
+
+			model := New(Config{Width: 80, Height: 24, NoColor: true})
+			if !model.openGenericModal(test.kind, nil, test.payload(test.form)) {
+				t.Fatal("folder modal did not open")
+			}
+			view := model.View().Content
+			if strings.Count(view, test.badge) != 1 || strings.Count(strings.ToLower(view), strings.ToLower(strings.Trim(test.badge, "[]"))) != 1 {
+				t.Fatalf("folder modal did not reuse exactly one title badge %q:\n%s", test.badge, view)
+			}
+		})
+	}
+}
+
+func TestFolderFormSanitizesDynamicValuesBeforeLabelStyling(t *testing.T) {
+	unsafe := "team\x1b[31m\n\u202e"
+	destination := app.Folder{Node: app.Node{ID: app.NodeID(unsafe), Kind: app.NodeKindFolder, Path: "/" + unsafe, Revision: 9}}
+	form := newFolderForm(nil, app.ItemSelector{ID: destination.ID})
+	form.setDestination(destination)
+	form.input.SetValue(unsafe)
+	capturedInput := form.input.Value()
+
+	lines, _ := form.modalLines(200, newStyles(false))
+	view := strings.Join(lines, "\n")
+	if strings.Contains(view, "\x1b[31m") || strings.Contains(view, "\u202e") {
+		t.Fatalf("folder form styled unsanitized dynamic content: %q", view)
+	}
+	for _, want := range []string{safeText(destination.Path, 200), safeText(string(destination.ID), 200), safeText(form.input.Value(), 200)} {
+		if !strings.Contains(ansi.Strip(view), want) {
+			t.Fatalf("folder form omitted safe projection %q: %q", want, ansi.Strip(view))
+		}
+	}
+	if form.destination.Path != destination.Path || form.destination.ID != destination.ID || form.destination.Revision != destination.Revision || form.input.Value() != capturedInput {
+		t.Fatal("folder rendering changed captured dynamic values")
+	}
+}
 
 func TestFolderNameManualPasteEquivalenceCorpus(t *testing.T) {
 	for payloadName, payload := range normalEquivalencePayloads() {

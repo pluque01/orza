@@ -516,7 +516,6 @@ func actionForKey(msg tea.KeyPressMsg, descriptors []actionDescriptor, keys keyM
 
 func actionHelpLines(descriptors []actionDescriptor) []string {
 	lines := []string{
-		"Help",
 		"Paste isolation requires terminal bracketed-paste support.",
 		"Without it, input works but pasted bytes cannot be distinguished from typing.",
 		"The application never reads the operating system clipboard.",

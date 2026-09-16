@@ -5,9 +5,49 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/pluque01/orza/internal/app"
 	"github.com/pluque01/orza/internal/tui"
 )
+
+type tuiCapturedField struct {
+	label string
+	value string
+}
+
+func TestTUIActionsAndHelpUseSingularBracketedTitles(t *testing.T) {
+	frames := make(map[bool][2]string, 2)
+	for _, noColor := range []bool{true, false} {
+		service := tui.ConnectionFuncs{ListFunc: func(context.Context, app.ListConnectionsRequest) (app.ListConnectionsResult, error) {
+			return app.ListConnectionsResult{CatalogRevision: 1}, nil
+		}}
+		model := tui.New(tui.Config{Connections: service, Width: 80, Height: 24, NoColor: noColor})
+		updateTUI(t, model, model.Init()())
+		actions := ansi.Strip(model.View().Content)
+		if strings.Count(actions, "[Actions]") != 1 {
+			t.Fatalf("no-color=%t Actions badge count != 1:\n%s", noColor, actions)
+		}
+
+		updateTUI(t, model, tuiKey("?"))
+		help := ansi.Strip(model.View().Content)
+		if strings.Count(help, "[Help]") != 1 || strings.Count(help, "Help") != 2 {
+			t.Fatalf("no-color=%t Help title is missing or duplicated in its body:\n%s", noColor, help)
+		}
+		for _, action := range []string{"n New connection", "f New folder", "r Reload", "? Help", "q Quit"} {
+			if !strings.Contains(help, action) {
+				t.Fatalf("no-color=%t Help omitted root action %q:\n%s", noColor, action, help)
+			}
+		}
+		updateTUI(t, model, tuiKey("esc"))
+		if strings.Count(ansi.Strip(model.View().Content), "[Actions]") != 1 {
+			t.Fatalf("no-color=%t Esc did not restore Actions", noColor)
+		}
+		frames[noColor] = [2]string{actions, help}
+	}
+	if frames[false] != frames[true] {
+		t.Fatal("ANSI-stripped Actions/Help frames differ from no-color frames")
+	}
+}
 
 func TestTUIContextualActionsAndCapturedConnectTarget(t *testing.T) {
 	connection := app.Connection{
@@ -31,6 +71,9 @@ func TestTUIContextualActionsAndCapturedConnectTarget(t *testing.T) {
 	updateTUI(t, model, model.Init()())
 
 	root := model.View().Content
+	if !strings.Contains(root, "[Actions]") {
+		t.Fatalf("root omitted bracketed Actions title:\n%s", root)
+	}
 	for _, action := range []string{"n New connection", "f New folder", "r Reload", "? Help", "q Quit"} {
 		if !strings.Contains(root, action) {
 			t.Fatalf("root Actions omitted %q:\n%s", action, root)
@@ -51,19 +94,23 @@ func TestTUIContextualActionsAndCapturedConnectTarget(t *testing.T) {
 	}
 	updateTUI(t, model, tuiKey("c"))
 	confirmation := model.View().Content
-	for _, captured := range []string{"Path: /server", "Endpoint: server.test:2222", "ID: 11111111111111111111111111111111", "Revision: 7"} {
-		if !strings.Contains(confirmation, captured) {
-			t.Fatalf("connect confirmation omitted captured %q:\n%s", captured, confirmation)
-		}
-	}
+	assertColonlessCapturedFields(t, confirmation, []tuiCapturedField{
+		{"Path", "/server"},
+		{"Endpoint", "server.test:2222"},
+		{"ID", "11111111111111111111111111111111"},
+		{"Revision", "7"},
+	})
 	updateTUI(t, model, tuiKey("esc"))
 	executeTUICommand(t, model, updateTUI(t, model, tuiKey("d")))
 	deleteView := model.View().Content
-	for _, captured := range []string{"Delete connection?", "Path: /server", "Target: (default)@server.test"} {
-		if !strings.Contains(deleteView, captured) {
-			t.Fatalf("delete confirmation omitted captured %q:\n%s", captured, deleteView)
-		}
+	if !strings.Contains(deleteView, "[Delete]") || !strings.Contains(deleteView, "permanently delete connection") {
+		t.Fatalf("delete confirmation omitted its type or action:\n%s", deleteView)
 	}
+	assertColonlessCapturedFields(t, deleteView, []tuiCapturedField{
+		{"Path", "/server"},
+		{"Target", "(default)@server.test:2222"},
+		{"ID/revision", "11111111111111111111111111111111/7"},
+	})
 }
 
 func TestTUIFolderActionInventory(t *testing.T) {
@@ -91,5 +138,28 @@ func TestTUIFolderActionInventory(t *testing.T) {
 	}
 	if strings.Contains(view, "c Connect") {
 		t.Fatalf("folder Actions exposed Connect:\n%s", view)
+	}
+}
+
+func assertColonlessCapturedFields(t *testing.T, view string, fields []tuiCapturedField) {
+	t.Helper()
+	plain := ansi.Strip(view)
+	for _, field := range fields {
+		if strings.Contains(plain, field.label+":") {
+			t.Fatalf("captured field label %q retained a colon:\n%s", field.label, plain)
+		}
+		want := field.label + " " + field.value
+		found := false
+		for _, line := range strings.Split(plain, "\n") {
+			for _, panelCell := range strings.Split(line, "│") {
+				if strings.Join(strings.Fields(panelCell), " ") == want {
+					found = true
+					break
+				}
+			}
+		}
+		if !found {
+			t.Fatalf("confirmation omitted colonless captured field %q:\n%s", want, plain)
+		}
 	}
 }

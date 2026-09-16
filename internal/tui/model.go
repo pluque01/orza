@@ -449,7 +449,7 @@ func (m *Model) focusedLayoutRegion() layoutRegion {
 
 func (m *Model) detailMaximumOffset() int {
 	layout := calculateLayout(m.width, m.height, m.focusedLayoutRegion())
-	return viewportMaximumOffset(len(m.detailState.content(layout.details.contentWidth())), layout.details.contentHeight())
+	return viewportMaximumOffset(len(m.detailState.content(layout.details.contentWidth(), m.styles)), layout.details.contentHeight())
 }
 
 func (m *Model) scrollDetail(delta int) {
@@ -1855,12 +1855,14 @@ func (m *Model) browserShell(layout layoutState) string {
 	} else if m.securityInput != nil && m.securityInput.secret != nil {
 		details = strings.Split(m.securityInput.secret.view(m.styles), "\n")
 	} else if m.screen == screenConnectionForm && m.form != nil {
-		if conflict := m.formConflictLines(layout.details.contentWidth()); len(conflict) != 0 {
-			details = append(details, conflict...)
-		}
-		formHeight := max(1, layout.details.contentHeight()-len(details))
-		detailTrackStart = len(details)
+		conflict := m.formConflictLines(layout.details.contentWidth())
+		formHeight := max(1, layout.details.contentHeight()-len(conflict))
 		projection := m.form.projectAt(m.styles, layout.details.contentWidth(), formHeight)
+		// Keep the active form projection visible when expanded conflict identity
+		// rows exhaust the compact Details region.
+		conflictRows := min(len(conflict), max(0, layout.details.contentHeight()-len(projection.lines)))
+		details = append(details, conflict[:conflictRows]...)
+		detailTrackStart = len(details)
 		details = append(details, projection.lines...)
 		detailScrollbar = projection.scrollbar
 	} else {
@@ -1870,7 +1872,7 @@ func (m *Model) browserShell(layout layoutState) string {
 			detailRows--
 		}
 		detailTrackStart = len(details)
-		projection := m.detailState.project(max(0, detailRows), layout.details.contentWidth())
+		projection := m.detailState.project(max(0, detailRows), layout.details.contentWidth(), m.styles)
 		details = append(details, projection.lines...)
 		detailScrollbar = projection.scrollbar
 	}
@@ -1899,7 +1901,14 @@ func (m *Model) browserShell(layout layoutState) string {
 		actions = packActions(status, actionsFor(context), layout.actions.contentWidth(), layout.actions.contentHeight())
 	}
 	treePanel := renderRegionPanelWithScrollbar(m.styles.regionTitle("Tree", m.focusOwner == focusOwnerTree), tree, layout.tree, m.styles, treeProjection.scrollbar, 0)
-	detailPanel := renderRegionPanelWithScrollbar(m.styles.regionTitle("Details", m.focusOwner == focusOwnerDetail || m.focusOwner == focusOwnerConnectionForm), details, layout.details, m.styles, detailScrollbar, detailTrackStart)
+	detailTitle := m.styles.regionTitle("Details", m.focusOwner == focusOwnerDetail || m.focusOwner == focusOwnerConnectionForm)
+	if m.screen == screenConnectionForm && m.form != nil {
+		formBadge := m.styles.contentBadge(m.form.title())
+		if !strings.Contains(ansi.Strip(strings.Join(details, "\n")), ansi.Strip(formBadge)) {
+			detailTitle += " " + formBadge
+		}
+	}
+	detailPanel := renderRegionPanelWithScrollbar(detailTitle, details, layout.details, m.styles, detailScrollbar, detailTrackStart)
 	actionsPanel := renderRegionPanel(m.styles.regionTitle("Actions", false), actions, layout.actions)
 
 	if layout.mode == layoutWide {
@@ -1962,10 +1971,12 @@ func (m *Model) formConflictLines(width int) []string {
 	}
 	lines := []string{m.styles.warning.Render("Warning: Save blocked: " + kind + ".")}
 	if conflict.detailVisible {
-		lines = append(lines,
-			"Target: "+conflict.target.path,
-			fmt.Sprintf("ID: %s  Revision: %d", conflict.target.id, conflict.target.revision),
-		)
+		identity := []displayField{
+			{label: "Target", value: safeText(conflict.target.path, width)},
+			{label: "ID", value: safeText(string(conflict.target.id), width)},
+			{label: "Revision", value: fmt.Sprintf("%d", conflict.target.revision)},
+		}
+		lines = append(lines, newStructuredFieldGroup(identity, 0, width, false).render(m.styles)...)
 	}
 	lines = append(lines, "r Reload  b Back  Esc Cancel warning")
 	return viewportTruncateLines(lines, width)

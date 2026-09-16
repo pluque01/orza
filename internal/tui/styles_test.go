@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -14,8 +15,10 @@ func TestStylesNoColorTextualSemantics(t *testing.T) {
 		got  string
 		want string
 	}{
-		{name: "active title", got: s.regionTitle("Tree", true), want: "[*] Tree"},
-		{name: "inactive title", got: s.regionTitle("Details", false), want: "[ ] Details"},
+		{name: "active title", got: s.regionTitle("Tree", true), want: "[*] [Tree]"},
+		{name: "inactive title", got: s.regionTitle("Details", false), want: "[ ] [Details]"},
+		{name: "content badge", got: s.contentBadge("Connection"), want: "[Connection]"},
+		{name: "descriptive label", got: s.descriptiveLabel("Endpoint"), want: "Endpoint"},
 		{name: "selected", got: s.item("Prod", itemSemantics{selected: true}), want: ">   Prod"},
 		{name: "focused", got: s.item("Name", itemSemantics{focused: true}), want: ">   Name"},
 		{name: "invalid", got: s.item("Host", itemSemantics{invalid: true}), want: " !  Host"},
@@ -50,6 +53,8 @@ func TestStylesColorRetainsTextualSemantics(t *testing.T) {
 	}{
 		{name: "active title", color: color.regionTitle("Tree", true), plain: plain.regionTitle("Tree", true)},
 		{name: "inactive title", color: color.regionTitle("Details", false), plain: plain.regionTitle("Details", false)},
+		{name: "content badge", color: color.contentBadge("Connection"), plain: plain.contentBadge("Connection")},
+		{name: "descriptive label", color: color.descriptiveLabel("Endpoint"), plain: plain.descriptiveLabel("Endpoint")},
 		{name: "selected", color: color.item("Prod", itemSemantics{selected: true}), plain: plain.item("Prod", itemSemantics{selected: true})},
 		{name: "focused", color: color.item("Name", itemSemantics{focused: true}), plain: plain.item("Name", itemSemantics{focused: true})},
 		{name: "invalid", color: color.item("Host", itemSemantics{invalid: true}), plain: plain.item("Host", itemSemantics{invalid: true})},
@@ -70,6 +75,100 @@ func TestStylesColorRetainsTextualSemantics(t *testing.T) {
 				t.Fatalf("color text has no ANSI styling: %q", tt.color)
 			}
 		})
+	}
+}
+
+func TestStylesTypeBadgeConstraintsAndBrightBlueRendering(t *testing.T) {
+	plain := newStyles(true)
+	color := newStyles(false)
+
+	plainBadge, ok := plain.typeBadge("Connection", badgePlacementContent, true)
+	if !ok {
+		t.Fatal("controlled content badge was rejected")
+	}
+	if plainBadge.label != "Connection" || plainBadge.placement != badgePlacementContent || plainBadge.active || plainBadge.accented {
+		t.Fatalf("plain content badge = %#v", plainBadge)
+	}
+	colorBadge, ok := color.typeBadge("Connection", badgePlacementContent, false)
+	if !ok || !colorBadge.accented {
+		t.Fatalf("color content badge = %#v, valid %t", colorBadge, ok)
+	}
+
+	plainText := plain.renderTypeBadge(plainBadge)
+	coloredText := color.renderTypeBadge(colorBadge)
+	if plainText != "[Connection]" || ansi.Strip(coloredText) != plainText {
+		t.Fatalf("badge color/plain = %q/%q", coloredText, plainText)
+	}
+	if want := "\x1b[1;30;104m[Connection]\x1b[m"; coloredText != want {
+		t.Fatalf("bright-blue badge = %q, want exact %q", coloredText, want)
+	}
+
+	for _, test := range []struct {
+		name      string
+		label     string
+		placement badgePlacement
+	}{
+		{name: "empty", placement: badgePlacementContent},
+		{name: "invalid placement", label: "Connection"},
+		{name: "control bearing", label: "Con\nnection", placement: badgePlacementContent},
+		{name: "ANSI bearing", label: "\x1b[31mConnection", placement: badgePlacementContent},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, valid := color.typeBadge(test.label, test.placement, false); valid {
+				t.Fatalf("accepted uncontrolled badge label %q at placement %d", test.label, test.placement)
+			}
+		})
+	}
+}
+
+func TestStylesStructuredFieldGroupUsesDisplayWidthAndLocalThreshold(t *testing.T) {
+	fields := []displayField{
+		{label: "Name", value: "production"},
+		{label: "界面", value: "catalog"},
+		{label: "Endpoint", value: "host:2222"},
+	}
+
+	aligned := newStructuredFieldGroup(fields, 0, 17, false)
+	if aligned.labelWidth != 8 || aligned.availableValueWidth() != 8 || aligned.minimumValueWidth != 8 || aligned.mode != fieldModeAligned {
+		t.Fatalf("aligned group = %#v, available value width %d", aligned, aligned.availableValueWidth())
+	}
+	if got, want := aligned.render(newStyles(true)), []string{"Name     product…", "界面     catalog", "Endpoint host:22…"}; !slices.Equal(got, want) {
+		t.Fatalf("aligned fields = %#v, want %#v", got, want)
+	}
+
+	stacked := newStructuredFieldGroup(fields, 0, 16, false)
+	if stacked.availableValueWidth() != 7 || stacked.mode != fieldModeStacked {
+		t.Fatalf("stacked group = %#v, available value width %d", stacked, stacked.availableValueWidth())
+	}
+	if got, want := stacked.render(newStyles(true)), []string{"Name", "  production", "界面", "  catalog", "Endpoint", "  host:2222"}; !slices.Equal(got, want) {
+		t.Fatalf("stacked fields = %#v, want %#v", got, want)
+	}
+
+	compact := newStructuredFieldGroup(fields, 4, 9, true)
+	if compact.prefixWidth != 4 || compact.contentWidth != 9 || compact.mode != fieldModeCompactInteractive {
+		t.Fatalf("compact interactive group = %#v", compact)
+	}
+	fields[0].label = "mutated"
+	if compact.fields[0].label != "Name" {
+		t.Fatalf("group did not retain ordered field snapshot: %#v", compact.fields)
+	}
+}
+
+func TestStylesDescriptiveLabelsAreMutedColonlessAndStatusesUnchanged(t *testing.T) {
+	plain := newStyles(true)
+	color := newStyles(false)
+	if got := plain.descriptiveLabel("Endpoint:"); got != "Endpoint" {
+		t.Fatalf("colonless label = %q", got)
+	}
+	colored := color.descriptiveLabel("Endpoint:")
+	if ansi.Strip(colored) != plain.descriptiveLabel("Endpoint:") || !strings.Contains(colored, "\x1b[90m") {
+		t.Fatalf("muted color/plain label = %q/%q", colored, plain.descriptiveLabel("Endpoint:"))
+	}
+	if got := plain.warningMessage("target changed"); got != "Warning: target changed" {
+		t.Fatalf("warning prefix = %q", got)
+	}
+	if got := plain.failureMessage("save failed"); got != "Error: save failed" {
+		t.Fatalf("error prefix = %q", got)
 	}
 }
 

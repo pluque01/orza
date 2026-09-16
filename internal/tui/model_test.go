@@ -115,8 +115,9 @@ func TestModelContextualNavigationConfirmationAndNarrowMode(t *testing.T) {
 	captured := payload.confirmation.connection
 	copy := model.browser.snapshot.nodes[connection.ID]
 	copy.connection.Host = "changed.test"
-	if payload.confirmation.connection.Host != captured.Host || !strings.Contains(model.View().Content, "/prod") || !strings.Contains(model.View().Content, "host.test:22") {
-		t.Fatalf("confirmation was mutable or incomplete: %q", model.View().Content)
+	view := model.View().Content
+	if payload.confirmation.connection.Host != captured.Host || !strings.Contains(view, "[Connect]") || !renderedTextContains(view, "Path /prod") || !renderedTextContains(view, "Endpoint host.test:22") || !renderedTextContains(view, "ID connection") || !renderedTextContains(view, "Revision 4") {
+		t.Fatalf("confirmation was mutable or incomplete: %q", view)
 	}
 	updateModel(model, keyPress("esc"))
 	if model.modal.isOpen() || model.browser.selectedID != connection.ID {
@@ -124,7 +125,7 @@ func TestModelContextualNavigationConfirmationAndNarrowMode(t *testing.T) {
 	}
 
 	updateModel(model, tea.WindowSizeMsg{Width: 42, Height: 10})
-	view := model.View().Content
+	view = model.View().Content
 	for _, value := range []string{"Terminal too small", "Required minimum: 40x12", "? Help", "q Quit"} {
 		if !strings.Contains(view, value) {
 			t.Fatalf("undersized view omitted %q: %q", value, view)
@@ -380,7 +381,7 @@ func TestHelpDocumentsUnsupportedBracketedPasteLimitation(t *testing.T) {
 	view := model.View().Content
 	payload, ok := model.modal.payload.(helpPayload)
 	completeHelp := strings.Join(strings.Fields(strings.Join(payload.lines, " ")), "")
-	if !ok || !strings.Contains(view, "Help") || !strings.Contains(completeHelp, "bracketed-pastesupport") || !strings.Contains(completeHelp, "cannotbedistinguishedfromtyping") || !strings.Contains(completeHelp, "neverreadstheoperatingsystemclipboard") {
+	if !ok || !strings.Contains(view, "[Help]") || !strings.Contains(completeHelp, "bracketed-pastesupport") || !strings.Contains(completeHelp, "cannotbedistinguishedfromtyping") || !strings.Contains(completeHelp, "neverreadstheoperatingsystemclipboard") {
 		t.Fatalf("help omitted unsupported-terminal limitation: payload=%q view=%q", completeHelp, view)
 	}
 }
@@ -418,8 +419,11 @@ func TestSSHFailureRecoveryResolvesCapturedIDAndRequiresConfirmation(t *testing.
 		t.Fatalf("resolution did not open confirmation: get=%d connect=%d modal=%#v", getCalls, connectCalls, model.modal)
 	}
 	view := model.View().Content
-	for _, want := range []string{"Previous path: /old", "Previous endpoint: [2001:db8::1]:22", "Path: /new", "Endpoint: [2001:db8::2]:2202", "Revision: 4"} {
-		if !strings.Contains(view, want) {
+	if !strings.Contains(view, "[SSH Failure]") {
+		t.Fatalf("changed-target confirmation omitted SSH Failure badge: %q", view)
+	}
+	for _, want := range []string{"Previous path /old", "Previous endpoint [2001:db8::1]:22", "Previous ID/revision captured/3", "Path /new", "Endpoint [2001:db8::2]:2202", "ID captured", "Revision 4"} {
+		if !renderedTextContains(view, want) {
 			t.Fatalf("changed-target confirmation omitted %q: %q", want, view)
 		}
 	}

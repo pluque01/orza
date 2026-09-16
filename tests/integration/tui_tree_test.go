@@ -180,7 +180,7 @@ func TestTUITreeDetailsDirectChildrenEmptyAndFallback(t *testing.T) {
 	// root -> empty
 	updateTUI(t, model, tuiKey("l"))
 	view := model.View().Content
-	for _, want := range []string{"[*] Tree", "[ ] Details", "Kind: Folder", "Path: /empty", "Direct connections: 0", "No direct connections."} {
+	for _, want := range []string{"[*] [Tree]", "[ ] [Details]", "[Folder]", "Path               /empty", "Direct connections 0", "No direct connections."} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("empty-folder Details omitted %q:\n%s", want, view)
 		}
@@ -192,7 +192,7 @@ func TestTUITreeDetailsDirectChildrenEmptyAndFallback(t *testing.T) {
 	// empty -> team; folder detail must exclude nested descendants.
 	updateTUI(t, model, tuiKey("j"))
 	view = model.View().Content
-	for _, want := range []string{"Path: /team", "Direct connections: 1", "direct: direct.test:2201"} {
+	for _, want := range []string{"Path               /team", "Direct connections 1", "direct             direct.test:2201"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("folder Details omitted %q:\n%s", want, view)
 		}
@@ -206,7 +206,7 @@ func TestTUITreeDetailsDirectChildrenEmptyAndFallback(t *testing.T) {
 	updateTUI(t, model, tuiKey("j"))
 	updateTUI(t, model, tuiKey("j"))
 	view = model.View().Content
-	for _, want := range []string{"Kind: Connection", "Path: /team/direct", "Endpoint: direct.test:2201", "User: deploy", "Method: agent"} {
+	for _, want := range []string{"[Connection]", "Path     /team/direct", "Endpoint direct.test:2201", "User     deploy", "Method   agent"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("connection Details omitted %q:\n%s", want, view)
 		}
@@ -226,8 +226,63 @@ func TestTUITreeDetailsDirectChildrenEmptyAndFallback(t *testing.T) {
 	}
 	executeTUICommand(t, model, updateTUI(t, model, tuiKey("r")))
 	view = model.View().Content
-	if !strings.Contains(view, ">   [-] team") || !strings.Contains(view, "Path: /team") || !strings.Contains(view, "Direct connections: 0") || strings.Contains(view, "Path: /team/direct") {
+	if !strings.Contains(view, ">   [-] team") || !strings.Contains(view, "Path               /team") || !strings.Contains(view, "Direct connections 0") || strings.Contains(view, "Path     /team/direct") {
 		t.Fatalf("missing selection did not atomically fall back to parent:\n%s", view)
+	}
+}
+
+func TestTUITreeDetailsBadgesSynchronizeWithSelectionInColorAndNoColor(t *testing.T) {
+	framesByMode := make(map[bool]map[string]string)
+	for _, noColor := range []bool{true, false} {
+		folders, connections := integrationTreeServices(t)
+		folder, err := folders.Create(context.Background(), app.CreateFolderRequest{Parent: app.ItemSelector{Path: "/"}, Name: "team"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := connections.Create(context.Background(), app.CreateConnectionRequest{
+			Parent: app.ItemSelector{ID: folder.Folder.ID}, Name: "direct", Host: "direct.test", Port: 2201, AuthMethod: app.AuthMethodAgent,
+		}); err != nil {
+			t.Fatal(err)
+		}
+
+		model := tui.New(tui.Config{Folders: folders, Connections: connections, Width: 80, Height: 24, NoColor: noColor})
+		executeTUICommand(t, model, model.Init())
+		frames := map[string]string{"root": model.View().Content}
+		updateTUI(t, model, tuiKey("l"))
+		frames["folder"] = model.View().Content
+		updateTUI(t, model, tuiKey("l"))
+		updateTUI(t, model, tuiKey("l"))
+		frames["connection"] = model.View().Content
+		updateTUI(t, model, tuiKey("tab"))
+		frames["details-focused"] = model.View().Content
+
+		for name, view := range frames {
+			plain := ansi.Strip(view)
+			for _, region := range []string{"[Tree]", "[Details]", "[Actions]"} {
+				if strings.Count(plain, region) != 1 {
+					t.Fatalf("no-color=%t %s region badge %q count != 1:\n%s", noColor, name, region, plain)
+				}
+			}
+			contentBadge := map[string]string{
+				"root": "[Root]", "folder": "[Folder]", "connection": "[Connection]", "details-focused": "[Connection]",
+			}[name]
+			if strings.Count(plain, contentBadge) != 1 || strings.Contains(plain, "Kind:") {
+				t.Fatalf("no-color=%t %s content badge is not distinct and singular:\n%s", noColor, name, plain)
+			}
+		}
+		if !strings.Contains(ansi.Strip(frames["connection"]), "[*] [Tree]") || !strings.Contains(ansi.Strip(frames["details-focused"]), "[*] [Details]") {
+			t.Fatalf("no-color=%t region ownership changed across Details focus", noColor)
+		}
+
+		framesByMode[noColor] = make(map[string]string, len(frames))
+		for name, view := range frames {
+			framesByMode[noColor][name] = ansi.Strip(view)
+		}
+	}
+	for name, plain := range framesByMode[true] {
+		if colored := framesByMode[false][name]; colored != plain {
+			t.Fatalf("%s color/no-color stripped frames differ", name)
+		}
 	}
 }
 
@@ -270,20 +325,21 @@ func TestTUIScrollbarKeyboardOnlyOverflow(t *testing.T) {
 	executeTUICommand(t, model, model.Init())
 	for _, key := range []string{"j", "j", "G", "k", "g"} {
 		updateTUI(t, model, tuiKey(key))
-		assertKeyboardOnlyOverflowView(t, model, "Tree after "+key, "Tree", "[*] Tree")
+		assertKeyboardOnlyOverflowView(t, model, "Tree after "+key, "Tree", "[*] [Tree]")
 	}
 
 	updateTUI(t, model, tuiKey("G"))
 	assertKeyboardOnlyOverflowView(t, model, "Tree end", "Tree", ">   [ssh] ")
 	updateTUI(t, model, tuiKey("tab"))
+	assertKeyboardOnlyOverflowView(t, model, "Details start", "Details", "[Connection]")
 	updateTUI(t, model, tuiKey("G"))
-	assertKeyboardOnlyOverflowView(t, model, "Details end", "Details", "Method: agent")
+	assertKeyboardOnlyOverflowView(t, model, "Details end", "Details", "Method   agent")
 	updateTUI(t, model, tuiKey("tab"))
 
 	updateTUI(t, model, tuiKey("n"))
-	assertKeyboardOnlyOverflowView(t, model, "connection form", "Details", "New connection")
+	assertKeyboardOnlyOverflowView(t, model, "connection form", "Details", "[New connection]", ">   Name")
 	updateTUI(t, model, tuiKey("tab"))
-	assertKeyboardOnlyOverflowView(t, model, "connection form next field", "Details", "Host:")
+	assertKeyboardOnlyOverflowView(t, model, "connection form next field", "Details", "[New connection]", ">   Host")
 	updateTUI(t, model, tuiKey("f1"))
 	assertKeyboardOnlyOverflowView(t, model, "form Help", "Help", "Connection form Help")
 	updateTUI(t, model, tuiKey("esc"))
@@ -296,7 +352,7 @@ func TestTUIScrollbarKeyboardOnlyOverflow(t *testing.T) {
 	updateTUI(t, model, tuiKey("esc"))
 
 	updateTUI(t, model, tuiKey("c"))
-	assertKeyboardOnlyOverflowView(t, model, "connect confirmation", "Connect", "Connect confirmation")
+	assertKeyboardOnlyOverflowView(t, model, "connect confirmation", "Connect", "Connect to SSH target?", "Path     /zzzz", "Endpoint long-host.")
 	updateTUI(t, model, tuiKey("esc"))
 
 	updateTUI(t, model, tuiKey("g"))
@@ -314,7 +370,7 @@ func TestTUIScrollbarKeyboardOnlyOverflow(t *testing.T) {
 		t.Fatal(err)
 	}
 	executeTUICommand(t, model, updateTUI(t, model, tuiKey("d")))
-	assertKeyboardOnlyOverflowView(t, model, "recoverable error", "Operation Error", "Recoverable operation error")
+	assertKeyboardOnlyOverflowView(t, model, "recoverable error", "Operation Error", "Operation delete connection", "Target    /yyyy")
 	updateTUI(t, model, tuiKey("G"))
 	assertKeyboardOnlyOverflowView(t, model, "recoverable error end", "Operation Error", "b/Esc Back")
 	updateTUI(t, model, tuiKey("esc"))
@@ -324,11 +380,22 @@ func TestTUIScrollbarKeyboardOnlyOverflow(t *testing.T) {
 	updateTUI(t, model, tuiKey("esc"))
 }
 
-func assertKeyboardOnlyOverflowView(t *testing.T, model *tui.Model, surface, panelTitle, active string) {
+func assertKeyboardOnlyOverflowView(t *testing.T, model *tui.Model, surface, panelTitle string, active ...string) {
 	t.Helper()
 	view := model.View().Content
-	if !strings.Contains(view, active) {
-		t.Fatalf("keyboard-only %s omitted active content %q:\n%s", surface, active, view)
+	for _, want := range active {
+		if !strings.Contains(view, want) {
+			t.Fatalf("keyboard-only %s omitted active content %q:\n%s", surface, want, view)
+		}
+	}
+	rows := strings.Split(view, "\n")
+	if len(rows) > 12 {
+		t.Fatalf("keyboard-only %s exceeded height bound: %d rows\n%s", surface, len(rows), view)
+	}
+	for index, row := range rows {
+		if width := ansi.StringWidth(row); width > 40 {
+			t.Fatalf("keyboard-only %s exceeded width bound on row %d: %d cells\n%s", surface, index, width, view)
+		}
 	}
 	if strings.Contains(view, "↑ more") || strings.Contains(view, "↓ more") {
 		t.Fatalf("keyboard-only %s has no marker-free scrollbar:\n%s", surface, view)
@@ -342,7 +409,7 @@ func assertKeyboardOnlyOverflowView(t *testing.T, model *tui.Model, surface, pan
 func assertActivePanelScrollbar(t *testing.T, view, surface, title string) {
 	t.Helper()
 	rows := strings.Split(view, "\n")
-	activeTitle := "[*] " + title
+	activeTitle := "[*] [" + title + "]"
 	for top, row := range rows {
 		marker := strings.Index(row, activeTitle)
 		if marker < 0 {
@@ -407,7 +474,7 @@ func splitTreePath(path string) (string, string) {
 
 func assertTreeSelectionPath(t *testing.T, model *tui.Model, path string) {
 	t.Helper()
-	if !strings.Contains(model.View().Content, "Path: "+path) {
+	if !strings.Contains(model.View().Content, "Path     "+path) && !strings.Contains(model.View().Content, "Path               "+path) {
 		t.Fatalf("selection path is not %s:\n%s", path, model.View().Content)
 	}
 }

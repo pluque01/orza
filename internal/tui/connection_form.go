@@ -7,9 +7,12 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/pluque01/orza/internal/app"
 	"github.com/pluque01/orza/internal/domain"
 )
+
+const connectionFormMarkerWidth = 4
 
 type connectionField int
 
@@ -104,6 +107,7 @@ func (f *connectionForm) setAuthMethod(method app.AuthMethod) {
 		if method == candidate {
 			f.authMethod = method
 			f.syncDependencies()
+			f.setDimensions(f.width, f.height)
 			return
 		}
 	}
@@ -153,8 +157,8 @@ func (f *connectionForm) focusableFields() []connectionField {
 func (f *connectionForm) setDimensions(width, height int) {
 	f.width = max(0, width)
 	f.height = max(0, height)
-	labelWidth := formLabelWidth(f.width)
-	inputWidth := max(0, f.width-4-labelWidth-1)
+	labelWidth := f.formLabelWidth()
+	inputWidth := max(0, f.width-connectionFormMarkerWidth-labelWidth-1)
 	for field := fieldName; field <= fieldIdentity; field++ {
 		if field == fieldAuth {
 			continue
@@ -163,8 +167,14 @@ func (f *connectionForm) setDimensions(width, height int) {
 	}
 }
 
-func formLabelWidth(width int) int {
-	return min(16, max(0, (width-5)/3))
+func (f *connectionForm) formLabelWidth() int {
+	labelWidth := ansi.StringWidth("Path")
+	for _, field := range f.visibleFields() {
+		if field <= fieldIdentity {
+			labelWidth = max(labelWidth, ansi.StringWidth(formLabels[field]))
+		}
+	}
+	return min(labelWidth, max(0, f.width-connectionFormMarkerWidth-1))
 }
 
 func (f *connectionForm) setFormError(message string) { f.formError = message }
@@ -434,23 +444,26 @@ func projectActiveBlock(lines []string, activeStart, activeEnd, rows, width int)
 }
 
 func (f *connectionForm) content(style styles) ([]string, int) {
-	title := "New connection"
-	if f.original != nil {
-		title = "Edit connection  " + f.original.Path
-	} else if f.destination != nil {
-		title += "  " + f.destination.Path
-	}
-	lines := []string{style.title.Render(safeText(title, f.width))}
+	lines := []string{style.contentBadge(f.title())}
 	activeLine := 0
-	labelWidth := formLabelWidth(f.width)
+	labelWidth := f.formLabelWidth()
+	if path, visible := f.catalogPath(); visible {
+		valueWidth := max(0, f.width-connectionFormMarkerWidth-labelWidth-1)
+		line := compactConnectionFormRow(style, "Path", safeText(path, valueWidth), labelWidth)
+		lines = append(lines, style.item(line, itemSemantics{}))
+	}
 	for _, field := range f.visibleFields() {
 		invalid := f.errors[field] != "" || field != fieldAuth && f.inputs[field].Error() != ""
 		semantics := itemSemantics{focused: field == f.focus, invalid: invalid, primary: field == fieldSave}
 		line := ""
 		switch field {
 		case fieldAuth:
-			label := safeText(formLabels[field]+":", labelWidth)
-			line = style.item(fmt.Sprintf("%-*s %s", labelWidth, label, f.authMethodView()), semantics)
+			authLabelWidth := labelWidth
+			selector := f.authMethodView()
+			if ansi.StringWidth(selector) > max(0, f.width-connectionFormMarkerWidth-authLabelWidth-1) {
+				authLabelWidth = min(authLabelWidth, max(0, f.width-connectionFormMarkerWidth-ansi.StringWidth(selector)-1))
+			}
+			line = style.item(compactConnectionFormRow(style, formLabels[field], selector, authLabelWidth), semantics)
 		case fieldRemember:
 			checked := " "
 			if f.remember {
@@ -463,8 +476,7 @@ func (f *connectionForm) content(style styles) ([]string, int) {
 			}
 			line = style.item("[ Save connection ]", semantics)
 		default:
-			label := safeText(formLabels[field]+":", labelWidth)
-			line = style.item(fmt.Sprintf("%-*s %s", labelWidth, label, f.inputs[field].View()), semantics)
+			line = style.item(compactConnectionFormRow(style, formLabels[field], f.inputs[field].View(), labelWidth), semantics)
 		}
 		if field == f.focus {
 			activeLine = len(lines)
@@ -483,4 +495,27 @@ func (f *connectionForm) content(style styles) ([]string, int) {
 	}
 	lines = append(lines, "Left/Right Change method  Tab Next  Shift+Tab/F2 Previous  Ctrl+S Save  Esc Cancel  F1 Help")
 	return lines, activeLine
+}
+
+func (f *connectionForm) title() string {
+	if f.original != nil {
+		return "Edit connection"
+	}
+	return "New connection"
+}
+
+func (f *connectionForm) catalogPath() (string, bool) {
+	if f.original != nil {
+		return f.original.Path, true
+	}
+	if f.destination != nil {
+		return f.destination.Path, true
+	}
+	return "", false
+}
+
+func compactConnectionFormRow(style styles, label, value string, labelWidth int) string {
+	label = safeText(label, labelWidth)
+	padding := strings.Repeat(" ", max(0, labelWidth-ansi.StringWidth(label)))
+	return style.descriptiveLabel(label) + padding + " " + value
 }

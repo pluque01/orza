@@ -25,6 +25,34 @@ func newTrustPrompt(prompt app.TrustDecisionPrompt) *trustPrompt {
 
 func (p *trustPrompt) view(style styles) string {
 	host := p.prompt.Host
+	fields := []displayField{
+		{label: "Host", value: safeText(host.Endpoint.CanonicalHost, trustPromptValueWidth) + fmt.Sprintf(":%d", host.Endpoint.Port)},
+		{label: "Remote address", value: safeText(host.RemoteAddress, trustPromptValueWidth)},
+		{label: "Algorithm", value: safeText(host.KeyAlgorithm, trustPromptValueWidth)},
+		{label: "SHA-256 fingerprint", value: safeText(host.FingerprintSHA256, trustPromptValueWidth)},
+	}
+	if p.prompt.Status == app.HostTrustChanged && p.prompt.Known != nil {
+		fields = append(fields, displayField{label: "Known fingerprint", value: safeText(p.prompt.Known.FingerprintSHA256, trustPromptValueWidth)})
+	}
+
+	var out strings.Builder
+	out.WriteString(style.contentBadge("Verify host identity") + "\n\n")
+	out.WriteString(strings.Join(newStructuredFieldGroup(fields, 0, trustPromptValueWidth+32, false).render(style), "\n"))
+	out.WriteByte('\n')
+	if p.prompt.Status == app.HostTrustChanged {
+		out.WriteString(style.failure.Render("WARNING: changed key; this may indicate a possible attack.") + "\n")
+	}
+	if p.prompt.Status == app.HostTrustRevoked {
+		out.WriteString("\nThis key is revoked. Esc Back  Q Quit")
+		return out.String()
+	}
+	out.WriteString("\n> Reject (default)    Trust once    Trust and persist")
+	return out.String()
+}
+
+// lineReaderView retains the non-TUI prompt consumed from stdin.
+func (p *trustPrompt) lineReaderView(style styles) string {
+	host := p.prompt.Host
 	var out strings.Builder
 	out.WriteString(style.warning.Render("Verify host identity") + "\n\n")
 	out.WriteString(fmt.Sprintf("Host: %s:%d\n", safeText(host.Endpoint.CanonicalHost, trustPromptValueWidth), host.Endpoint.Port))
@@ -68,7 +96,7 @@ func decideTrust(ctx context.Context, input io.Reader, output io.Writer, prompt 
 	if err := ctx.Err(); err != nil {
 		return app.TrustReject, err
 	}
-	view := newTrustPrompt(prompt).view(newStyles(noColor))
+	view := newTrustPrompt(prompt).lineReaderView(newStyles(noColor))
 	if _, err := fmt.Fprintln(output, view); err != nil {
 		return app.TrustReject, err
 	}

@@ -50,6 +50,36 @@ func TestConnectionFormConflictMissingAndRevisionChangedTwentyRuns(t *testing.T)
 	}
 }
 
+func TestConnectionFormConflictIdentityUsesColonlessStructuredRows(t *testing.T) {
+	target := capturedTarget{
+		id:       "11111111111111111111111111111111",
+		path:     "/team/production",
+		revision: 7,
+		kind:     app.NodeKindConnection,
+	}
+	model := &Model{
+		styles: newStyles(true),
+		connectionEdit: &connectionEditState{conflict: &conflictState{
+			kind: conflictTypeRevisionChanged, target: target, detailVisible: true,
+		}},
+	}
+	lines := model.formConflictLines(80)
+	view := strings.Join(lines, "\n")
+	for _, label := range []string{"Target", "ID", "Revision"} {
+		if strings.Contains(view, label+":") {
+			t.Fatalf("conflict identity retained colon-suffixed %s label:\n%s", label, view)
+		}
+	}
+	for _, value := range []string{target.path, string(target.id), "7"} {
+		if lineContaining(lines, value) < 0 {
+			t.Fatalf("conflict identity omitted %q:\n%s", value, view)
+		}
+	}
+	if lineContaining(lines, target.path) == lineContaining(lines, string(target.id)) || lineContaining(lines, string(target.id)) == lineContaining(lines, "7") {
+		t.Fatalf("Target, ID, and Revision are not separate structured rows:\n%s", view)
+	}
+}
+
 func TestConnectionFormConflictReloadBackCancelRecoveryTwentyRuns(t *testing.T) {
 	for run := range 20 {
 		root := testFolder("root", "", "/", 1)

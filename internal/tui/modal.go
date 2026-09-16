@@ -119,16 +119,74 @@ func (payload unsavedChangesPayload) valid() bool {
 	return payload.intent == unsavedIntentCancel || payload.intent == unsavedIntentQuit
 }
 
-func (payload unsavedChangesPayload) lines(width int) []string {
+func (payload unsavedChangesPayload) lines(width int, modalStyle ...styles) []string {
 	action := "Cancel connection editing?"
 	if payload.intent == unsavedIntentQuit {
 		action = "Quit with unsaved changes?"
 	}
-	lines := []string{"Unsaved changes", "Action: " + action}
+	fields := []displayField{{label: "Action", value: action}}
 	if payload.target != "" {
-		lines = appendWrappedModalLine(lines, "Target: ", payload.target, width)
+		fields = append(fields, displayField{label: "Target", value: payload.target})
 	}
+	lines := renderWrappedModalFields(modalRenderStyle(modalStyle), width, fields)
 	return append(lines, modalControlLine("s Save"), modalControlLine("d Discard"), modalControlLine("Esc Cancel"))
+}
+
+func modalRenderStyle(optional []styles) styles {
+	if len(optional) != 0 {
+		return optional[0]
+	}
+	return newStyles(true)
+}
+
+func renderWrappedModalFields(style styles, width int, fields []displayField) []string {
+	if len(fields) == 0 {
+		return nil
+	}
+	projected := make([]displayField, len(fields))
+	for index, field := range fields {
+		projected[index] = displayField{label: field.label, value: safeText(field.value, max(1, len(field.value)*6+1))}
+	}
+
+	group := newStructuredFieldGroup(projected, 0, width, false)
+	if group.mode == fieldModeAligned {
+		expanded := make([]displayField, 0, len(projected))
+		for _, field := range projected {
+			wrapped := wrapModalValue(field.value, max(1, group.availableValueWidth()))
+			for index, value := range wrapped {
+				label := ""
+				if index == 0 {
+					label = field.label
+				}
+				expanded = append(expanded, displayField{label: label, value: value})
+			}
+		}
+		return newStructuredFieldGroup(expanded, 0, width, false).render(style)
+	}
+
+	continuations := make([][]string, len(projected))
+	for index := range projected {
+		wrapped := wrapModalValue(projected[index].value, max(1, width-2))
+		projected[index].value = wrapped[0]
+		continuations[index] = wrapped[1:]
+	}
+	group = newStructuredFieldGroup(projected, 0, width, false)
+	base := group.render(style)
+	lines := make([]string, 0, len(base))
+	for index := range projected {
+		lines = append(lines, base[index*2], base[index*2+1])
+		for _, continuation := range continuations[index] {
+			lines = append(lines, "  "+continuation)
+		}
+	}
+	return lines
+}
+
+func wrapModalValue(value string, width int) []string {
+	if value == "" {
+		return []string{""}
+	}
+	return strings.Split(ansi.Hardwrap(value, max(1, width), false), "\n")
 }
 
 func appendWrappedModalLine(lines []string, label, value string, width int) []string {
@@ -138,18 +196,9 @@ func appendWrappedModalLine(lines []string, label, value string, width int) []st
 	return append(lines, wrapped...)
 }
 
-func projectedModalLine(label, value string, width int) string {
-	return projectedModalLineWithSuffix(label, value, "", width)
-}
-
-func projectedModalLineWithSuffix(label, value, suffix string, width int) string {
-	available := max(0, width-ansi.StringWidth(label)-ansi.StringWidth(suffix))
-	return label + safeText(value, available) + suffix
-}
-
 func modalContent(state modalState, style styles, width int, help []string) ([]string, int) {
 	if state.helpVisible {
-		return append(append([]string{"Help"}, help...), modalControlLine("?/Esc Close")), noActiveLine
+		return append(safeHelpLines(help), modalControlLine("?/Esc Close")), noActiveLine
 	}
 	if state.operationStatus != "" {
 		captured := state
@@ -170,11 +219,12 @@ func modalContent(state modalState, style styles, width int, help []string) ([]s
 	}
 	if state.conflict != nil {
 		conflict := state.conflict
-		header := []string{"Warning: captured target is no longer current."}
+		header := []string{style.warningMessage("captured target is no longer current.")}
 		if conflict.detailVisible {
-			header = append(header, projectedModalLine("Target: ", conflict.target.path, width))
-			revision := "/" + fmt.Sprint(conflict.target.revision)
-			header = append(header, projectedModalLineWithSuffix("ID/revision: ", string(conflict.target.id), revision, width))
+			header = append(header, renderWrappedModalFields(style, width, []displayField{
+				{label: "Target", value: conflict.target.path},
+				{label: "ID/revision", value: fmt.Sprintf("%s/%d", conflict.target.id, conflict.target.revision)},
+			})...)
 		}
 		body, active := modalPayloadContent(state, style, width)
 		if controls := modalPriorityStart(body); controls >= 0 {
@@ -185,7 +235,7 @@ func modalContent(state modalState, style styles, width int, help []string) ([]s
 		return lines, max(0, active+len(header))
 	}
 	if state.recoverableError != "" {
-		header := []string{"Error: " + state.recoverableError}
+		header := []string{style.failureMessage(state.recoverableError)}
 		body, active := modalPayloadContent(state, style, width)
 		return append(header, body...), max(0, active+len(header))
 	}
@@ -193,42 +243,90 @@ func modalContent(state modalState, style styles, width int, help []string) ([]s
 }
 
 func modalPayloadContent(state modalState, style styles, width int) ([]string, int) {
+	if !validModalPayloadForKind(state.kind, state.payload) {
+		return []string{"Error: invalid modal payload", modalControlLine("Esc Close")}, noActiveLine
+	}
 	switch payload := state.payload.(type) {
 	case folderCreatePayload:
-		lines, active := payload.form.modalLines(width)
+		lines, active := payload.form.modalLines(width, style)
 		lines[len(lines)-1] = modalControlLine(lines[len(lines)-1])
 		return lines, active
 	case folderEditPayload:
-		lines, active := payload.form.modalLines(width)
+		lines, active := payload.form.modalLines(width, style)
 		lines[len(lines)-1] = modalControlLine(lines[len(lines)-1])
 		return lines, active
 	case movePickerPayload:
-		lines, active := payload.picker.modalLines(width)
+		lines, active := payload.picker.modalLines(width, style)
 		lines[len(lines)-1] = modalControlLine(lines[len(lines)-1])
 		return lines, active
 	case deleteConnectionPayload:
-		return deleteConnectionLines(payload.confirmation, width), noActiveLine
+		return deleteConnectionLines(payload.confirmation, width, style), noActiveLine
 	case deleteFolderPayload:
-		return deleteFolderLines(payload.confirmation.scope, width), noActiveLine
+		return deleteFolderLines(payload.confirmation.scope, width, style), noActiveLine
 	case connectConfirmationPayload:
-		return connectConfirmationLines(payload.confirmation, width), noActiveLine
+		return connectConfirmationLines(payload.confirmation, width, style), noActiveLine
 	case unsavedChangesPayload:
-		return payload.lines(width), noActiveLine
+		return payload.lines(width, style), noActiveLine
 	case helpPayload:
-		return append(append([]string{"Help"}, payload.lines...), modalControlLine("?/Esc Close")), noActiveLine
+		return append(safeHelpLines(payload.lines), modalControlLine("?/Esc Close")), noActiveLine
 	case operationErrorPayload:
-		return operationErrorLines(payload.modal, width), noActiveLine
+		return operationErrorLines(payload.modal, width, style), noActiveLine
 	case sshFailurePayload:
 		if payload.confirmation != nil {
-			return connectConfirmationLines(payload.confirmation, width), noActiveLine
+			return connectConfirmationLines(payload.confirmation, width, style), noActiveLine
 		}
-		return sshFailureLines(payload.modal, width), noActiveLine
+		return sshFailureLines(payload.modal, width, style), noActiveLine
 	default:
-		return []string{"Error: invalid modal payload", "Esc Close"}, 0
+		return []string{"Error: invalid modal payload", modalControlLine("Esc Close")}, noActiveLine
 	}
 }
 
-func deleteConnectionLines(confirmation *deleteConfirmation, width int) []string {
+func safeHelpLines(lines []string) []string {
+	projected := make([]string, len(lines))
+	for index, line := range lines {
+		projected[index] = safeText(line, int(^uint(0)>>1))
+	}
+	return projected
+}
+
+func validModalPayloadForKind(kind modalKind, value any) bool {
+	switch kind {
+	case modalKindFolderCreate:
+		payload, ok := value.(folderCreatePayload)
+		return ok && payload.validModalPayload()
+	case modalKindFolderEdit:
+		payload, ok := value.(folderEditPayload)
+		return ok && payload.validModalPayload()
+	case modalKindMovePicker:
+		payload, ok := value.(movePickerPayload)
+		return ok && payload.validModalPayload()
+	case modalKindDeleteConnection:
+		payload, ok := value.(deleteConnectionPayload)
+		return ok && payload.validModalPayload()
+	case modalKindDeleteFolder:
+		payload, ok := value.(deleteFolderPayload)
+		return ok && payload.validModalPayload()
+	case modalKindConnectConfirmation:
+		payload, ok := value.(connectConfirmationPayload)
+		return ok && payload.validModalPayload()
+	case modalKindUnsavedChanges:
+		payload, ok := value.(unsavedChangesPayload)
+		return ok && payload.validModalPayload()
+	case modalKindHelp:
+		payload, ok := value.(helpPayload)
+		return ok && payload.validModalPayload()
+	case modalKindOperationError:
+		payload, ok := value.(operationErrorPayload)
+		return ok && payload.validModalPayload()
+	case modalKindSSHFailure:
+		payload, ok := value.(sshFailurePayload)
+		return ok && payload.validModalPayload()
+	default:
+		return false
+	}
+}
+
+func deleteConnectionLines(confirmation *deleteConfirmation, width int, modalStyle ...styles) []string {
 	if confirmation == nil {
 		return nil
 	}
@@ -239,54 +337,65 @@ func deleteConnectionLines(confirmation *deleteConfirmation, width int) []string
 		username = "(default)"
 	}
 	endpoint = username + "@" + endpoint
-	lines := []string{"Delete connection?", "Action: permanently delete connection"}
-	lines = appendWrappedModalLine(lines, "Path: ", scope.Path, width)
-	lines = appendWrappedModalLine(lines, "Target: ", endpoint, width)
-	lines = appendWrappedModalLine(lines, "ID/revision: ", fmt.Sprintf("%s/%d", scope.ID, scope.Revision), width)
-	if scope.HasRememberedPassword {
-		lines = append(lines, "Effect: also deletes the saved password from the operating system credential store")
+	fields := []displayField{
+		{label: "Action", value: "permanently delete connection"},
+		{label: "Path", value: scope.Path},
+		{label: "Target", value: endpoint},
+		{label: "ID/revision", value: fmt.Sprintf("%s/%d", scope.ID, scope.Revision)},
 	}
+	if scope.HasRememberedPassword {
+		fields = append(fields, displayField{label: "Effect", value: "also deletes the saved password from the operating system credential store"})
+	}
+	lines := renderWrappedModalFields(modalRenderStyle(modalStyle), width, fields)
 	return append(lines, modalControlLine("y Confirm"), modalControlLine("Enter/Esc Cancel"), modalControlLine("? Help"))
 }
 
-func deleteFolderLines(scope app.FolderDeleteScope, width int) []string {
-	lines := []string{"Delete folder", "Action: permanently delete the folder subtree"}
-	lines = appendWrappedModalLine(lines, "Path: ", scope.Path, width)
-	lines = appendWrappedModalLine(lines, "ID/revision: ", fmt.Sprintf("%s/%d", scope.ID, scope.Revision), width)
-	lines = append(lines, fmt.Sprintf("Scope: %s, %s, %s", countLabel(scope.Folders, "folder"), countLabel(scope.Connections, "connection"), countLabel(scope.RememberedCredentials, "remembered credential")))
+func deleteFolderLines(scope app.FolderDeleteScope, width int, modalStyle ...styles) []string {
+	lines := renderWrappedModalFields(modalRenderStyle(modalStyle), width, []displayField{
+		{label: "Action", value: "permanently delete the folder subtree"},
+		{label: "Path", value: scope.Path},
+		{label: "ID/revision", value: fmt.Sprintf("%s/%d", scope.ID, scope.Revision)},
+		{label: "Scope", value: fmt.Sprintf("%s, %s, %s", countLabel(scope.Folders, "folder"), countLabel(scope.Connections, "connection"), countLabel(scope.RememberedCredentials, "remembered credential"))},
+	})
 	return append(lines, modalControlLine("y Confirm"), modalControlLine("Enter/Esc Cancel"), modalControlLine("? Help"))
 }
 
-func connectConfirmationLines(confirmation *connectConfirmation, width int) []string {
+func connectConfirmationLines(confirmation *connectConfirmation, width int, modalStyle ...styles) []string {
 	if confirmation == nil {
 		return nil
 	}
-	lines := []string{"Connect confirmation", "Connect to SSH target?"}
+	fields := make([]displayField, 0, 7)
 	if confirmation.previous != nil {
-		lines[0] = "SSH retry confirmation"
-		lines = appendWrappedModalLine(lines, "Previous path: ", confirmation.previous.Path, width)
-		lines = appendWrappedModalLine(lines, "Previous endpoint: ", net.JoinHostPort(confirmation.previous.Host, strconv.Itoa(int(confirmation.previous.Port))), width)
-		lines = appendWrappedModalLine(lines, "Previous ID/revision: ", fmt.Sprintf("%s/%d", confirmation.previous.ID, confirmation.previous.Revision), width)
+		fields = append(fields,
+			displayField{label: "Previous path", value: confirmation.previous.Path},
+			displayField{label: "Previous endpoint", value: net.JoinHostPort(confirmation.previous.Host, strconv.Itoa(int(confirmation.previous.Port)))},
+			displayField{label: "Previous ID/revision", value: fmt.Sprintf("%s/%d", confirmation.previous.ID, confirmation.previous.Revision)},
+		)
 	}
 	connection := confirmation.connection
-	lines = appendWrappedModalLine(lines, "Path: ", connection.Path, width)
-	lines = appendWrappedModalLine(lines, "Endpoint: ", net.JoinHostPort(connection.Host, strconv.Itoa(int(connection.Port))), width)
-	lines = appendWrappedModalLine(lines, "ID: ", string(connection.ID), width)
-	lines = appendWrappedModalLine(lines, "Revision: ", fmt.Sprint(connection.Revision), width)
+	fields = append(fields,
+		displayField{label: "Path", value: connection.Path},
+		displayField{label: "Endpoint", value: net.JoinHostPort(connection.Host, strconv.Itoa(int(connection.Port)))},
+		displayField{label: "ID", value: string(connection.ID)},
+		displayField{label: "Revision", value: fmt.Sprint(connection.Revision)},
+	)
+	lines := append([]string{"Connect to SSH target?"}, renderWrappedModalFields(modalRenderStyle(modalStyle), width, fields)...)
 	return append(lines, modalControlLine("y Confirm"), modalControlLine("Enter/Esc Cancel"), modalControlLine("? Help"))
 }
 
-func operationErrorLines(modal *errorModal, width int) []string {
+func operationErrorLines(modal *errorModal, width int, modalStyle ...styles) []string {
 	if modal == nil {
 		return nil
 	}
-	lines := []string{"Recoverable operation error", "Operation: " + modal.operation}
-	lines = appendWrappedModalLine(lines, "Target: ", modal.target, width)
 	message := modal.message
 	if modal.kind == app.ErrorKindConflict {
 		message = "Stale version was never overwritten. The connection changed."
 	}
-	lines = appendWrappedModalLine(lines, "Cause: ", message, width)
+	lines := renderWrappedModalFields(modalRenderStyle(modalStyle), width, []displayField{
+		{label: "Operation", value: modal.operation},
+		{label: "Target", value: modal.target},
+		{label: "Cause", value: message},
+	})
 	if modal.kind == app.ErrorKindConflict || modal.kind == app.ErrorKindNotFound {
 		return append(lines, modalControlLine("r Reload"), modalControlLine("b/Esc Back"), modalControlLine("q Quit"), modalControlLine("? Help"))
 	}
@@ -296,23 +405,27 @@ func operationErrorLines(modal *errorModal, width int) []string {
 	return append(lines, modalControlLine("b/Esc Back"), modalControlLine("q Quit"), modalControlLine("? Help"))
 }
 
-func sshFailureLines(modal *errorModal, width int) []string {
+func sshFailureLines(modal *errorModal, width int, modalStyle ...styles) []string {
 	if modal == nil || modal.failure == nil {
 		return nil
 	}
-	lines := []string{"SSH startup failed"}
-	lines = appendWrappedModalLine(lines, "Summary: ", modal.failure.Summary, width)
-	lines = appendWrappedModalLine(lines, "Category: ", string(modal.failure.Category), width)
-	lines = appendWrappedModalLine(lines, "Path: ", modal.attempt.Path, width)
+	fields := []displayField{
+		{label: "Summary", value: modal.failure.Summary},
+		{label: "Category", value: string(modal.failure.Category)},
+		{label: "Path", value: modal.attempt.Path},
+	}
 	if modal.attempt.Host != "" && modal.attempt.Port != 0 {
-		lines = appendWrappedModalLine(lines, "Endpoint: ", net.JoinHostPort(modal.attempt.Host, strconv.Itoa(int(modal.attempt.Port))), width)
+		fields = append(fields, displayField{label: "Endpoint", value: net.JoinHostPort(modal.attempt.Host, strconv.Itoa(int(modal.attempt.Port)))})
 	}
-	lines = appendWrappedModalLine(lines, "ID/revision: ", fmt.Sprintf("%s/%d", modal.attempt.ID, modal.attempt.Revision), width)
-	lines = appendWrappedModalLine(lines, "Stage: ", string(modal.failure.Stage), width)
-	lines = appendWrappedModalLine(lines, "Recommendation: ", modal.failure.Recommendation, width)
+	fields = append(fields,
+		displayField{label: "ID/revision", value: fmt.Sprintf("%s/%d", modal.attempt.ID, modal.attempt.Revision)},
+		displayField{label: "Stage", value: string(modal.failure.Stage)},
+		displayField{label: "Recommendation", value: modal.failure.Recommendation},
+	)
 	if modal.detailVisible && modal.failure.TechnicalDetail != "" {
-		lines = appendWrappedModalLine(lines, "Technical detail: ", modal.failure.TechnicalDetail, width)
+		fields = append(fields, displayField{label: "Technical detail", value: modal.failure.TechnicalDetail})
 	}
+	lines := append([]string{"SSH startup failed"}, renderWrappedModalFields(modalRenderStyle(modalStyle), width, fields)...)
 	return append(lines, sshFailureModalControlLines(modal)...)
 }
 

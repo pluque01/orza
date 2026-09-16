@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/pluque01/orza/internal/app"
 )
 
@@ -16,8 +17,8 @@ func TestUS5ExactNoColorCues(t *testing.T) {
 		got  string
 		want string
 	}{
-		{name: "active region", got: style.regionTitle("Tree", true), want: "[*] Tree"},
-		{name: "inactive region", got: style.regionTitle("Details", false), want: "[ ] Details"},
+		{name: "active region", got: style.regionTitle("Tree", true), want: "[*] [Tree]"},
+		{name: "inactive region", got: style.regionTitle("Details", false), want: "[ ] [Details]"},
 		{name: "focused", got: style.item("Name", itemSemantics{focused: true}), want: ">   Name"},
 		{name: "invalid", got: style.item("Host", itemSemantics{invalid: true}), want: " !  Host"},
 		{name: "primary", got: style.item("Save", itemSemantics{primary: true}), want: "  * Save"},
@@ -151,7 +152,7 @@ func TestUS5NoColorSafeTextAcrossDisplayModes(t *testing.T) {
 				t.Fatalf("no-color %s frame contains ANSI/control sequence: %q", size.name, view)
 			}
 			if size.width >= minimumLayoutWidth && size.height >= minimumLayoutHeight {
-				for _, cue := range []string{"[*] Tree", "[ ] Details", "[ ] Actions", "> ", "[ssh]"} {
+				for _, cue := range []string{"[*] [Tree]", "[ ] [Details]", "[ ] [Actions]", "[Connection]", "> ", "[ssh]"} {
 					if !strings.Contains(view, cue) {
 						t.Fatalf("%s frame omitted textual cue %q:\n%s", size.name, cue, view)
 					}
@@ -166,5 +167,47 @@ func TestUS5NoColorSafeTextAcrossDisplayModes(t *testing.T) {
 			}
 			assertUS5FrameBounded(t, view, size.width, size.height)
 		})
+	}
+}
+
+func TestDetailColorAndNoColorHaveEquivalentSafeBoundedText(t *testing.T) {
+	root := testFolder("root", "", "/", 1)
+	connection := testConnection("unsafe-detail", root.ID, "/team/界\nnode", 1)
+	connection.Name = "界\x1b[31mnode"
+	connection.Host = "host\u202Eevil.test"
+	connection.Username = "deploy\ruser"
+	connection.IdentityFile = "/keys/界-id"
+	connection.CredentialRef = "CREDENTIAL-REFERENCE-CANARY"
+	snapshot := newCatalogSnapshot(root, 1)
+	_ = snapshot.addChildren(root.ID, app.ListChildrenResult{Connections: []app.Connection{connection}})
+	state, ok := newDetailState(snapshot, connection.ID)
+	if !ok {
+		t.Fatal("unsafe detail target rejected")
+	}
+
+	for _, width := range []int{24, 40, 80} {
+		plain := strings.Join(state.project(20, width, newStyles(true)).lines, "\n")
+		colored := strings.Join(state.project(20, width, newStyles(false)).lines, "\n")
+		if got := ansi.Strip(colored); got != plain {
+			t.Fatalf("width %d color/plain mismatch:\ncolor %q\nplain %q", width, colored, plain)
+		}
+		if strings.Contains(plain, "\x1b[") || !strings.Contains(colored, "\x1b[") {
+			t.Fatalf("width %d color/no-color ANSI ownership is incorrect", width)
+		}
+		for _, line := range strings.Split(colored, "\n") {
+			if ansi.StringWidth(line) > width {
+				t.Fatalf("width %d line overflows: %q", width, line)
+			}
+		}
+		for _, forbidden := range []string{"\r", "\u202e", connection.CredentialRef} {
+			if strings.Contains(plain, forbidden) {
+				t.Fatalf("width %d projected unsafe/credential value %q: %q", width, forbidden, plain)
+			}
+		}
+		for _, escaped := range []string{`\x1B`, `\n`, `\u202E`, `\r`} {
+			if !strings.Contains(strings.Join(state.content(200, newStyles(true)), "\n"), escaped) {
+				t.Fatalf("safe content omitted inert escape %q", escaped)
+			}
+		}
 	}
 }

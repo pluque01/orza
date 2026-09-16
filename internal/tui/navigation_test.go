@@ -26,7 +26,7 @@ func TestModelOwnsTreeFocusAndSynchronizesDetailInSameUpdate(t *testing.T) {
 		t.Fatalf("same-transition IDs = selection %q detail %q, want %q", model.browser.selectedID, model.detailState.targetID, first.ID)
 	}
 	view := model.View().Content
-	if !strings.Contains(view, ">   [ssh] first") || !strings.Contains(view, "Path: /first") || strings.Contains(view, "Path: /second") {
+	if !strings.Contains(view, ">   [ssh] first") || !scContainsStructuredField(view, "Path", "/first") || scContainsStructuredField(view, "Path", "/second") {
 		t.Fatalf("first frame mixed selection detail:\n%s", view)
 	}
 }
@@ -40,7 +40,7 @@ func TestModelTabAndShiftTabToggleTreeAndDetailsWithoutSelectionChange(t *testin
 	if model.focusOwner != focusOwnerDetail || model.browser.selectedID != selected {
 		t.Fatalf("Tab = focus %v selection %q, want Details and %q", model.focusOwner, model.browser.selectedID, selected)
 	}
-	if view := model.View().Content; !strings.Contains(view, "[*] Details") || !strings.Contains(view, "[ ] Tree") {
+	if view := model.View().Content; !strings.Contains(view, "[*] [Details]") || !strings.Contains(view, "[ ] [Tree]") {
 		t.Fatalf("Details focus is not textual in shell:\n%s", view)
 	}
 
@@ -130,7 +130,7 @@ func TestBrowserShellIsTitledAndBoundedInWideAndStackedLayouts(t *testing.T) {
 	for _, size := range []tea.WindowSizeMsg{{Width: 80, Height: 24}, {Width: 40, Height: 12}} {
 		updateModel(model, size)
 		view := model.View().Content
-		for _, title := range []string{"[*] Tree", "[ ] Details", "[ ] Actions"} {
+		for _, title := range []string{"[*] [Tree]", "[ ] [Details]", "[ ] [Actions]"} {
 			if !strings.Contains(view, title) {
 				t.Fatalf("%dx%d shell omitted %q:\n%s", size.Width, size.Height, title, view)
 			}
@@ -155,7 +155,7 @@ func TestConnectionShellRendersEndpointWithoutDuplicateHostLine(t *testing.T) {
 	model := loadedModel(t, []app.Connection{connection}, true)
 	updateModel(model, keyPress("l"))
 	view := model.View().Content
-	if !strings.Contains(view, "Endpoint: host.test:22") || strings.Contains(view, "Host: host.test:22") {
+	if !scContainsStructuredField(view, "Endpoint", "host.test:22") || scContainsStructuredField(view, "Host", "host.test:22") {
 		t.Fatalf("connection detail did not retain only the canonical endpoint:\n%s", view)
 	}
 }

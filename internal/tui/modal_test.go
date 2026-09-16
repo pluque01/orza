@@ -10,6 +10,222 @@ import (
 	"github.com/pluque01/orza/internal/app"
 )
 
+type feature008ModalCase struct {
+	kind    modalKind
+	label   string
+	payload any
+}
+
+func feature008ModalCases() []feature008ModalCase {
+	connection := app.Connection{
+		Node:       app.Node{ID: "connection", Kind: app.NodeKindConnection, Name: "prod", Path: "/team/prod", Revision: 7},
+		Host:       "prod.test",
+		Port:       2202,
+		Username:   "deploy",
+		AuthMethod: app.AuthMethodAgent,
+	}
+	folder := app.Folder{Node: app.Node{ID: "folder", Kind: app.NodeKindFolder, Name: "team", Path: "/team", Revision: 3}}
+	createForm := newFolderForm(nil, app.ItemSelector{ID: folder.ID})
+	createForm.setDestination(folder)
+	editForm := newFolderForm(&folder, app.ItemSelector{})
+	failure := app.NewSSHStartError(app.SSHFailureTimeout, app.SSHFailureStageNetworkConnection, "operation timed out", nil).Presentation()
+
+	return []feature008ModalCase{
+		{modalKindFolderCreate, "Create Folder", folderCreatePayload{form: createForm}},
+		{modalKindFolderEdit, "Edit Folder", folderEditPayload{form: editForm}},
+		{modalKindMovePicker, "Move", movePickerPayload{picker: newMovePicker(connection.Node, []app.Folder{folder})}},
+		{modalKindDeleteConnection, "Delete", deleteConnectionPayload{confirmation: newDeleteConfirmation(app.ConnectionDeleteScope{ID: connection.ID, Path: connection.Path, Host: connection.Host, Username: connection.Username, Revision: connection.Revision})}},
+		{modalKindDeleteFolder, "Delete", deleteFolderPayload{confirmation: newFolderDeleteConfirmation(app.FolderDeleteScope{ID: folder.ID, Path: folder.Path, Revision: folder.Revision, Folders: 1, Connections: 1})}},
+		{modalKindConnectConfirmation, "Connect", connectConfirmationPayload{confirmation: newConnectConfirmation(connection)}},
+		{modalKindUnsavedChanges, "Unsaved Changes", unsavedChangesPayload{intent: unsavedIntentQuit, target: connection.Path}},
+		{modalKindHelp, "Help", helpPayload{lines: []string{"c Connect", "Esc Close"}}},
+		{modalKindOperationError, "Operation Error", operationErrorPayload{modal: newErrorModal("reload catalog", connection.Path, app.ErrConflict)}},
+		{modalKindSSHFailure, "SSH Failure", sshFailurePayload{modal: newSSHFailureModal(app.SSHAttemptTarget{ID: connection.ID, Revision: connection.Revision, Path: connection.Path, Host: connection.Host, Port: connection.Port}, failure)}},
+	}
+}
+
+func TestModalTitleBadgeInventoryAndANSIParity(t *testing.T) {
+	cases := feature008ModalCases()
+	if len(cases) != len(newModalRegistry().payloadTypes) {
+		t.Fatalf("modal cases/registry = %d/%d", len(cases), len(newModalRegistry().payloadTypes))
+	}
+	layout := calculateLayout(80, 24, regionTree)
+	for _, test := range cases {
+		t.Run(string(test.kind), func(t *testing.T) {
+			if title := modalTitle(test.kind); test.label != title {
+				t.Fatalf("case label = %q, modal title = %q", test.label, title)
+			}
+			state := modalState{kind: test.kind, payload: test.payload}
+			plain := renderModalOverlay("", state, layout, newStyles(true), nil)
+			colored := renderModalOverlay("", state, layout, newStyles(false), nil)
+			badge := "[" + test.label + "]"
+			if strings.Count(plain, badge) != 1 {
+				t.Fatalf("plain badge count for %s != 1:\n%s", test.kind, plain)
+			}
+			if ansi.Strip(colored) != plain {
+				t.Fatalf("ANSI strip parity failed for %s:\ncolored %q\nplain   %q", test.kind, colored, plain)
+			}
+		})
+	}
+}
+
+func TestModalUnknownFallbackAndKnownInvalidPayloadAreSafe(t *testing.T) {
+	layout := calculateLayout(80, 24, regionTree)
+	unknownState := modalState{kind: modalKind("future_modal")}
+	unknown := renderModalOverlay("", unknownState, layout, newStyles(true), nil)
+	coloredUnknown := renderModalOverlay("", unknownState, layout, newStyles(false), nil)
+	if strings.Count(unknown, "[Panel]") != 1 || !strings.Contains(unknown, "Error: invalid modal payload") || ansi.Strip(coloredUnknown) != unknown {
+		t.Fatalf("unknown modal did not use a safe equivalent fallback:\nplain %q\ncolor %q", unknown, coloredUnknown)
+	}
+
+	for _, test := range feature008ModalCases() {
+		t.Run(string(test.kind), func(t *testing.T) {
+			state := modalState{kind: test.kind, payload: nil}
+			lines, active := modalContent(state, newStyles(true), 60, nil)
+			if active != noActiveLine || !reflect.DeepEqual(lines, []string{"Error: invalid modal payload", modalControlLine("Esc Close")}) {
+				t.Fatalf("invalid payload lines/active = %#v/%d", lines, active)
+			}
+			view := renderModalOverlay("", state, layout, newStyles(true), nil)
+			if strings.Count(view, "["+test.label+"]") != 1 || !strings.Contains(view, "Error: invalid modal payload") || !strings.Contains(view, "Esc Close") {
+				t.Fatalf("known invalid modal lost badge or safe error:\n%s", view)
+			}
+		})
+	}
+
+	mismatched := modalState{kind: modalKindDeleteConnection, payload: helpPayload{lines: []string{"unsafe mismatch"}}}
+	lines, _ := modalContent(mismatched, newStyles(true), 60, nil)
+	if strings.Contains(strings.Join(lines, "\n"), "unsafe mismatch") {
+		t.Fatalf("known kind rendered a mismatched payload: %#v", lines)
+	}
+}
+
+func TestModalRemovesDuplicateHeadingsAndKeepsMeaningfulCopy(t *testing.T) {
+	cases := []struct {
+		name  string
+		state modalState
+		omit  []string
+		keep  []string
+	}{
+		{name: "inline help", state: modalState{kind: modalKindConnectConfirmation, helpVisible: true}, omit: []string{"Help"}, keep: []string{"?/Esc Close"}},
+		{name: "help", state: modalState{kind: modalKindHelp, payload: helpPayload{lines: []string{"c Connect"}}}, omit: []string{"Help"}, keep: []string{"c Connect"}},
+		{name: "connect", state: feature008ModalState(modalKindConnectConfirmation), omit: []string{"Connect confirmation", "SSH retry confirmation"}, keep: []string{"Connect to SSH target?"}},
+		{name: "delete connection", state: feature008ModalState(modalKindDeleteConnection), omit: []string{"Delete connection?"}, keep: []string{"permanently delete connection"}},
+		{name: "delete folder", state: feature008ModalState(modalKindDeleteFolder), omit: []string{"Delete folder"}, keep: []string{"permanently delete the folder subtree"}},
+		{name: "unsaved", state: feature008ModalState(modalKindUnsavedChanges), omit: []string{"Unsaved changes"}, keep: []string{"Quit with unsaved changes?"}},
+		{name: "operation error", state: feature008ModalState(modalKindOperationError), omit: []string{"Recoverable operation error"}, keep: []string{"Cause"}},
+		{name: "SSH failure", state: feature008ModalState(modalKindSSHFailure), keep: []string{"SSH startup failed"}},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			lines, _ := modalContent(test.state, newStyles(true), 100, []string{"c Connect"})
+			for _, omitted := range test.omit {
+				if modalHasExactLine(lines, omitted) {
+					t.Fatalf("body duplicated heading %q: %#v", omitted, lines)
+				}
+			}
+			view := strings.Join(lines, "\n")
+			for _, kept := range test.keep {
+				if !strings.Contains(view, kept) {
+					t.Fatalf("body omitted meaningful copy %q: %s", kept, view)
+				}
+			}
+		})
+	}
+}
+
+func TestModalStructuredFieldsAreColonlessWithANSIParity(t *testing.T) {
+	connection := app.Connection{Node: app.Node{ID: "current", Path: "/current", Revision: 9}, Host: "current.test", Port: 2202}
+	previous := app.SSHAttemptTarget{ID: "previous", Path: "/previous", Revision: 8, Host: "previous.test", Port: 22}
+	retry := newRetryConnectConfirmation(previous, connection)
+	failure := app.NewSSHStartError(app.SSHFailureTimeout, app.SSHFailureStageNetworkConnection, "operation timed out", nil).Presentation()
+	sshModal := newSSHFailureModal(app.SSHAttemptTarget{ID: "current", Revision: 9, Path: "/current", Host: "current.test", Port: 2202}, failure)
+	sshModal.detailVisible = true
+	tests := []struct {
+		name   string
+		state  modalState
+		labels []string
+	}{
+		{name: "connect retry", state: modalState{kind: modalKindConnectConfirmation, payload: connectConfirmationPayload{confirmation: retry}}, labels: []string{"Previous path", "Previous endpoint", "Previous ID/revision", "Path", "Endpoint", "ID", "Revision"}},
+		{name: "delete connection", state: feature008ModalState(modalKindDeleteConnection), labels: []string{"Action", "Path", "Target", "ID/revision"}},
+		{name: "delete folder", state: feature008ModalState(modalKindDeleteFolder), labels: []string{"Action", "Path", "ID/revision", "Scope"}},
+		{name: "unsaved", state: feature008ModalState(modalKindUnsavedChanges), labels: []string{"Action", "Target"}},
+		{name: "operation error", state: feature008ModalState(modalKindOperationError), labels: []string{"Operation", "Target", "Cause"}},
+		{name: "SSH failure", state: modalState{kind: modalKindSSHFailure, payload: sshFailurePayload{modal: sshModal}}, labels: []string{"Summary", "Category", "Path", "Endpoint", "ID/revision", "Stage", "Recommendation", "Technical detail"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			plainLines, _ := modalContent(test.state, newStyles(true), 120, nil)
+			colorLines, _ := modalContent(test.state, newStyles(false), 120, nil)
+			plain := strings.Join(plainLines, "\n")
+			colored := strings.Join(colorLines, "\n")
+			if ansi.Strip(colored) != plain {
+				t.Fatalf("field ANSI strip parity failed:\ncolored %q\nplain   %q", colored, plain)
+			}
+			for _, label := range test.labels {
+				if strings.Contains(plain, label+":") {
+					t.Fatalf("field %q retained a colon:\n%s", label, plain)
+				}
+				if !modalHasFieldLabel(plainLines, label) {
+					t.Fatalf("field %q missing:\n%s", label, plain)
+				}
+			}
+		})
+	}
+}
+
+func TestModalWarningAndErrorPrefixesRemainUnchanged(t *testing.T) {
+	target := capturedTarget{id: "target", revision: 7, path: "/target"}
+	states := []struct {
+		name   string
+		state  modalState
+		prefix string
+	}{
+		{name: "warning", state: modalState{kind: modalKindHelp, payload: helpPayload{lines: []string{"c Connect"}}, conflict: &conflictState{target: target, detailVisible: true}}, prefix: "Warning: captured target is no longer current."},
+		{name: "recoverable error", state: modalState{kind: modalKindHelp, payload: helpPayload{lines: []string{"c Connect"}}, recoverableError: "retry safely"}, prefix: "Error: retry safely"},
+	}
+	for _, test := range states {
+		t.Run(test.name, func(t *testing.T) {
+			plain, _ := modalContent(test.state, newStyles(true), 80, nil)
+			colored, _ := modalContent(test.state, newStyles(false), 80, nil)
+			if len(plain) == 0 || plain[0] != test.prefix || ansi.Strip(colored[0]) != test.prefix {
+				t.Fatalf("status prefix plain/color = %#v/%#v, want %q", plain, colored, test.prefix)
+			}
+		})
+	}
+}
+
+func feature008ModalState(kind modalKind) modalState {
+	for _, test := range feature008ModalCases() {
+		if test.kind == kind {
+			return modalState{kind: test.kind, payload: test.payload}
+		}
+	}
+	return modalState{kind: kind}
+}
+
+func modalHasExactLine(lines []string, want string) bool {
+	for _, line := range lines {
+		if ansi.Strip(strings.TrimPrefix(line, modalControlsPrefix)) == want {
+			return true
+		}
+	}
+	return false
+}
+
+func modalHasFieldLabel(lines []string, label string) bool {
+	for _, line := range lines {
+		plain := strings.TrimSpace(ansi.Strip(strings.TrimPrefix(line, modalControlsPrefix)))
+		if plain == label || strings.HasPrefix(plain, label+" ") {
+			return true
+		}
+	}
+	return false
+}
+
+func modalContainsWrapped(view, want string) bool {
+	return strings.Contains(view, want) || strings.Contains(strings.ReplaceAll(view, " ", ""), strings.ReplaceAll(want, " ", ""))
+}
+
 func TestConflictReloadPreservesOpenForm(t *testing.T) {
 	connection := app.Connection{Node: app.Node{ID: "11111111111111111111111111111111", Name: "prod", Path: "/prod", Revision: 1}, Host: "prod.test", Port: 22, AuthMethod: app.AuthMethodAgent}
 	revision := app.CatalogRevision(6)
@@ -60,7 +276,7 @@ func TestConnectConfirmationCapturesPathEndpointAndRevision(t *testing.T) {
 		t.Fatal("connect confirmation did not require explicit Y")
 	}
 	view := strings.Join(connectConfirmationLines(modal, 80), "\n")
-	for _, value := range []string{"/work/prod", "prod.test:2202", "connection", "Revision: 7"} {
+	for _, value := range []string{"/work/prod", "prod.test:2202", "connection", "Revision", "7"} {
 		if !strings.Contains(view, value) {
 			t.Fatalf("connect confirmation omitted %q: %q", value, view)
 		}
@@ -74,7 +290,7 @@ func TestConnectConfirmationFormatsIPv6Endpoint(t *testing.T) {
 	connection := app.Connection{Node: app.Node{ID: "connection", Path: "/ipv6", Revision: 1}, Host: "2001:db8::1", Port: 22}
 	modal := newConnectConfirmation(connection)
 	view := strings.Join(connectConfirmationLines(modal, 40), "\n")
-	if !strings.Contains(view, "Endpoint: [2001:db8::1]:22") {
+	if !strings.Contains(view, "Endpoint") || !strings.Contains(view, "[2001:db8::1]:22") {
 		t.Fatalf("confirmation has ambiguous IPv6 endpoint: %q", view)
 	}
 }
@@ -88,9 +304,9 @@ func TestSSHFailurePriorityAt80x24ReducedAndNoColor(t *testing.T) {
 		modal.detailVisible = true
 		model.installSSHFailure(modal)
 		view := model.View().Content
-		wants := []string{"Category: authentication_denied", "Path: /work/prod", "Endpoint: prod.test:2202", "d Detail", "r Retry", "e Edit", "b/Esc Back", "q Quit"}
+		wants := []string{"Category", "authentication_denied", "Path", "/work/prod", "Endpoint", "prod.test:2202", "d Detail", "r Retry", "e Edit", "b/Esc Back", "q Quit"}
 		if size.width == 80 {
-			wants = append(wants, "Stage: authentication", "Recommendation:")
+			wants = append(wants, "Stage", "authentication", "Recommendation")
 		}
 		for _, want := range wants {
 			if !strings.Contains(view, want) {
@@ -123,8 +339,8 @@ func TestSSHFailureAt80x24BoundsSamePrefixTargets(t *testing.T) {
 			Port: 2222,
 		}, failure))
 		views := strings.Join(sshFailureLines(model.activeSSHFailure(), 70), "")
-		for _, want := range []string{"Path: /production/", target.pathSuffix, "Endpoint: shared-endpoint", target.hostSuffix + ":2222", "ID/revision: " + target.id, "Category: timeout", "Stage: network_connection", "Recommendation:", "d Detail", "r Retry", "e Edit", "b/Esc Back", "q Quit"} {
-			if !strings.Contains(views, want) {
+		for _, want := range []string{"Path", "/production/", target.pathSuffix, "Endpoint", "shared-endpoint", target.hostSuffix + ":2222", "ID/revision", target.id, "Category", "timeout", "Stage", "network_connection", "Recommendation", "d Detail", "r Retry", "e Edit", "b/Esc Back", "q Quit"} {
+			if !modalContainsWrapped(views, want) {
 				t.Fatalf("80x24 scrollable view omitted %q for %q", want, target.id)
 			}
 		}
@@ -151,8 +367,8 @@ func TestConnectConfirmationsAt80x24BoundLongDistinctTargetsAndKeepControls(t *t
 		modal *connectConfirmation
 		want  []string
 	}{
-		{"normal", newConnectConfirmation(current), []string{"Path: /production/", "current-distinguishing-suffix", "current.example.test:2202", "ID: current-stable-id", "Revision: 9"}},
-		{"retry", newRetryConnectConfirmation(previous, current), []string{"Previous path: /production/", "previous-distinguishing-suffix", "previous.example.test:22", "Previous ID/revision: previous-stable-id", "Path: /production/", "current-distinguishing-suffix", "current.example.test:2202", "ID: current-stable-id", "Revision: 9"}},
+		{"normal", newConnectConfirmation(current), []string{"Path", "/production/", "current-distinguishing-suffix", "current.example.test:2202", "ID", "current-stable-id", "Revision", "9"}},
+		{"retry", newRetryConnectConfirmation(previous, current), []string{"Previous path", "/production/", "previous-distinguishing-suffix", "previous.example.test:22", "Previous ID/revision", "previous-stable-id", "Path", "current-distinguishing-suffix", "current.example.test:2202", "ID", "current-stable-id", "Revision", "9"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -161,7 +377,7 @@ func TestConnectConfirmationsAt80x24BoundLongDistinctTargetsAndKeepControls(t *t
 			model.openGenericModal(modalKindConnectConfirmation, &target, connectConfirmationPayload{confirmation: tt.modal})
 			views := strings.Join(connectConfirmationLines(tt.modal, 70), "")
 			for _, want := range append(tt.want, "y Confirm", "Enter/Esc Cancel") {
-				if !strings.Contains(views, want) {
+				if !modalContainsWrapped(views, want) {
 					t.Fatalf("80x24 scrollable confirmation omitted %q", want)
 				}
 			}
@@ -189,16 +405,16 @@ func TestUnifiedConfirmationAndErrorOverlaysKeepTargetsAndControlsVisible(t *tes
 	}{
 		{name: "connect", setup: func(model *Model) {
 			model.openGenericModal(modalKindConnectConfirmation, nil, connectConfirmationPayload{newConnectConfirmation(connection)})
-		}, want: []string{"Path: /prod", "Endpoint: prod.test:22", "Enter/Esc Cancel", "y Confirm"}},
+		}, want: []string{"Path", "/prod", "Endpoint", "prod.test:22", "Enter/Esc Cancel", "y Confirm"}},
 		{name: "delete connection", setup: func(model *Model) {
 			model.openGenericModal(modalKindDeleteConnection, nil, deleteConnectionPayload{newDeleteConfirmation(scope)})
-		}, want: []string{"Path: /prod", "Target: deploy@prod.test", "Enter/Esc Cancel", "y Confirm"}},
+		}, want: []string{"Path", "/prod", "Target", "deploy@prod.test", "Enter/Esc Cancel", "y Confirm"}},
 		{name: "delete folder", setup: func(model *Model) {
 			model.openGenericModal(modalKindDeleteFolder, nil, deleteFolderPayload{newFolderDeleteConfirmation(folderScope)})
-		}, want: []string{"Path: /tree", "Scope: 2 folders, 1 connection", "Enter/Esc Cancel", "y Confirm"}},
+		}, want: []string{"Path", "/tree", "Scope", "2 folders, 1 connection", "Enter/Esc Cancel", "y Confirm"}},
 		{name: "error", setup: func(model *Model) {
 			model.openGenericModal(modalKindOperationError, nil, operationErrorPayload{newErrorModal("move", "/prod", app.ErrConflict)})
-		}, want: []string{"Target: /prod", "Cause:", "r Reload", "b/Esc Back"}},
+		}, want: []string{"Target", "/prod", "Cause", "r Reload", "b/Esc Back"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -369,7 +585,7 @@ func TestFormConflictOversizedValuesAreBoundedWithoutChangingTarget(t *testing.T
 		line = strings.TrimPrefix(line, modalControlsPrefix)
 		lineWidth := ansi.StringWidth(line)
 		assertTerminalSafe(t, line, max(lineWidth, 1))
-		if (strings.HasPrefix(line, "Target: ") || strings.HasPrefix(line, "ID/revision: ")) && lineWidth > 40 {
+		if (strings.HasPrefix(line, "Target ") || strings.HasPrefix(line, "ID/revision ")) && lineWidth > 40 {
 			t.Fatalf("oversized modal-conflict identity width = %d, want <= 40: %q", lineWidth, line)
 		}
 	}
@@ -390,19 +606,19 @@ func TestLoadingModalSuppressesStalePayloadActions(t *testing.T) {
 		{
 			name:  "move",
 			state: modalState{kind: modalKindMovePicker, operationStatus: "Loading: Move — /captured", payload: movePickerPayload{picker: newMovePicker(connection.Node, []app.Folder{{Node: app.Node{ID: "folder", Path: "/destination"}}})}},
-			want:  []string{"Move destination", "Source: /captured", "ID/revision: connection/7", "/destination"},
+			want:  []string{"Source", "/captured", "ID/revision", "connection/7", "/destination"},
 			stale: []string{"Enter Move"},
 		},
 		{
 			name:  "confirmation",
 			state: modalState{kind: modalKindConnectConfirmation, operationStatus: "Loading: SSH start — captured.test:22", payload: connectConfirmationPayload{confirmation: newConnectConfirmation(connection)}},
-			want:  []string{"Connect confirmation", "Path: /captured", "Endpoint: captured.test:22", "ID: connection", "Revision: 7"},
+			want:  []string{"Connect to SSH target?", "Path", "/captured", "Endpoint", "captured.test:22", "ID", "connection", "Revision", "7"},
 			stale: []string{"y Confirm", "Enter/Esc Cancel"},
 		},
 		{
 			name:  "SSH failure",
 			state: modalState{kind: modalKindSSHFailure, operationStatus: "Loading: Reload — /captured", payload: sshFailurePayload{modal: newSSHFailureModal(app.SSHAttemptTarget{ID: connection.ID, Revision: connection.Revision, Path: connection.Path, Host: connection.Host, Port: connection.Port}, failure)}},
-			want:  []string{"SSH startup failed", "Path: /captured", "ID/revision: connection/7"},
+			want:  []string{"SSH startup failed", "Path", "/captured", "ID/revision", "connection/7"},
 			stale: []string{"d Detail", "r Retry", "e Edit", "b/Esc Back"},
 		},
 	}

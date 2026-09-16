@@ -3,6 +3,7 @@ package tui
 import (
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/charmbracelet/x/ansi"
@@ -67,6 +68,68 @@ func TestObjectActionCanonicalLabelsAndPrioritiesAreStable(t *testing.T) {
 
 	if _, exists := reflect.TypeFor[actionDescriptor]().FieldByName("compactLabel"); exists {
 		t.Fatal("actionDescriptor must not define a compact label")
+	}
+}
+
+func TestActionsAndHelpUseSingularBracketedTypeTitles(t *testing.T) {
+	descriptors := actionsFor(actionContext{selection: actionSelectionConnection, state: actionStateNormal, focus: actionFocusTree, canToggle: true})
+	actionLines := packActions("", descriptors, 76, 3)
+	actionRect := layoutRect{width: 80, height: 5}
+	plainActions := renderRegionPanel(newStyles(true).regionTitle("Actions", false), actionLines, actionRect)
+	coloredActions := renderRegionPanel(newStyles(false).regionTitle("Actions", false), actionLines, actionRect)
+	if strings.Count(plainActions, "[Actions]") != 1 || ansi.Strip(coloredActions) != plainActions {
+		t.Fatalf("Actions title is not a singular ANSI-equivalent badge:\nplain %q\ncolor %q", plainActions, coloredActions)
+	}
+
+	layout := calculateLayout(80, 24, regionTree)
+	state := modalState{kind: modalKindHelp, payload: helpPayload{lines: actionHelpLines(descriptors)}}
+	plainHelp := renderModalOverlay("", state, layout, newStyles(true), nil)
+	coloredHelp := renderModalOverlay("", state, layout, newStyles(false), nil)
+	if strings.Count(plainHelp, "[Help]") != 1 || ansi.Strip(coloredHelp) != plainHelp {
+		t.Fatalf("Help title is not a singular ANSI-equivalent badge:\nplain %q\ncolor %q", plainHelp, coloredHelp)
+	}
+	helpLines, _ := modalContent(state, newStyles(true), 200, nil)
+	for _, line := range helpLines {
+		if strings.TrimSpace(strings.TrimPrefix(line, modalControlsPrefix)) == "Help" {
+			t.Fatalf("Help body duplicates its title: %#v", helpLines)
+		}
+	}
+}
+
+func TestHelpKeepsContextualDescriptorInventoryAndKeys(t *testing.T) {
+	descriptors := actionsFor(actionContext{selection: actionSelectionConnection, state: actionStateNormal, focus: actionFocusTree, canToggle: true})
+	const wantKeys = "c/n/f/e/m/d/r/?/q/Up/k/Down/j/Home/g/End/G/Left/h/Right/l/Enter/Space/Tab/Shift+Tab"
+	if got := actionKeys(descriptors); got != wantKeys {
+		t.Fatalf("contextual keys = %q, want %q", got, wantKeys)
+	}
+
+	want := []string{
+		"Paste isolation requires terminal bracketed-paste support.",
+		"Without it, input works but pasted bytes cannot be distinguished from typing.",
+		"The application never reads the operating system clipboard.",
+		"c Connect",
+		"n New connection",
+		"f New folder",
+		"e Edit",
+		"m Move",
+		"d Delete",
+		"r Reload",
+		"? Help",
+		"q Quit",
+		"Up/k Move up",
+		"Down/j Move down",
+		"Home/g First row",
+		"End/G Last row",
+		"Left/h Collapse/parent",
+		"Right/l Expand/child",
+		"Enter/Space Toggle",
+		"Tab/Shift+Tab Details",
+		modalControlLine("?/Esc Close"),
+	}
+	state := modalState{kind: modalKindHelp, payload: helpPayload{lines: actionHelpLines(descriptors)}}
+	got, _ := modalContent(state, newStyles(true), 200, nil)
+	if !slices.Equal(got, want) {
+		t.Fatalf("Help lines = %#v, want exact contextual inventory %#v", got, want)
 	}
 }
 
@@ -156,7 +219,7 @@ func TestPackActionsPreservesStatusAndRecoveryBeforeOverflowMarker(t *testing.T)
 	want := []string{
 		"Conflict: target changed",
 		"r Reload q Quit ? Help",
-		actionsOverflowMarker,
+		"Hidden actions — ? Help",
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("packed overflow = %#v, want %#v", got, want)

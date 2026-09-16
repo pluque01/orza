@@ -34,6 +34,11 @@ type scActionCounters struct {
 	connect int
 }
 
+type scStructuredFieldExpectation struct {
+	label string
+	value string
+}
+
 func newSCCatalogFixture(t testing.TB) scCatalogFixture {
 	t.Helper()
 	root := testFolder("sc-root", "", "/", 1)
@@ -71,19 +76,20 @@ func TestSC001SelectionDetailActionSynchronizationTwentyRuns(t *testing.T) {
 		path       string
 		actionKeys string
 		want       []string
+		fields     []scStructuredFieldExpectation
 		absent     []string
 	}
 	for run := 1; run <= scConformanceRuns; run++ {
 		fixture := newSCCatalogFixture(t)
 		model := fixture.model
 		targets := []target{
-			{fixture.root.ID, fixture.root.Path, "n/f/r/?/q", []string{"Kind: Root", "Direct connections: 0", detailEmptyConnections}, []string{"direct.example", "deep.example"}},
-			{fixture.empty.ID, fixture.empty.Path, "n/f/e/m/d/r/?/q", []string{"Kind: Folder", "Direct connections: 0", detailEmptyConnections}, []string{"direct.example", "deep.example"}},
-			{fixture.direct.ID, fixture.direct.Path, "n/f/e/m/d/r/?/q", []string{"Kind: Folder", "Direct connections: 1", "direct-connection: direct.example:22"}, []string{"deep.example"}},
-			{fixture.directConn.ID, fixture.directConn.Path, "c/n/f/e/m/d/r/?/q", []string{"Kind: Connection", "Endpoint: direct.example:22", "Method: agent"}, []string{"deep.example", detailEmptyConnections}},
-			{fixture.nested.ID, fixture.nested.Path, "n/f/e/m/d/r/?/q", []string{"Kind: Folder", "Direct connections: 0", detailEmptyConnections}, []string{"deep.example"}},
-			{fixture.child.ID, fixture.child.Path, "n/f/e/m/d/r/?/q", []string{"Kind: Folder", "Direct connections: 1", "deep-connection: deep.example:22"}, []string{"direct.example"}},
-			{fixture.deepConn.ID, fixture.deepConn.Path, "c/n/f/e/m/d/r/?/q", []string{"Kind: Connection", "Endpoint: deep.example:22", "Method: agent"}, []string{"direct.example", detailEmptyConnections}},
+			{fixture.root.ID, fixture.root.Path, "n/f/r/?/q", []string{"[Root]", detailEmptyConnections}, []scStructuredFieldExpectation{{"Direct connections", "0"}}, []string{"direct.example", "deep.example"}},
+			{fixture.empty.ID, fixture.empty.Path, "n/f/e/m/d/r/?/q", []string{"[Folder]", detailEmptyConnections}, []scStructuredFieldExpectation{{"Direct connections", "0"}}, []string{"direct.example", "deep.example"}},
+			{fixture.direct.ID, fixture.direct.Path, "n/f/e/m/d/r/?/q", []string{"[Folder]"}, []scStructuredFieldExpectation{{"Direct connections", "1"}, {"direct-connection", "direct.example:22"}}, []string{"deep.example"}},
+			{fixture.directConn.ID, fixture.directConn.Path, "c/n/f/e/m/d/r/?/q", []string{"[Connection]"}, []scStructuredFieldExpectation{{"Endpoint", "direct.example:22"}, {"Method", "agent"}}, []string{"deep.example", detailEmptyConnections}},
+			{fixture.nested.ID, fixture.nested.Path, "n/f/e/m/d/r/?/q", []string{"[Folder]", detailEmptyConnections}, []scStructuredFieldExpectation{{"Direct connections", "0"}}, []string{"deep.example"}},
+			{fixture.child.ID, fixture.child.Path, "n/f/e/m/d/r/?/q", []string{"[Folder]"}, []scStructuredFieldExpectation{{"Direct connections", "1"}, {"deep-connection", "deep.example:22"}}, []string{"direct.example"}},
+			{fixture.deepConn.ID, fixture.deepConn.Path, "c/n/f/e/m/d/r/?/q", []string{"[Connection]"}, []scStructuredFieldExpectation{{"Endpoint", "deep.example:22"}, {"Method", "agent"}}, []string{"direct.example", detailEmptyConnections}},
 		}
 
 		updateModel(model, keyPress("g"))
@@ -99,16 +105,20 @@ func TestSC001SelectionDetailActionSynchronizationTwentyRuns(t *testing.T) {
 			if got := actionKeys(objectActions(model.actionContext())); got != target.actionKeys {
 				t.Fatalf("run %d target %q: actions = %q, want %q", run, target.id, got, target.actionKeys)
 			}
-			if !strings.Contains(view, "Path: "+target.path) {
+			if !scContainsStructuredField(view, "Path", target.path) {
 				t.Fatalf("run %d target %q: first frame omitted synchronized path %q:\n%s", run, target.id, target.path, view)
 			}
-			currentDetailLine := "Path: " + target.path
-			if !scDetailFrameContains(model, view, currentDetailLine) {
-				t.Fatalf("run %d target %q: Details omitted exact line %q", run, target.id, currentDetailLine)
+			if !scDetailFrameContainsStructuredField(model, view, "Path", target.path) {
+				t.Fatalf("run %d target %q: Details omitted Path field %q", run, target.id, target.path)
 			}
 			for _, want := range target.want {
 				if !scDetailFrameContains(model, view, want) {
 					t.Fatalf("run %d target %q: Details omitted %q", run, target.id, want)
+				}
+			}
+			for _, field := range target.fields {
+				if !scDetailFrameContainsStructuredField(model, view, field.label, field.value) {
+					t.Fatalf("run %d target %q: Details omitted structured field %q %q", run, target.id, field.label, field.value)
 				}
 			}
 			for _, absent := range target.absent {
@@ -116,10 +126,10 @@ func TestSC001SelectionDetailActionSynchronizationTwentyRuns(t *testing.T) {
 					t.Fatalf("run %d target %q: Details retained non-contextual data %q", run, target.id, absent)
 				}
 			}
-			if previousDetailLine != "" && scDetailFrameContains(model, view, previousDetailLine) {
-				t.Fatalf("run %d target %q: first frame retained previous Details line %q", run, target.id, previousDetailLine)
+			if previousDetailLine != "" && scDetailFrameContainsStructuredField(model, view, "Path", previousDetailLine) {
+				t.Fatalf("run %d target %q: first frame retained previous Details path %q", run, target.id, previousDetailLine)
 			}
-			previousDetailLine = currentDetailLine
+			previousDetailLine = target.path
 			assertSCNoANSI(t, view)
 		}
 	}
@@ -858,10 +868,13 @@ func TestSC006NoColorPrincipalBrowserAndConnectionFormFlowsTwentyRuns(t *testing
 			selectSCNode(model, id)
 			view := model.View().Content
 			assertSCNoANSI(t, view)
-			for _, cue := range []string{"[*] Tree", "[ ] Details", "[ ] Actions", "> ", "Path:"} {
+			for _, cue := range []string{"[*] [Tree]", "[ ] [Details]", "[ ] [Actions]", "> "} {
 				if !strings.Contains(view, cue) {
 					t.Fatalf("run %d node %q omitted no-color cue %q", run, id, cue)
 				}
+			}
+			if !scContainsStructuredField(view, "Path", model.browser.selectionNode().Path) {
+				t.Fatalf("run %d node %q omitted no-color Path field", run, id)
 			}
 		}
 
@@ -869,7 +882,7 @@ func TestSC006NoColorPrincipalBrowserAndConnectionFormFlowsTwentyRuns(t *testing
 		updateModel(model, keyPress("tab"))
 		view := model.View().Content
 		assertSCNoANSI(t, view)
-		if !strings.Contains(view, "[*] Details") || !strings.Contains(view, "[ ] Tree") {
+		if !strings.Contains(view, "[*] [Details]") || !strings.Contains(view, "[ ] [Tree]") {
 			t.Fatalf("run %d: Details focus lacked textual ownership", run)
 		}
 		updateModel(model, keyPress("tab"))
@@ -877,7 +890,7 @@ func TestSC006NoColorPrincipalBrowserAndConnectionFormFlowsTwentyRuns(t *testing
 		updateModel(model, keyPress("n"))
 		view = model.View().Content
 		assertSCNoANSI(t, view)
-		if !strings.Contains(view, "[*] Details") || !strings.Contains(view, ">   Name:") || !strings.Contains(view, "  * [ Save connection ]") {
+		if !strings.Contains(view, "[*] [Details]") || !scContainsStructuredField(view, "Name", "") || !strings.Contains(view, "  * [ Save connection ]") {
 			t.Fatalf("run %d: create form omitted focus/primary cues:\n%s", run, view)
 		}
 		updateModel(model, keyPress("ctrl+s"))
@@ -1126,6 +1139,40 @@ func scDetailFrameContains(model *Model, view, exact string) bool {
 		line = strings.TrimSuffix(line, " │")
 		if strings.TrimRight(line, " ") == exact {
 			return true
+		}
+	}
+	return false
+}
+
+func scDetailFrameContainsStructuredField(model *Model, view, label, value string) bool {
+	layout := calculateLayout(model.width, model.height, model.focusedLayoutRegion())
+	lines := strings.Split(view, "\n")
+	for row := layout.details.y + 1; row < layout.details.bottom()-1 && row < len(lines); row++ {
+		line := ansi.Cut(lines[row], layout.details.x, layout.details.right())
+		if scContainsStructuredField(line, label, value) {
+			return true
+		}
+	}
+	return false
+}
+
+func scContainsStructuredField(view, label, value string) bool {
+	for _, line := range strings.Split(view, "\n") {
+		remaining := line
+		for {
+			index := strings.Index(remaining, label)
+			if index < 0 {
+				break
+			}
+			after := remaining[index+len(label):]
+			trimmed := strings.TrimLeft(after, " ")
+			if !strings.HasPrefix(after, ":") && len(after) > len(trimmed) && strings.HasPrefix(trimmed, value) {
+				suffix := strings.TrimPrefix(trimmed, value)
+				if suffix == "" || strings.HasPrefix(suffix, " ") || strings.HasPrefix(suffix, "│") {
+					return true
+				}
+			}
+			remaining = after
 		}
 	}
 	return false
