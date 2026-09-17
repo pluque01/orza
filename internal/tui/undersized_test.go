@@ -68,6 +68,7 @@ func TestUS5UndersizedShellAndExactRestoration20Runs(t *testing.T) {
 			for run := 0; run < 20; run++ {
 				updateModel(fixture.model, tea.WindowSizeMsg{Width: 40, Height: 12})
 				before := snapshotUS5Undersized(fixture)
+				beforeView := fixture.model.View().Content
 				beforeGeometry := assertUS5RenderedViewportGeometry(t, fixture.model)
 
 				updateModel(fixture.model, tea.WindowSizeMsg{Width: 39, Height: 11})
@@ -91,6 +92,9 @@ func TestUS5UndersizedShellAndExactRestoration20Runs(t *testing.T) {
 				updateModel(fixture.model, keyPress("?"))
 				updateModel(fixture.model, tea.WindowSizeMsg{Width: 40, Height: 12})
 				assertUS5UndersizedSnapshot(t, fixture, before, run, "recovery")
+				if recovered := fixture.model.View().Content; recovered != beforeView {
+					t.Fatalf("run %d recovery did not restore panel content, errors, and controls\n got: %q\nwant: %q", run+1, recovered, beforeView)
+				}
 				if recovered := assertUS5RenderedViewportGeometry(t, fixture.model); !reflect.DeepEqual(recovered, beforeGeometry) {
 					t.Fatalf("run %d recovery did not restore viewport geometry before further input\n got: %#v\nwant: %#v", run+1, recovered, beforeGeometry)
 				}

@@ -6,58 +6,84 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/pluque01/orza/internal/app"
 )
 
-func TestDetailConnectionProjection(t *testing.T) {
-	root := testFolder("root", "", "/", 1)
-	connection := testConnection("connection", root.ID, "/team/production", 2)
-	connection.Host = "prod.example"
-	connection.Port = 2222
-	connection.AuthMethod = app.AuthMethodKey
-	connection.IdentityFile = "/home/operator/.ssh/id_production"
-	connection.CredentialRef = "SECRET-CREDENTIAL-CANARY"
-	snapshot := newCatalogSnapshot(root, 3)
-	if !snapshot.addChildren(root.ID, app.ListChildrenResult{Connections: []app.Connection{connection}}) {
-		t.Fatal("fixture snapshot rejected")
-	}
+func TestDetailConnectionPresentationMatrix(t *testing.T) {
+	methods := []app.AuthMethod{app.AuthMethodAgent, app.AuthMethodKey, app.AuthMethodPassword}
+	widths := []int{24, 40, 80}
+	for index := range 30 {
+		index := index
+		t.Run(fmt.Sprintf("presentation-%02d", index+1), func(t *testing.T) {
+			root := testFolder("root", "", "/", 1)
+			connection := testConnection(fmt.Sprintf("connection-%02d", index), root.ID, fmt.Sprintf("/team/node-%02d", index), 2)
+			connection.Host = fmt.Sprintf("host-%02d.test", index)
+			connection.Port = uint16(2200 + index)
+			connection.AuthMethod = methods[index%len(methods)]
+			connection.CredentialRef = fmt.Sprintf("SECRET-CREDENTIAL-CANARY-%02d", index)
+			if index%3 != 0 {
+				connection.Username = fmt.Sprintf("user-%02d", index)
+			}
+			if index%2 == 0 {
+				connection.IdentityFile = fmt.Sprintf("/keys/id-%02d", index)
+			}
+			snapshot := newCatalogSnapshot(root, 3)
+			if !snapshot.addChildren(root.ID, app.ListChildrenResult{Connections: []app.Connection{connection}}) {
+				t.Fatal("fixture snapshot rejected")
+			}
 
-	state, ok := newDetailState(snapshot, connection.ID)
-	if !ok {
-		t.Fatal("connection detail target rejected")
-	}
-	if state.targetID != connection.ID || state.kind != detailKindConnection || state.heading != "Connection" {
-		t.Fatalf("identity = %q/%q/%q", state.targetID, state.kind, state.heading)
-	}
-	want := []string{
-		"Kind: Connection",
-		"Name: production",
-		"Path: /team/production",
-		"Endpoint: prod.example:2222",
-		"User: (default)",
-		"Method: key",
-		"Identity: /home/operator/.ssh/id_production",
-	}
-	projection := state.project(20, 200)
-	if !slices.Equal(projection.lines, want) {
-		t.Fatalf("lines = %#v, want %#v", projection.lines, want)
-	}
-	if strings.Contains(strings.Join(projection.lines, "\n"), connection.CredentialRef) {
-		t.Fatal("detail exposed credential reference")
-	}
+			state, ok := newDetailState(snapshot, connection.ID)
+			if !ok {
+				t.Fatal("connection detail target rejected")
+			}
+			if state.targetID != connection.ID || state.kind != detailKindConnection || state.heading != "Connection" {
+				t.Fatalf("identity = %q/%q/%q", state.targetID, state.kind, state.heading)
+			}
+			projection := state.project(20, widths[index%len(widths)])
+			joined := strings.Join(projection.lines, "\n")
+			if strings.Count(joined, "Connection") != 1 || strings.Contains(joined, "[Connection]") {
+				t.Fatalf("connection badge count != 1:\n%s", joined)
+			}
+			if strings.Contains(joined, "Kind") || strings.Contains(joined, connection.CredentialRef) {
+				t.Fatalf("Details exposed Kind or credential reference:\n%s", joined)
+			}
 
-	connection.Username = "deploy"
-	connection.AuthMethod = app.AuthMethodAgent
-	connection.IdentityFile = ""
-	snapshot = newCatalogSnapshot(root, 4)
-	_ = snapshot.addChildren(root.ID, app.ListChildrenResult{Connections: []app.Connection{connection}})
-	state, ok = state.withTarget(snapshot, connection.ID)
-	if !ok {
-		t.Fatal("updated connection detail target rejected")
+			labels := []string{"Name", "Path", "Endpoint", "User", "Method"}
+			if connection.IdentityFile != "" {
+				labels = append(labels, "Identity")
+			}
+			assertDetailAlignedRows(t, projection.lines[1:], labels)
+			if connection.Username == "" && !strings.Contains(joined, "(default)") {
+				t.Fatalf("default user omitted:\n%s", joined)
+			}
+		})
 	}
-	joined := strings.Join(state.project(20, 200).lines, "\n")
-	if !strings.Contains(joined, "User: deploy") || strings.Contains(joined, "Identity:") {
-		t.Fatalf("optional/default fields projected incorrectly:\n%s", joined)
+}
+
+func assertDetailAlignedRows(t *testing.T, lines, labels []string) {
+	t.Helper()
+	if len(lines) != len(labels) {
+		t.Fatalf("field row count = %d, want %d: %#v", len(lines), len(labels), lines)
+	}
+	labelWidth := 0
+	for _, label := range labels {
+		labelWidth = max(labelWidth, ansi.StringWidth(label))
+	}
+	valueStart := -1
+	for index, label := range labels {
+		if strings.Contains(lines[index], label+":") {
+			t.Fatalf("field label has trailing colon: %q", lines[index])
+		}
+		prefix := label + strings.Repeat(" ", labelWidth-ansi.StringWidth(label)) + " "
+		if !strings.HasPrefix(lines[index], prefix) || ansi.StringWidth(lines[index]) <= ansi.StringWidth(prefix) {
+			t.Fatalf("field row %q does not preserve label/value columns", lines[index])
+		}
+		if valueStart < 0 {
+			valueStart = ansi.StringWidth(prefix)
+		} else if ansi.StringWidth(prefix) != valueStart {
+			t.Fatalf("value start = %d, want shared start %d for %q", ansi.StringWidth(prefix), valueStart, lines[index])
+		}
 	}
 }
 
@@ -95,7 +121,7 @@ func TestDetailFolderUsesOrderedImmediateConnectionChildren(t *testing.T) {
 		t.Fatalf("direct connection order = %q, want %q", gotIDs, wantIDs)
 	}
 	joined := strings.Join(state.project(20, 200).lines, "\n")
-	for _, want := range []string{"Kind: Folder", "Name: team", "Path: /team", "Direct connections: 3", "alpha: alpha-one.example:22", "alpha: alpha-two.example:22", "zeta: zeta.example:22"} {
+	for _, want := range []string{"Folder", "Name               team", "Path               /team", "Direct connections 3", "alpha              alpha-one.example:22", "alpha              alpha-two.example:22", "zeta               zeta.example:22"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("folder detail omitted %q:\n%s", want, joined)
 		}
@@ -124,7 +150,11 @@ func TestDetailRootAndFolderEmptyState(t *testing.T) {
 				t.Fatal("detail target rejected")
 			}
 			joined := strings.Join(state.project(20, 200).lines, "\n")
-			if !strings.Contains(joined, "Direct connections: 0") || !strings.Contains(joined, detailEmptyConnections) {
+			badge := "Folder"
+			if state.kind == detailKindRoot {
+				badge = "Root"
+			}
+			if strings.Count(joined, badge) != 1 || strings.Contains(joined, "["+badge+"]") || strings.Contains(joined, "Kind") || !strings.Contains(joined, "Direct connections 0") || !strings.Contains(joined, detailEmptyConnections) {
 				t.Fatalf("missing explicit empty state:\n%s", joined)
 			}
 		})
@@ -179,6 +209,40 @@ func TestDetailProjectionMakesUntrustedTextInertAndBounded(t *testing.T) {
 	for _, escaped := range []string{`\x1B`, `\n`, `\u202E`, `\r`} {
 		if !strings.Contains(strings.Join(state.content(200), "\n"), escaped) {
 			t.Fatalf("safe content omitted inert escape %q: %#v", escaped, state.content(200))
+		}
+	}
+}
+
+func TestDetailDirectChildNamesAndEndpointsRemainOrderedSafeAndVisible(t *testing.T) {
+	root := testFolder("root", "", "/", 1)
+	folder := testFolder("folder", root.ID, "/folder", 1)
+	unsafeFirst := testConnection("unsafe-first", folder.ID, "/folder/first", 1)
+	unsafeFirst.Name = "alpha\x1b[31m"
+	unsafeFirst.Host = "alpha\u202E.test"
+	unsafeFirst.CredentialRef = "DIRECT-CREDENTIAL-CANARY"
+	safeSecond := testConnection("safe-second", folder.ID, "/folder/second", 1)
+	safeSecond.Name = "zeta"
+	safeSecond.Host = "zeta.test"
+	snapshot := newCatalogSnapshot(root, 1)
+	_ = snapshot.addChildren(root.ID, app.ListChildrenResult{Folders: []app.Folder{folder}})
+	_ = snapshot.addChildren(folder.ID, app.ListChildrenResult{Connections: []app.Connection{safeSecond, unsafeFirst}})
+
+	state, ok := newDetailState(snapshot, folder.ID)
+	if !ok {
+		t.Fatal("folder detail target rejected")
+	}
+	plain := strings.Join(state.project(20, 80, newStyles(true)).lines, "\n")
+	if first, second := strings.Index(plain, `alpha\x1B[31m`), strings.Index(plain, "zeta"); first < 0 || second < 0 || first >= second {
+		t.Fatalf("direct child names are not ordered and visible:\n%s", plain)
+	}
+	for _, visible := range []string{`alpha\u202E.test:22`, "zeta.test:22"} {
+		if !strings.Contains(plain, visible) {
+			t.Fatalf("direct child endpoint omitted %q:\n%s", visible, plain)
+		}
+	}
+	for _, forbidden := range []string{"\x1b", "\u202e", unsafeFirst.CredentialRef} {
+		if strings.Contains(plain, forbidden) {
+			t.Fatalf("direct child projection contains unsafe/credential value %q: %q", forbidden, plain)
 		}
 	}
 }

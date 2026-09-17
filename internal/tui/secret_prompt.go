@@ -7,6 +7,8 @@ import (
 	"github.com/pluque01/orza/internal/app"
 )
 
+const secretPromptValueWidth = 256
+
 // secretPrompt contains display state only. Secret bytes are owned by the
 // terminal adapter and passed directly to the application service.
 type secretPrompt struct {
@@ -26,19 +28,21 @@ func (p *secretPrompt) view(style styles) string {
 		label = "Password"
 	}
 	var out strings.Builder
-	out.WriteString(style.title.Render(label) + "\n\n")
+	out.WriteString(style.contentBadge(label) + "\n\n")
 	out.WriteString("Input is read by the terminal with echo disabled and is not retained by the TUI.\n")
 	if p.kind == app.SecretPassword && p.storeName != "" {
 		mark := " "
 		if p.consent {
 			mark = "x"
 		}
-		out.WriteString("[" + mark + "] Store in " + p.storeName + " (optional, unchecked by default)\n")
+		out.WriteString("[" + mark + "] Store in " + safeText(p.storeName, secretPromptValueWidth) + " (optional, unchecked by default)\n")
 	}
 	if p.kind == app.SecretPassphrase {
 		out.WriteString("Passphrases are never persisted.\n")
 	}
-	out.WriteString("Secret: " + strings.Repeat("*", p.masked) + "\nEnter Submit  Esc Cancel  F1 Help  Ctrl+C Quit")
+	secret := strings.Repeat("*", p.masked)
+	field := newStructuredFieldGroup([]displayField{{label: "Secret", value: secret}}, 0, len("Secret ")+len(secret), true).render(style)
+	out.WriteString(field[0] + "\nEnter Submit  Esc Cancel  F1 Help  Ctrl+C Quit")
 	return out.String()
 }
 

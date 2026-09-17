@@ -79,7 +79,7 @@ func TestTUIConnectionCRUDAndStaleRecovery(t *testing.T) {
 	updateTUI(t, model, tuiKey("b"))
 	updateTUI(t, model, tuiKey("l"))
 	executeTUICommand(t, model, updateTUI(t, model, tuiKey("d")))
-	if view := model.View().Content; !strings.Contains(view, "Operation: delete connection") || !strings.Contains(view, "never overwritten") || !strings.Contains(view, "r Reload") {
+	if view := model.View().Content; !strings.Contains(view, "Operation delete connection") || strings.Contains(view, "Operation: delete connection") || !strings.Contains(view, "never overwritten") || !strings.Contains(view, "r Reload") {
 		t.Fatalf("stale delete view = %q", view)
 	}
 	if current, err = connections.Get(context.Background(), app.ItemSelector{ID: created.ID}); err != nil || current.Connection.Host != external {
@@ -140,10 +140,13 @@ func TestTUIConnectionFormDetailsCancelAndSelectionTwentyRuns(t *testing.T) {
 
 		updateTUI(t, model, tuiKey("n"))
 		view := model.View().Content
-		for _, want := range []string{"Tree", "Details", "New connection", "Actions"} {
+		for _, want := range []string{"Tree", "Details", "New connection", "Actions", "Path"} {
 			if !strings.Contains(view, want) {
 				t.Fatalf("run %d: create form omitted %q: %q", run, want, view)
 			}
+		}
+		if strings.Contains(view, "New connection  /") || strings.Contains(view, "Path:") {
+			t.Fatalf("run %d: create form embedded or colon-prefixed its catalog path: %q", run, view)
 		}
 		typeText(t, model, "discarded")
 		updateTUI(t, model, tuiKey("esc"))
@@ -168,7 +171,7 @@ func TestTUIConnectionFormDetailsCancelAndSelectionTwentyRuns(t *testing.T) {
 		assertTreeSelectionPath(t, model, created.Path)
 
 		updateTUI(t, model, tuiKey("e"))
-		if view := model.View().Content; !strings.Contains(view, "Tree") || !strings.Contains(view, "Edit connection") || !strings.Contains(view, created.Path) {
+		if view := model.View().Content; !strings.Contains(view, "Tree") || !strings.Contains(view, "Edit connection") || !strings.Contains(view, created.Path) || strings.Contains(view, "Edit connection  "+created.Path) || strings.Contains(view, "Path:") {
 			t.Fatalf("run %d: edit did not remain in Details: %q", run, view)
 		}
 		updateTUI(t, model, tuiKey("tab"))
@@ -192,12 +195,12 @@ func TestTUISessionFailureRecoveryHandoffAndTerminalRestoration(t *testing.T) {
 
 	t.Run("active session hands off and returns status", func(t *testing.T) {
 		local := terminal.NewFake(terminal.Size{Columns: 80, Rows: 24})
-		writer := newSignalingWriter("[ssh] prod", "Endpoint: prod.test:22", "Connect to SSH target?")
+		writer := newSignalingWriter("[ssh] prod", "Endpoint prod.test:22", "Connect to SSH target?")
 		services := tui.ConnectionFuncs{ListFunc: list}
 		status := 23
 		input := pipeInput(t, []readerStage{
 			{wait: writer.signal("[ssh] prod"), data: "j"},
-			{wait: writer.signal("Endpoint: prod.test:22"), data: "c"},
+			{wait: writer.signal("Endpoint prod.test:22"), data: "c"},
 			{wait: writer.signal("Connect to SSH target?"), data: "y"},
 		})
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -233,7 +236,7 @@ func TestTUIConnectConfirmationCancelStartsZeroNetwork(t *testing.T) {
 	updateTUI(t, model, model.Init()())
 	updateTUI(t, model, tuiKey("j"))
 	updateTUI(t, model, tuiKey("c"))
-	if view := model.View().Content; !strings.Contains(view, "Connect to SSH target?") || !strings.Contains(view, connection.Path) {
+	if view := model.View().Content; !strings.Contains(view, "Connect") || strings.Count(view, "Connect to SSH target?") != 1 || !strings.Contains(view, connection.Path) || strings.Contains(view, "Path: "+connection.Path) || strings.Contains(view, "Endpoint: "+connection.Host) || strings.Contains(view, "Connect confirmation") {
 		t.Fatalf("connect confirmation = %q", view)
 	}
 	updateTUI(t, model, tuiKey("enter"))
@@ -245,9 +248,14 @@ func TestTUIConnectConfirmationCancelStartsZeroNetwork(t *testing.T) {
 
 func assertConnectConfirmationOutput(t *testing.T, output string, connection app.Connection) {
 	t.Helper()
-	for _, value := range []string{"Connect to SSH target?", "Path: " + connection.Path, "Endpoint: " + connection.Host + ":22"} {
+	for _, value := range []string{"Connect", "Connect to SSH target?", "Path", connection.Path, "Endpoint", connection.Host + ":22"} {
 		if !strings.Contains(output, value) {
 			t.Fatalf("connect confirmation omitted %q: %q", value, output)
+		}
+	}
+	for _, stale := range []string{"Connect confirmation", "Path: " + connection.Path, "Endpoint: " + connection.Host + ":22"} {
+		if strings.Contains(output, stale) {
+			t.Fatalf("connect confirmation retained stale presentation %q: %q", stale, output)
 		}
 	}
 }

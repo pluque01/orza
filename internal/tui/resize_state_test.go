@@ -11,13 +11,11 @@ import (
 )
 
 type us5ModalPayload struct {
-	value   string
-	control int
+	value string
 }
 
 type us5OpaqueFixture struct {
 	model    *Model
-	modal    modalState
 	conflict conflictState
 	security securityInputState
 	intent   string
@@ -33,6 +31,7 @@ type us5OpaqueSnapshot struct {
 	formValues       []string
 	formFocus        connectionField
 	formOffset       int
+	formErrors       [fieldCount]string
 	formError        string
 	modal            modalState
 	conflict         conflictState
@@ -77,6 +76,7 @@ func newUS5OpaqueFixture(t *testing.T) *us5OpaqueFixture {
 	model.form.inputs[fieldName].SetValue("opaque-用户")
 	model.form.setFocus(fieldHost)
 	model.form.viewport = newViewportState(6)
+	model.form.errors[fieldPort] = "retained field error"
 	model.form.formError = "retained save error"
 	model.pendingSelection = connection.ID
 
@@ -91,18 +91,21 @@ func newUS5OpaqueFixture(t *testing.T) *us5OpaqueFixture {
 		t.Fatal("operation fixture setup failed")
 	}
 
-	registry, err := registerModalPayload[us5ModalPayload](modalRegistry{}, modalKindHelp)
-	if err != nil {
-		t.Fatal(err)
+	helpLines := make([]string, 16)
+	for index := range helpLines {
+		helpLines[index] = "retained help payload"
 	}
-	modal, err := (modalState{}).open(registry, modalOpenRequest{
+	modal, err := (modalState{}).open(newModalRegistry(), modalOpenRequest{
 		kind: modalKindHelp, openedFrom: focusOwnerConnectionForm,
-		target: &target, payload: us5ModalPayload{value: "opaque panel", control: 3},
+		target: &target, payload: helpPayload{lines: helpLines},
 		viewport: newViewportState(8), conflict: &conflict,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
+	modal.recoverableError = "retained modal error"
+	model.modal = modal
+	model.focusOwner = focusOwnerModal
 	security, ok := newSecurityInputState(securityInputSecret, focusOwnerConnectionForm)
 	if !ok {
 		t.Fatal("security input fixture setup failed")
@@ -110,7 +113,7 @@ func newUS5OpaqueFixture(t *testing.T) *us5OpaqueFixture {
 	security = security.withViewport(newViewportState(9))
 
 	return &us5OpaqueFixture{
-		model: model, modal: modal, conflict: conflict, security: security,
+		model: model, conflict: conflict, security: security,
 		intent: "quit-after-save:pending",
 	}
 }
@@ -122,10 +125,12 @@ func (fixture *us5OpaqueFixture) snapshot() us5OpaqueSnapshot {
 	}
 	sort.Slice(expanded, func(i, j int) bool { return expanded[i] < expanded[j] })
 	values := make([]string, fieldCount)
+	errors := [fieldCount]string{}
 	for field := fieldName; field < fieldCount; field++ {
 		if field <= fieldIdentity {
 			values[field] = fixture.model.form.inputs[field].Value()
 		}
+		errors[field] = fixture.model.form.errors[field]
 	}
 	operation := operationState{}
 	if fixture.model.operation != nil {
@@ -142,8 +147,9 @@ func (fixture *us5OpaqueFixture) snapshot() us5OpaqueSnapshot {
 		treeOffset:   fixture.model.browser.viewport.logicalOffset,
 		detailTarget: fixture.model.detailState.targetID, detailOffset: fixture.model.detailState.viewport.logicalOffset,
 		focus: fixture.model.focusOwner, formValues: values, formFocus: fixture.model.form.focusedField(),
-		formOffset: fixture.model.form.viewport.logicalOffset, formError: fixture.model.form.formError,
-		modal: fixture.modal, conflict: fixture.conflict, operation: operation,
+		formOffset: fixture.model.form.viewport.logicalOffset, formErrors: errors,
+		formError: fixture.model.form.formError,
+		modal:     fixture.model.modal, conflict: fixture.conflict, operation: operation,
 		pendingSelection: fixture.model.pendingSelection, security: fixture.security, intent: fixture.intent,
 	}
 }
@@ -164,6 +170,12 @@ func TestUS5ResizeSequencePreservesOpaqueState20Runs(t *testing.T) {
 				}
 				if got := fixture.snapshot(); !reflect.DeepEqual(got, want) {
 					t.Fatalf("run %d resize %dx%d changed opaque state\n got: %#v\nwant: %#v", run+1, width, height, got, want)
+				}
+				view := fixture.model.View().Content
+				for _, required := range []string{"Loading: Save", "retained help payload", "Esc Cancel ? Help q Quit"} {
+					if !strings.Contains(view, required) {
+						t.Fatalf("run %d resize %dx%d omitted priority modal content %q:\n%s", run+1, width, height, required, view)
+					}
 				}
 				geometry := assertUS5RenderedViewportGeometry(t, fixture.model)
 				if previous, ok := restored[width]; ok && !reflect.DeepEqual(geometry, previous) {

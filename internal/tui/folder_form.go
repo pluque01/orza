@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/pluque01/orza/internal/app"
@@ -92,31 +93,34 @@ func (f *folderForm) renameRequest() (app.RenameFolderRequest, bool) {
 	return app.RenameFolderRequest{Folder: app.ItemSelector{ID: f.original.ID}, Name: f.input.Value(), Expected: &expected}, true
 }
 
-func (f *folderForm) modalLines(width int) ([]string, int) {
-	title := "Create folder"
+func (f *folderForm) modalLines(width int, semanticStyles ...styles) ([]string, int) {
+	style := newStyles(true)
+	if len(semanticStyles) != 0 {
+		style = semanticStyles[0]
+	}
 	location := f.parent.Path
 	if f.destination != nil {
 		location = f.destination.Path
 	}
 	if f.original != nil {
-		title = "Edit folder"
 		location = f.original.Path
 	}
-	lines := []string{title}
-	lines = appendWrappedModalLine(lines, "Target: ", location, width)
+	fields := []displayField{{label: "Target", value: safeText(location, int(^uint(0)>>1))}}
 	if f.original != nil {
-		lines = appendWrappedModalLine(lines, "ID/revision: ", fmt.Sprintf("%s/%d", f.original.ID, f.original.Revision), width)
+		fields = append(fields, displayField{label: "ID/revision", value: safeText(fmt.Sprintf("%s/%d", f.original.ID, f.original.Revision), int(^uint(0)>>1))})
 	} else if f.destination != nil {
-		lines = appendWrappedModalLine(lines, "Destination ID: ", string(f.destination.ID), width)
+		fields = append(fields, displayField{label: "Destination ID", value: safeText(string(f.destination.ID), int(^uint(0)>>1))})
 	}
-	active := len(lines)
-	lines = append(lines, "> Name: "+f.input.View())
+	fields = append(fields, displayField{label: "Name", value: safeText(f.input.View(), int(^uint(0)>>1))})
+	lines := newStructuredFieldGroup(fields, 2, width, true).render(style)
+	active := len(lines) - 1
+	lines[active] = "> " + strings.TrimPrefix(lines[active], "  ")
 	message := f.err
 	if message == "" {
 		message = f.input.Error()
 	}
 	if message != "" {
-		lines = append(lines, "Error: "+message)
+		lines = append(lines, style.failureMessage(safeText(message, max(0, width-7))))
 	}
 	lines = append(lines, "Ctrl+S/Enter Save  Esc Cancel  F1 Help")
 	return lines, active

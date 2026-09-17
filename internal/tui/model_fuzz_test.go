@@ -13,6 +13,39 @@ import (
 
 const modelFuzzActionLimit = 128
 
+func FuzzSC005PanelFieldRendering(f *testing.F) {
+	for index, field := range sc005FieldCases() {
+		f.Add(uint8(index), []byte(field.label), []byte(field.value), uint8(sc005ContentWidth), uint8(sc005ContentHeight))
+	}
+
+	f.Fuzz(func(t *testing.T, rawSurface uint8, rawLabel, rawValue []byte, rawWidth, rawHeight uint8) {
+		if len(rawLabel)+len(rawValue) > 4096 {
+			t.Skip()
+		}
+		if len(rawLabel) == 0 {
+			rawLabel = []byte("field")
+		}
+		if len(rawValue) == 0 {
+			rawValue = []byte("value")
+		}
+		field := sc005FieldCase{
+			name:  "fuzz",
+			label: strings.Repeat(string(rawLabel), 4),
+			value: strings.Repeat(string(rawValue), 4),
+		}
+		surfaces := sc005SurfaceCases()
+		surface := surfaces[int(rawSurface)%len(surfaces)]
+		width := sc005ContentWidth + int(rawWidth%25)
+		height := sc005ContentHeight + int(rawHeight%5)
+		canary := fmt.Sprintf("SC005-FUZZ-SECRET-CANARY-%d", rawSurface)
+		for strings.Contains(field.label, canary) || strings.Contains(field.value, canary) {
+			canary += "X"
+		}
+		result := surface.render(field, canary, width, height)
+		assertSC005SurfaceResult(t, surface, field, canary, width, height, result)
+	})
+}
+
 type modelFuzzHarness struct {
 	t             *testing.T
 	model         *Model

@@ -18,10 +18,11 @@ func TestUS4ConfirmationsRequireExplicitAcceptanceAndRevealFullTargets(t *testin
 		payload any
 		kind    modalKind
 		accept  func(tea.KeyPressMsg) bool
+		want    []string
 	}{
-		{"connect", connectConfirmationPayload{newConnectConfirmation(connection)}, modalKindConnectConfirmation, newConnectConfirmation(connection).confirmed},
-		{"delete connection", deleteConnectionPayload{newDeleteConfirmation(app.ConnectionDeleteScope{ID: connection.ID, Path: long, Host: connection.Host, Revision: 9})}, modalKindDeleteConnection, newDeleteConfirmation(app.ConnectionDeleteScope{}).confirmed},
-		{"delete folder", deleteFolderPayload{newFolderDeleteConfirmation(app.FolderDeleteScope{ID: "folder", Path: long, Revision: 4})}, modalKindDeleteFolder, newFolderDeleteConfirmation(app.FolderDeleteScope{}).confirmed},
+		{"connect", connectConfirmationPayload{newConnectConfirmation(connection)}, modalKindConnectConfirmation, newConnectConfirmation(connection).confirmed, []string{"Path " + long, "Endpoint " + connection.Host + ":2202", "ID stable-id", "Revision 9"}},
+		{"delete connection", deleteConnectionPayload{newDeleteConfirmation(app.ConnectionDeleteScope{ID: connection.ID, Path: long, Host: connection.Host, Revision: 9})}, modalKindDeleteConnection, newDeleteConfirmation(app.ConnectionDeleteScope{}).confirmed, []string{"Path " + long, "Target (default)@" + connection.Host, "ID/revision stable-id/9"}},
+		{"delete folder", deleteFolderPayload{newFolderDeleteConfirmation(app.FolderDeleteScope{ID: "folder", Path: long, Revision: 4})}, modalKindDeleteFolder, newFolderDeleteConfirmation(app.FolderDeleteScope{}).confirmed, []string{"Path " + long, "ID/revision folder/4"}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -33,9 +34,14 @@ func TestUS4ConfirmationsRequireExplicitAcceptanceAndRevealFullTargets(t *testin
 				t.Fatal(err)
 			}
 			lines, _ := modalContent(state, newStyles(true), 20, nil)
-			joined := strings.Join(lines, "")
-			if !strings.Contains(joined, "final") || strings.Contains(joined, "…") {
-				t.Fatalf("captured target was truncated: %q", joined)
+			joined := strings.Join(lines, "\n")
+			for _, want := range test.want {
+				if !renderedTextContains(joined, want) {
+					t.Fatalf("captured identity omitted %q: %q", want, joined)
+				}
+			}
+			if strings.Contains(joined, "…") {
+				t.Fatalf("captured identity was truncated: %q", joined)
 			}
 		})
 	}
@@ -52,7 +58,7 @@ func TestUS5LongConfirmationIdentityIsScrollRevealableWithCancelAlwaysVisible(t 
 	}
 
 	first := model.View().Content
-	for _, want := range []string{"Connect", "Enter/Esc Cancel", "█"} {
+	for _, want := range []string{"Connect", "Connect to SSH target?", "Enter/Esc Cancel", "█"} {
 		if !strings.Contains(first, want) {
 			t.Fatalf("initial confirmation omitted %q:\n%s", want, first)
 		}
@@ -112,9 +118,12 @@ func TestUS5DeleteConfirmationPreservesCapturedEndpointThroughScopeLookup(t *tes
 	})
 	view := model.View().Content
 	lines, _ := modalContent(model.modal, model.styles, calculateLayout(40, 12, regionTree).modalOverlay().contentWidth(), nil)
-	compact := strings.Join(lines, "")
-	for _, want := range []string{"Path: /production", "Target: (default)@prod.example:2202", "ID/revision: captured-id/9"} {
-		if !strings.Contains(compact, want) {
+	compact := strings.Join(lines, "\n")
+	if !strings.Contains(view, "Delete") {
+		t.Fatalf("delete confirmation omitted type title:\n%s", view)
+	}
+	for _, want := range []string{"Path /production", "Target (default)@prod.example:2202", "ID/revision captured-id/9"} {
+		if !renderedTextContains(compact, want) {
 			t.Fatalf("delete confirmation omitted captured identity %q:\n%s", want, view)
 		}
 	}

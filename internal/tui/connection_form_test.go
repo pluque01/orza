@@ -8,9 +8,167 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/pluque01/orza/internal/app"
 	"github.com/pluque01/orza/internal/terminal"
 )
+
+func TestConnectionFormControlledBadgeKeepsCatalogPathInSafeStructuredValue(t *testing.T) {
+	unsafePath := "/team/\x1b[31mprod\nnext\u202e"
+	tests := []struct {
+		name  string
+		label string
+		form  func() *connectionForm
+	}{
+		{
+			name:  "new",
+			label: "New connection",
+			form: func() *connectionForm {
+				form := newConnectionForm(nil)
+				form.setDestination(app.Folder{Node: app.Node{Path: unsafePath}})
+				return form
+			},
+		},
+		{
+			name:  "edit",
+			label: "Edit connection",
+			form: func() *connectionForm {
+				return newConnectionForm(&app.Connection{
+					Node: app.Node{ID: "connection-id", Name: "prod", Path: unsafePath, Revision: 3},
+					Host: "prod.test", Port: 22, AuthMethod: app.AuthMethodAgent,
+				})
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			form := test.form()
+			plain := form.view(newStyles(true), 240, 24)
+			colored := form.view(newStyles(false), 240, 24)
+			if got := ansi.Strip(colored); got != plain {
+				t.Fatalf("color/plain form mismatch:\ncolor %q\nplain %q", colored, plain)
+			}
+			lines := strings.Split(plain, "\n")
+			if lines[0] != test.label || strings.Count(plain, test.label) != 1 {
+				t.Fatalf("controlled badge = %q, view:\n%s", lines[0], plain)
+			}
+			projectedPath := safeText(unsafePath, 240)
+			if strings.Contains(lines[0], projectedPath) || !strings.Contains(plain, projectedPath) {
+				t.Fatalf("catalog path was not isolated as a structured value: %q", plain)
+			}
+			if strings.ContainsAny(plain, "\x1b\r") || !strings.Contains(plain, `\x1B`) || !strings.Contains(plain, `\n`) || !strings.Contains(plain, `\u202E`) {
+				t.Fatalf("catalog path was not safely projected: %q", plain)
+			}
+		})
+	}
+}
+
+func TestConnectionFormCompactRowsUseColonlessMutedLabelsAndBestAlignment(t *testing.T) {
+	form := newConnectionForm(&app.Connection{
+		Node: app.Node{ID: "connection-id", Name: "name-value", Path: "/catalog/form/path", Revision: 3},
+		Host: "host-value.test", Port: 2222, Username: "user-value", AuthMethod: app.AuthMethodKey,
+		IdentityFile: "/identity-value",
+	})
+	plainLines, _ := form.content(newStyles(true))
+	coloredLines, _ := form.content(newStyles(false))
+	if got := ansi.Strip(strings.Join(coloredLines, "\n")); got != strings.Join(plainLines, "\n") {
+		t.Fatal("colored form changed plain-text semantics")
+	}
+
+	values := []struct {
+		label string
+		value string
+	}{
+		{label: "Path", value: "/catalog/form/path"},
+		{label: "Name", value: "name-value"},
+		{label: "Folder", value: "/catalog/form"},
+		{label: "Host", value: "host-value.test"},
+		{label: "Port", value: "2222"},
+		{label: "User", value: "user-value"},
+		{label: "Method", value: "Agent [Key] Password"},
+		{label: "Identity file", value: "/identity-value"},
+	}
+	valueStart := -1
+	for _, field := range values {
+		lineIndex := compactFormLabelLine(plainLines, field.label)
+		if lineIndex < 0 {
+			t.Fatalf("missing %s row:\n%s", field.label, strings.Join(plainLines, "\n"))
+		}
+		line := plainLines[lineIndex]
+		if !strings.Contains(line, field.value) {
+			t.Fatalf("%s row omitted value %q: %q", field.label, field.value, line)
+		}
+		if strings.Contains(line, field.label+":") {
+			t.Fatalf("colon-suffixed form label %q", line)
+		}
+		start := strings.Index(line, field.value)
+		if valueStart < 0 {
+			valueStart = start
+		} else if start != valueStart {
+			t.Fatalf("%s value starts at %d, want best shared column %d: %q", field.label, start, valueStart, line)
+		}
+		if !strings.Contains(coloredLines[lineIndex], "\x1b[90m") {
+			t.Fatalf("%s label is not muted in color mode: %q", field.label, coloredLines[lineIndex])
+		}
+	}
+}
+
+func TestConnectionFormFortyByTwelvePreservesAuthMarkersErrorsSaveAndFooter(t *testing.T) {
+	form := validConnectionForm()
+	form.setAuthMethod(app.AuthMethodKey)
+	form.setFocus(fieldAuth)
+	view := form.view(newStyles(true), 40, 12)
+	if !strings.Contains(view, "Agent [Key] Password") {
+		t.Fatalf("40-column authentication selector is incomplete: %q", view)
+	}
+	methodLine := strings.Split(view, "\n")[lineContaining(strings.Split(view, "\n"), "Agent [Key] Password")]
+	if !strings.HasPrefix(methodLine, ">   Method") {
+		t.Fatalf("focused Method marker order changed: %q", methodLine)
+	}
+
+	form.setFocus(fieldHost)
+	form.errors[fieldHost] = "host validation failed"
+	view = form.view(newStyles(true), 40, 12)
+	lines := strings.Split(view, "\n")
+	hostLineIndex := lineContaining(lines, "Host")
+	if hostLineIndex < 0 {
+		t.Fatalf("focused invalid Host row is not visible at 40x12: %q", view)
+	}
+	hostLine := lines[hostLineIndex]
+	if !strings.HasPrefix(hostLine, ">!  Host") || !strings.Contains(hostLine, "host.test") {
+		t.Fatalf("focused invalid field did not keep its label and value on one compact row: %q", hostLine)
+	}
+	if hostLineIndex+1 >= len(lines) || lines[hostLineIndex+1] != "Error: host validation failed" {
+		t.Fatalf("focused invalid field/error priority changed: %q", view)
+	}
+
+	delete(form.errors, fieldHost)
+	form.setFocus(fieldSave)
+	form.setFormError("persistence failed safely")
+	view = form.view(newStyles(true), 40, 12)
+	if !strings.Contains(view, "Error: persistence failed safely") || !strings.Contains(view, "> * [ Save connection ]") || !strings.Contains(view, "Left/Right Change method") {
+		t.Fatalf("Save/error/footer priority changed at 40x12: %q", view)
+	}
+}
+
+func lineContaining(lines []string, value string) int {
+	for index, line := range lines {
+		if strings.Contains(line, value) {
+			return index
+		}
+	}
+	return -1
+}
+
+func compactFormLabelLine(lines []string, label string) int {
+	for index, line := range lines {
+		if len(line) >= connectionFormMarkerWidth && strings.HasPrefix(line[connectionFormMarkerWidth:], label) {
+			return index
+		}
+	}
+	return -1
+}
 
 func TestConnectionNormalControlsManualPasteEquivalenceCorpus(t *testing.T) {
 	fields := []connectionField{fieldName, fieldHost, fieldPort, fieldUsername, fieldIdentity}
@@ -290,7 +448,7 @@ func TestConnectionFormDynamicViewportKeepsActiveErrorsAndSaveVisible(t *testing
 	form.setDimensions(32, 4)
 	projection := form.project(newStyles(true))
 	joined := strings.Join(projection.lines, "\n")
-	if !strings.Contains(joined, "Host:") || !strings.Contains(joined, "host validation failed") {
+	if !strings.Contains(joined, "Host") || strings.Contains(joined, "Host:") || !strings.Contains(joined, "host validation failed") {
 		t.Fatalf("focused field/error not visible in reduced viewport: %q", joined)
 	}
 	if !projection.hasPrevious || !projection.hasNext || !projection.scrollbar.visible {

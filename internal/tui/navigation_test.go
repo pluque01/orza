@@ -26,7 +26,7 @@ func TestModelOwnsTreeFocusAndSynchronizesDetailInSameUpdate(t *testing.T) {
 		t.Fatalf("same-transition IDs = selection %q detail %q, want %q", model.browser.selectedID, model.detailState.targetID, first.ID)
 	}
 	view := model.View().Content
-	if !strings.Contains(view, ">   [ssh] first") || !strings.Contains(view, "Path: /first") || strings.Contains(view, "Path: /second") {
+	if !strings.Contains(view, ">   [ssh] first") || !scContainsStructuredField(view, "Path", "/first") || scContainsStructuredField(view, "Path", "/second") {
 		t.Fatalf("first frame mixed selection detail:\n%s", view)
 	}
 }
@@ -155,7 +155,7 @@ func TestConnectionShellRendersEndpointWithoutDuplicateHostLine(t *testing.T) {
 	model := loadedModel(t, []app.Connection{connection}, true)
 	updateModel(model, keyPress("l"))
 	view := model.View().Content
-	if !strings.Contains(view, "Endpoint: host.test:22") || strings.Contains(view, "Host: host.test:22") {
+	if !scContainsStructuredField(view, "Endpoint", "host.test:22") || scContainsStructuredField(view, "Host", "host.test:22") {
 		t.Fatalf("connection detail did not retain only the canonical endpoint:\n%s", view)
 	}
 }

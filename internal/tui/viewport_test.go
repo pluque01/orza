@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/x/ansi"
 )
@@ -218,5 +219,54 @@ func TestViewportEllipsisStaysWithinVisibleWidth(t *testing.T) {
 				t.Fatalf("truncated line %q has no ellipsis", got)
 			}
 		})
+	}
+}
+
+func TestViewportProjectionIsLabelIndependentAndTerminalSafe(t *testing.T) {
+	invalid := string([]byte{'I', 'D', ':', ' ', 0xff, 'x'})
+	styled := "Target: \x1b[1;31m東京-control\x1b[0m"
+	tests := []struct {
+		name  string
+		line  string
+		width int
+		want  string
+	}{
+		{name: "literal Target prefix preserves trusted ANSI", line: styled, width: 12, want: "Target: \x1b[1;31m東…\x1b[0m"},
+		{name: "literal ID prefix is not parsed", line: "ID: alpha\nbeta", width: 40, want: `ID: alpha\nbeta`},
+		{name: "unrelated label gets identical control safety", line: "Subject: alpha\nbeta", width: 40, want: `Subject: alpha\nbeta`},
+		{name: "invalid UTF-8", line: invalid, width: 40, want: `ID: \xFFx`},
+		{name: "bidi control", line: "Path \u202eabc", width: 40, want: `Path \u202Eabc`},
+		{name: "C0 and C1 controls", line: "Name a\t\x00\u009bb", width: 40, want: `Name a\t\x00\x9Bb`},
+		{name: "Unicode display width", line: "Value 東京駅", width: 10, want: "Value 東…"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			projection := newViewportState(0).project([]string{test.line}, 1, test.width, noActiveLine)
+			if len(projection.lines) != 1 || projection.lines[0] != test.want {
+				t.Fatalf("projection = %#v, want [%q]", projection.lines, test.want)
+			}
+			if got := ansi.StringWidth(projection.lines[0]); got > test.width {
+				t.Fatalf("projection width = %d, limit %d: %q", got, test.width, projection.lines[0])
+			}
+			assertViewportTextSafe(t, projection.lines[0])
+		})
+	}
+}
+
+func assertViewportTextSafe(t *testing.T, line string) {
+	t.Helper()
+	plain := ansi.Strip(line)
+	if !utf8.ValidString(plain) {
+		t.Fatalf("viewport text is invalid UTF-8: %q", line)
+	}
+	if strings.ContainsAny(plain, "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f"+
+		"\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f\x7f") {
+		t.Fatalf("viewport text contains an unsafe C0 control: %q", line)
+	}
+	for _, r := range plain {
+		if r >= '\u0080' && r <= '\u009f' || isBidiFormattingControl(r) {
+			t.Fatalf("viewport text contains unsafe rune %U: %q", r, line)
+		}
 	}
 }

@@ -130,6 +130,77 @@ func sc009FolderReader(root app.Folder, contents func(app.NodeID) app.ListChildr
 	return get, list
 }
 
+func TestMovePickerReusesModalBadgeAndSharedFieldHierarchy(t *testing.T) {
+	source := app.Node{ID: "source", Kind: app.NodeKindFolder, Name: "source", Path: "/source", Revision: 7}
+	descendant := app.Folder{Node: app.Node{ID: "descendant", ParentID: source.ID, Kind: app.NodeKindFolder, Name: "child", Path: "/source/child", Revision: 2}}
+	destination := app.Folder{Node: app.Node{ID: "destination", Kind: app.NodeKindFolder, Name: "archive", Path: "/archive", Revision: 11}}
+	picker := newMovePicker(source, []app.Folder{{Node: source}, descendant, destination})
+
+	plainLines, active := picker.modalLines(80, newStyles(true))
+	coloredLines, coloredActive := picker.modalLines(80, newStyles(false))
+	plain := strings.Join(plainLines, "\n")
+	colored := strings.Join(coloredLines, "\n")
+	if ansi.Strip(colored) != plain || coloredActive != active {
+		t.Fatalf("move color/plain semantics or active line differ: %q / %q / %d / %d", colored, plain, coloredActive, active)
+	}
+	if !strings.Contains(colored, "\x1b[90m") {
+		t.Fatalf("move descriptive labels were not muted: %q", colored)
+	}
+	if sourceColumn, revisionColumn := strings.Index(plainLines[0], source.Path), strings.Index(plainLines[1], string(source.ID)+"/7"); sourceColumn < 0 || sourceColumn != revisionColumn {
+		t.Fatalf("move identity values are not aligned: %d/%d in %#v", sourceColumn, revisionColumn, plainLines)
+	}
+	for _, forbidden := range []string{"Move destination", "Source:", "ID/revision:"} {
+		if strings.Contains(plain, forbidden) {
+			t.Fatalf("move picker retained duplicate heading or colon label %q: %q", forbidden, plain)
+		}
+	}
+	for _, want := range []string{"Source", "/source", "ID/revision", "source/7", "> /archive", "/source [unavailable: source subtree]", "/source/child [unavailable: source subtree]", "Enter Move  Esc Cancel  ? Help"} {
+		if !strings.Contains(plain, want) {
+			t.Fatalf("move picker omitted %q: %q", want, plain)
+		}
+	}
+	if active < 0 || active >= len(plainLines) || !strings.HasPrefix(plainLines[active], "> ") {
+		t.Fatalf("move active marker/index changed: active %d, lines %#v", active, plainLines)
+	}
+	selected := picker.selected
+	selectedDestination := picker.destination()
+	if selectedDestination == nil || selectedDestination.ID != destination.ID || selectedDestination.Revision != destination.Revision {
+		t.Fatalf("selected destination/revision = %#v", selectedDestination)
+	}
+	if picker.source != source || picker.selected != selected || picker.targets[0].folder.Revision != destination.Revision {
+		t.Fatal("move rendering changed captured source, revisions, or selection")
+	}
+
+	model := New(Config{Width: 80, Height: 24, NoColor: true})
+	if !model.openGenericModal(modalKindMovePicker, nil, movePickerPayload{picker: picker}) {
+		t.Fatal("move modal did not open")
+	}
+	if view := model.View().Content; strings.Count(view, "[*] Move") != 1 || strings.Contains(view, "Move destination") {
+		t.Fatalf("move modal did not retain exactly one type title:\n%s", view)
+	}
+}
+
+func TestMovePickerSanitizesDynamicValuesBeforeLabelStyling(t *testing.T) {
+	unsafe := "value\x1b[31m\n\u202e"
+	source := app.Node{ID: app.NodeID(unsafe), Kind: app.NodeKindConnection, Path: "/" + unsafe, Revision: 13}
+	destination := app.Folder{Node: app.Node{ID: "destination", Kind: app.NodeKindFolder, Path: "/target-" + unsafe, Revision: 17}}
+	picker := newMovePicker(source, []app.Folder{destination})
+
+	lines, _ := picker.modalLines(200, newStyles(false))
+	view := strings.Join(lines, "\n")
+	if strings.Contains(view, "\x1b[31m") || strings.Contains(view, "\u202e") {
+		t.Fatalf("move picker styled unsanitized dynamic content: %q", view)
+	}
+	for _, want := range []string{safeText(source.Path, 200), safeText(string(source.ID), 200), safeText(destination.Path, 200)} {
+		if !strings.Contains(ansi.Strip(view), want) {
+			t.Fatalf("move picker omitted safe projection %q: %q", want, ansi.Strip(view))
+		}
+	}
+	if picker.source != source || picker.destination() == nil || picker.destination().ID != destination.ID || picker.destination().Revision != destination.Revision {
+		t.Fatal("move rendering changed captured dynamic values or revisions")
+	}
+}
+
 func TestSC009ClosedModalInvariantMatrix(t *testing.T) {
 	root := testFolder("root", "", "/", 1)
 	folder := testFolder("folder", root.ID, "/folder", 3)
@@ -148,35 +219,45 @@ func TestSC009ClosedModalInvariantMatrix(t *testing.T) {
 			form := newFolderForm(nil, app.ItemSelector{ID: folder.ID})
 			form.setDestination(folder)
 			return folderCreatePayload{form: form}
-		}, tea.KeyPressMsg(tea.Key{Code: tea.KeyF1}), []string{"Create folder", "Target: /folder", "Destination ID: folder", "Name:", "Save", "Cancel"}},
+		}, tea.KeyPressMsg(tea.Key{Code: tea.KeyF1}), []string{"Create Folder", "Target", "/folder", "Destination ID", "Name", "Save", "Cancel"}},
 		{"folder edit", modalKindFolderEdit, func() any {
 			return folderEditPayload{form: newFolderForm(&folder, app.ItemSelector{})}
-		}, tea.KeyPressMsg(tea.Key{Code: tea.KeyF1}), []string{"Edit folder", "Target: /folder", "ID/revision: folder/3", "Name:", "Save", "Cancel"}},
+		}, tea.KeyPressMsg(tea.Key{Code: tea.KeyF1}), []string{"Edit Folder", "Target", "/folder", "ID/revision", "folder/3", "Name", "Save", "Cancel"}},
 		{"move", modalKindMovePicker, func() any {
 			return movePickerPayload{picker: newMovePicker(connection.Node, []app.Folder{root, destination})}
-		}, keyPress("?"), []string{"Move destination", "Source: /folder/connection", "ID/revision: connection/4", "/destination", "Enter Move", "Esc Cancel"}},
+		}, keyPress("?"), []string{"Move", "Source", "/folder/connection", "ID/revision", "connection/4", "/destination", "Enter Move", "Esc Cancel"}},
 		{"delete connection", modalKindDeleteConnection, func() any {
 			return deleteConnectionPayload{confirmation: newDeleteConfirmation(app.ConnectionDeleteScope{ID: connection.ID, Path: connection.Path, Host: connection.Host, Revision: connection.Revision, HasRememberedPassword: true})}
-		}, keyPress("?"), []string{"Delete connection?", "Path: /folder/connection", "Target: (default)@host.test", "ID/revision: connection/4", "saved password", "y Confirm", "Enter/Esc Cancel"}},
+		}, keyPress("?"), []string{"Action      permanently delete connection", "Path        /folder/connection", "Target      (default)@host.test", "ID/revision connection/4", "Effect      also deletes the saved password", "y Confirm", "Enter/Esc Cancel"}},
 		{"delete folder", modalKindDeleteFolder, func() any {
 			return deleteFolderPayload{confirmation: newFolderDeleteConfirmation(app.FolderDeleteScope{ID: folder.ID, Path: folder.Path, Revision: folder.Revision, Folders: 2, Connections: 3, RememberedCredentials: 1})}
-		}, keyPress("?"), []string{"Delete folder", "Path: /folder", "ID/revision: folder/3", "Scope: 2 folders, 3 connections, 1 remembered credential", "y Confirm", "Enter/Esc Cancel"}},
+		}, keyPress("?"), []string{"Action      permanently delete the folder subtree", "Path        /folder", "ID/revision folder/3", "Scope       2 folders, 3 connections, 1 remembered credential", "y Confirm", "Enter/Esc Cancel"}},
 		{"connect confirmation", modalKindConnectConfirmation, func() any {
 			return connectConfirmationPayload{confirmation: newConnectConfirmation(connection)}
-		}, keyPress("?"), []string{"Connect confirmation", "Path: /folder/connection", "Endpoint: host.test:22", "ID: connection", "Revision: 4", "y Confirm", "Enter/Esc Cancel"}},
+		}, keyPress("?"), []string{"Connect to SSH target?", "Path     /folder/connection", "Endpoint host.test:22", "ID       connection", "Revision 4", "y Confirm", "Enter/Esc Cancel"}},
 		{"unsaved changes", modalKindUnsavedChanges, func() any {
 			return unsavedChangesPayload{intent: unsavedIntentCancel, target: connection.Path}
-		}, keyPress("?"), []string{"Unsaved changes", "Target: /folder/connection", "s Save", "d Discard", "Esc Cancel"}},
+		}, keyPress("?"), []string{"Action Cancel connection editing?", "Target /folder/connection", "s Save", "d Discard", "Esc Cancel"}},
 		{"help", modalKindHelp, func() any {
 			return helpPayload{lines: []string{"Up Move up", "Down Move down", "Esc Close"}}
 		}, keyPress("j"), []string{"Help", "Up Move up", "Down Move down", "?/Esc Close"}},
 		{"operation error", modalKindOperationError, func() any {
 			return operationErrorPayload{modal: newErrorModal("move catalog item", connection.Path, app.ErrInvalidRequest)}
-		}, keyPress("?"), []string{"Recoverable operation error", "Operation: move catalog item", "Target: /folder/connection", "Cause:", "b/Esc Back", "q Quit"}},
+		}, keyPress("?"), []string{"Operation move catalog item", "Target    /folder/connection", "Cause", "b/Esc Back", "q Quit"}},
 		{"SSH failure", modalKindSSHFailure, func() any {
 			attempt := app.SSHAttemptTarget{ID: connection.ID, Revision: connection.Revision, Path: connection.Path, Host: connection.Host, Port: connection.Port}
 			return sshFailurePayload{modal: newSSHFailureModal(attempt, failure)}
-		}, keyPress("?"), []string{"SSH startup failed", "Category: timeout", "Path: /folder/connection", "Endpoint: host.test:22", "ID/revision: connection/4", "Stage: network_connection", "Recommendation:", "d Detail", "r Retry", "e Edit", "b/Esc Back", "q Quit"}},
+		}, keyPress("?"), []string{"SSH startup failed", "Category       timeout", "Path           /folder/connection", "Endpoint       host.test:22", "ID/revision    connection/4", "Stage          network_connection", "Recommendation ", "d Detail", "r Retry", "e Edit", "b/Esc Back", "q Quit"}},
+	}
+	removedHeadings := map[modalKind]string{
+		modalKindFolderCreate:        "Create folder",
+		modalKindFolderEdit:          "Edit folder",
+		modalKindMovePicker:          "Move destination",
+		modalKindDeleteConnection:    "Delete connection?",
+		modalKindDeleteFolder:        "Delete folder",
+		modalKindConnectConfirmation: "Connect confirmation",
+		modalKindUnsavedChanges:      "Unsaved changes",
+		modalKindOperationError:      "Recoverable operation error",
 	}
 
 	if len(tests) != 10 || len(newModalRegistry().payloadTypes) != len(tests) {
@@ -205,8 +286,12 @@ func TestSC009ClosedModalInvariantMatrix(t *testing.T) {
 				}
 				view := model.View().Content
 				lines := strings.Split(view, "\n")
-				if len(lines) > model.height || rect.y >= len(lines) || !strings.Contains(lines[rect.y], modalTitle(test.kind)) {
+				title := "[*] " + modalTitle(test.kind)
+				if len(lines) > model.height || rect.y >= len(lines) || !strings.Contains(lines[rect.y], title) {
 					t.Fatalf("run %d: centered panel title missing at row %d", run, rect.y)
+				}
+				if removed := removedHeadings[test.kind]; removed != "" && strings.Contains(view, removed) {
+					t.Fatalf("run %d: payload retained duplicate heading %q", run, removed)
 				}
 				for _, want := range test.want {
 					if !strings.Contains(view, want) {
@@ -940,7 +1025,7 @@ func TestSC009RetryFailureRetainsCapturedIntentTwentyRuns(t *testing.T) {
 		if !ok || payload.modal.retry == nil || payload.modal.retry.kind != operationRetryConnectionDeleteScope || model.modal.target == nil || model.modal.target.id != captured.ID || model.browser.selectedID != other.ID || calls != 2 {
 			t.Fatalf("run %d: failed Retry lost intent/target: calls=%d modal=%#v", run, calls, model.modal)
 		}
-		if !strings.Contains(model.View().Content, "Target: /captured") || !strings.Contains(model.View().Content, "r Retry") {
+		if !strings.Contains(model.View().Content, "Target    /captured") || !strings.Contains(model.View().Content, "r Retry") {
 			t.Fatalf("run %d: failed Retry omitted captured recovery cues", run)
 		}
 	}

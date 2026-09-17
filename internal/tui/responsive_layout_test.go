@@ -97,6 +97,62 @@ func TestUS5StackedOddRowFollowsPreservedApplicationFocus(t *testing.T) {
 	}
 }
 
+func TestUS3DetailIdentityRowsUseLocalEightCellValueBoundary(t *testing.T) {
+	state := detailState{
+		kind:    detailKindConnection,
+		heading: "Connection",
+		fields: []detailField{
+			{label: "Name", value: "prod"},
+			{label: "Path", value: "/prod"},
+			{label: "Endpoint", value: "host:22"},
+			{label: "User", value: "deploy"},
+			{label: "Method", value: "key"},
+			{label: "Identity", value: "id_key"},
+		},
+	}
+	tests := []struct {
+		name  string
+		width int
+		want  []string
+	}{
+		{
+			name:  "exactly eight value cells stays aligned",
+			width: 17,
+			want: []string{
+				"Connection",
+				"Name     prod",
+				"Path     /prod",
+				"Endpoint host:22",
+				"User     deploy",
+				"Method   key",
+				"Identity id_key",
+			},
+		},
+		{
+			name:  "seven value cells stacks every pair",
+			width: 16,
+			want: []string{
+				"Connection",
+				"Name", "  prod",
+				"Path", "  /prod",
+				"Endpoint", "  host:22",
+				"User", "  deploy",
+				"Method", "  key",
+				"Identity", "  id_key",
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := state.content(test.width, newStyles(true))
+			if strings.Join(got, "\n") != strings.Join(test.want, "\n") {
+				t.Fatalf("detail content at local width %d = %#v, want %#v", test.width, got, test.want)
+			}
+		})
+	}
+}
+
 func TestUS5Reduced40x12KeepsIdentityAndSafetyBeforeOverflow(t *testing.T) {
 	model := New(Config{Width: 40, Height: 12, NoColor: true})
 	view := model.View().Content

@@ -449,6 +449,17 @@ Every normal frame has three named regions:
   list direct child connections only, not connections in descendant folders.
 - **Actions** shows the exact available keys for the current selection and focus owner.
 
+Panel titles use plain text such as `Details`; the existing `[*]` and `[ ]` markers identify active
+and inactive regions. Content types use unbracketed labels such as `Connection` and `Folder`; Details
+keeps its stable region title while identifying selected content separately. When styling is available,
+content-type labels are bold without a foreground or background color; structured descriptive labels use
+secondary emphasis while values remain primary.
+
+Read-only identity rows align values in one shared column when the local panel leaves at least eight
+display cells for values. Below that threshold, every label is followed by its indented value on the
+next line; fields are not hidden to preserve alignment. Interactive forms instead keep each label and
+bounded control on one compact row, leaving the next line available for a validation error at 40x12.
+
 At 80 columns or wider, Tree is left of Details and Actions spans the bottom. Below 80 columns, Tree is
 above Details and Actions remains at the bottom. The complete layout target is **80x24**. A wide or
 stacked frame below 80x24 is reduced and prioritizes the active row or field, target identity, errors,
@@ -465,11 +476,13 @@ Help requested from it is inline rather than a second stacked modal.
 
 The controlled interface language is English only. Catalog names, paths, hosts, users, and safe backend
 diagnostic values are displayed without translation. Run `NO_COLOR=1 orza` or `orza --no-color`
-when color is unavailable. No-color mode removes ANSI styling but retains textual semantics: `[*]`/`[ ]`
-mark active/inactive regions, `>` marks selection or focus, `!` marks invalid input, `*` marks a primary
-control, and `[/]`, `[+]`, `[-]`, `[ssh]`, `Warning:`, `Error:`, the `│`/`█` track and thumb, and `…` preserve node,
-severity, overflow position, and truncation meaning. Scrollbars are informational and remain keyboard-only;
-when Actions omits lower-priority options it shows `Hidden actions — ? Help` instead of becoming scrollable.
+when color is unavailable. Color adds emphasis but carries no meaning by itself. No-color mode removes
+ANSI styling while retaining the same title, content-type label, values, and textual semantics:
+`[*]`/`[ ]` mark active/inactive regions, `>` marks selection or focus, `!` marks invalid input, `*`
+marks a primary control, and `[/]`, `[+]`, `[-]`, `[ssh]`, `Warning:`, `Error:`, the `│`/`█` track and
+thumb, and `…` preserve node, severity, overflow position, and truncation meaning. Scrollbars are
+informational and remain keyboard-only; when Actions omits lower-priority options it shows
+`Hidden actions — ? Help` instead of becoming scrollable.
 
 | Keys | Action |
 |---|---|

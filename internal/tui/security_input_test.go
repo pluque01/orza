@@ -34,3 +34,34 @@ func TestUS4SecurityInputOwnershipResizeAndMaskingTwentyRuns(t *testing.T) {
 		}
 	}
 }
+
+func TestSecurityInputProjectsNoSecretOrCredentialData(t *testing.T) {
+	const (
+		secretCanary     = "raw-secret-canary"
+		credentialCanary = "credential-reference-canary"
+		promptCanary     = "request-prompt-canary"
+	)
+	request := app.SecretRequest{
+		Kind:       app.SecretPassword,
+		Prompt:     promptCanary,
+		Credential: credentialCanary,
+	}
+	prompt := newSecretPrompt(request.Kind, "")
+	raw := []byte(secretCanary)
+	prompt.setForTest(raw)
+	view := prompt.view(newStyles(true))
+
+	for _, canary := range []string{secretCanary, credentialCanary, promptCanary} {
+		if strings.Contains(view, canary) {
+			t.Fatalf("security presentation projected %q: %q", canary, view)
+		}
+	}
+	if !strings.Contains(view, strings.Repeat("*", len(secretCanary))) {
+		t.Fatalf("security presentation lost exact masking length: %q", view)
+	}
+	for index, value := range raw {
+		if value != 0 {
+			t.Fatalf("secret byte %d was not wiped: %q", index, raw)
+		}
+	}
+}

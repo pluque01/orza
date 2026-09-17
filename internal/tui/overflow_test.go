@@ -2,13 +2,265 @@ package tui
 
 import (
 	"fmt"
+	"net"
 	"slices"
 	"strings"
 	"testing"
+	"unicode"
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pluque01/orza/internal/app"
 )
+
+const (
+	sc005ContentWidth  = 24
+	sc005ContentHeight = 8
+)
+
+type sc005FieldCase struct {
+	name  string
+	label string
+	value string
+}
+
+type sc005SurfaceCase struct {
+	name           string
+	expectEllipsis bool
+	render         func(sc005FieldCase, string, int, int) sc005SurfaceResult
+}
+
+type sc005SurfaceResult struct {
+	logical          []string
+	visible          []string
+	panel            string
+	completeIdentity []string
+}
+
+func TestSC005LongUnicodeControlFieldMatrix(t *testing.T) {
+	fields := sc005FieldCases()
+	surfaces := sc005SurfaceCases()
+	if coverage := len(fields) * len(surfaces); coverage < 100 {
+		t.Fatalf("SC-005 field coverage = %d, want at least 100", coverage)
+	} else {
+		t.Logf("SC-005 field coverage: %d cases (%d fields x %d surfaces)", coverage, len(fields), len(surfaces))
+	}
+
+	for fieldIndex, field := range fields {
+		for _, surface := range surfaces {
+			t.Run(fmt.Sprintf("%02d_%s/%s", fieldIndex, field.name, surface.name), func(t *testing.T) {
+				canary := fmt.Sprintf("SC005-SECRET-CANARY-%02d-%s", fieldIndex, surface.name)
+				result := surface.render(field, canary, sc005ContentWidth, sc005ContentHeight)
+				assertSC005SurfaceResult(t, surface, field, canary, sc005ContentWidth, sc005ContentHeight, result)
+			})
+		}
+	}
+}
+
+func sc005FieldCases() []sc005FieldCase {
+	return []sc005FieldCase{
+		{name: "long_ascii", label: strings.Repeat("destination-label-", 7), value: "/" + strings.Repeat("production-segment/", 8) + "tail"},
+		{name: "wide_cjk", label: strings.Repeat("接続先界", 12), value: strings.Repeat("東京駅/界面/", 14) + "終端"},
+		{name: "emoji_zwj", label: strings.Repeat("operator-👩\u200d💻-", 8), value: strings.Repeat("host-👨\u200d👩\u200d👧\u200d👦-", 12) + "tail"},
+		{name: "combining", label: strings.Repeat("e\u0301tiquette-", 12), value: strings.Repeat("re\u0301sume\u0301/cafe\u0301/", 14) + "fin"},
+		{name: "bidi_controls", label: strings.Repeat("label\u061c\u202e\u2066", 12), value: strings.Repeat("path\u202e/host\u2069/", 14) + "tail"},
+		{name: "ansi_sequences", label: strings.Repeat("label\x1b[31mred\x1b[0m", 8), value: strings.Repeat("segment\x1b[2J\x1b[H/", 14) + "tail"},
+		{name: "line_controls", label: strings.Repeat("label\r\n", 14), value: strings.Repeat("row\ncolumn\rvalue/", 12) + "tail"},
+		{name: "c0_controls", label: strings.Repeat("label\x00\x07\x08\x0b", 12), value: strings.Repeat("part\x01\x02\x03\x1f/", 14) + "tail"},
+		{name: "c1_controls", label: strings.Repeat("label\u0085\u009b", 12), value: strings.Repeat("part\u0080\u008d\u009f/", 14) + "tail"},
+		{name: "invalid_utf8", label: strings.Repeat(string([]byte{'l', 'a', 'b', 0xff, 0xc3, '('}), 12), value: strings.Repeat(string([]byte{'v', 'a', 'l', 0xfe, 0xc0, 0xaf, '/'}), 14) + "tail"},
+		{name: "tabs_and_delete", label: strings.Repeat("long\tlabel\x7f", 12), value: strings.Repeat("tab\tpath\x7fsegment/", 12) + "tail"},
+		{name: "zero_width_mixed", label: strings.Repeat("label\u200b\u200c\u200d", 12), value: strings.Repeat("界e\u0301🙂\u200b/segment/", 14) + "tail"},
+	}
+}
+
+func sc005SurfaceCases() []sc005SurfaceCase {
+	return []sc005SurfaceCase{
+		{name: "details", expectEllipsis: true, render: sc005RenderDetails},
+		{name: "connection_form", expectEllipsis: true, render: sc005RenderConnectionForm},
+		{name: "folder_form", expectEllipsis: true, render: sc005RenderFolderForm},
+		{name: "connect_confirmation", render: sc005RenderConnectConfirmation},
+		{name: "delete_confirmation", render: sc005RenderDeleteConfirmation},
+		{name: "help", expectEllipsis: true, render: sc005RenderHelp},
+		{name: "operation_error", render: sc005RenderOperationError},
+		{name: "trust", expectEllipsis: true, render: sc005RenderTrust},
+		{name: "secret", expectEllipsis: true, render: sc005RenderSecret},
+	}
+}
+
+func sc005RenderDetails(field sc005FieldCase, canary string, width, height int) sc005SurfaceResult {
+	root := testFolder("root", "", "/", 1)
+	connection := testConnection("sc005-details", root.ID, "/sc005-details", 7)
+	connection.Name = field.value
+	connection.Path = field.value
+	connection.Host = field.value
+	connection.Username = field.value
+	connection.IdentityFile = field.value
+	connection.CredentialRef = canary
+	snapshot := newCatalogSnapshot(root, 1)
+	_ = snapshot.addChildren(root.ID, app.ListChildrenResult{Connections: []app.Connection{connection}})
+	state, _ := newDetailState(snapshot, connection.ID)
+	state.fields = append([]detailField{{label: field.label, value: field.value}}, state.fields...)
+	for index := 0; index < height; index++ {
+		state.fields = append(state.fields, detailField{label: fmt.Sprintf("Extra %d", index), value: field.value})
+	}
+	logical := state.content(width, newStyles(true))
+	projection := state.project(height, width, newStyles(true))
+	return sc005ProjectedResult(logical, projection, width, height)
+}
+
+func sc005RenderConnectionForm(field sc005FieldCase, canary string, width, height int) sc005SurfaceResult {
+	connection := testConnection("sc005-form", syntheticRootID, "/sc005-form", 7)
+	connection.CredentialRef = canary
+	form := newConnectionForm(&connection)
+	form.setAuthMethod(app.AuthMethodKey)
+	form.inputs[fieldName].SetValue(field.value)
+	form.inputs[fieldHost].SetValue(field.value)
+	form.inputs[fieldIdentity].SetValue(field.value)
+	form.setFocus(fieldName)
+	form.setDimensions(width, height)
+	logical, _ := form.content(newStyles(true))
+	return sc005ProjectedResult(logical, form.project(newStyles(true)), width, height)
+}
+
+func sc005RenderFolderForm(field sc005FieldCase, _ string, width, height int) sc005SurfaceResult {
+	destination := testFolder("destination", syntheticRootID, field.value, 7)
+	form := newFolderForm(nil, app.ItemSelector{Path: field.value})
+	form.setDestination(destination)
+	form.input.SetValue(field.value)
+	logical, active := form.modalLines(width, newStyles(true))
+	state := modalState{kind: modalKindFolderCreate, payload: folderCreatePayload{form: form}}
+	projection := projectModalViewport(state, sc005ModalControls(logical), height, width, active)
+	return sc005ProjectedResult(logical, projection, width, height)
+}
+
+func sc005RenderConnectConfirmation(field sc005FieldCase, canary string, width, height int) sc005SurfaceResult {
+	connection := testConnection("sc005-connect", syntheticRootID, "/sc005-connect", 7)
+	connection.Path = field.value
+	connection.Host = field.value
+	connection.CredentialRef = canary
+	state := modalState{kind: modalKindConnectConfirmation, payload: connectConfirmationPayload{confirmation: newConnectConfirmation(connection)}}
+	result := sc005RenderModalState(state, width, height)
+	result.completeIdentity = []string{field.value, net.JoinHostPort(field.value, "22")}
+	return result
+}
+
+func sc005RenderDeleteConfirmation(field sc005FieldCase, _ string, width, height int) sc005SurfaceResult {
+	scope := app.ConnectionDeleteScope{ID: "sc005-delete", Path: field.value, Host: field.value, Username: "operator", Revision: 7, HasRememberedPassword: true}
+	state := modalState{kind: modalKindDeleteConnection, payload: deleteConnectionPayload{confirmation: newDeleteConfirmation(scope)}}
+	result := sc005RenderModalState(state, width, height)
+	result.completeIdentity = []string{field.value, "operator@" + field.value}
+	return result
+}
+
+func sc005RenderHelp(field sc005FieldCase, _ string, width, height int) sc005SurfaceResult {
+	lines := make([]string, height*2)
+	for index := range lines {
+		lines[index] = fmt.Sprintf("%s %02d %s", field.label, index, field.value)
+	}
+	state := modalState{kind: modalKindHelp, payload: helpPayload{lines: lines}}
+	return sc005RenderModalState(state, width, height)
+}
+
+func sc005RenderOperationError(field sc005FieldCase, canary string, width, height int) sc005SurfaceResult {
+	err := fmt.Errorf("%s: %w", canary, app.ErrInvalidRequest)
+	modal := newErrorModal(field.label, field.value, err)
+	state := modalState{kind: modalKindOperationError, payload: operationErrorPayload{modal: modal}}
+	result := sc005RenderModalState(state, width, height)
+	result.completeIdentity = []string{field.label, field.value}
+	return result
+}
+
+func sc005RenderTrust(field sc005FieldCase, canary string, width, height int) sc005SurfaceResult {
+	prompt := app.TrustDecisionPrompt{
+		Status: app.HostTrustChanged,
+		Host: app.PresentedHost{
+			Endpoint: app.HostEndpoint{CanonicalHost: field.value, Port: 22}, RemoteAddress: field.value,
+			KeyAlgorithm: field.value, FingerprintSHA256: field.value, PublicKey: []byte(canary),
+		},
+		Known: &app.TrustedHost{FingerprintSHA256: field.value, PublicKey: []byte(canary)},
+	}
+	logical := strings.Split(newTrustPrompt(prompt).view(newStyles(true)), "\n")
+	return sc005RawPanelResult(logical, width, height)
+}
+
+func sc005RenderSecret(field sc005FieldCase, canary string, width, height int) sc005SurfaceResult {
+	prompt := newSecretPrompt(app.SecretPassword, field.value)
+	secret := []byte(canary)
+	prompt.setForTest(secret)
+	logical := strings.Split(prompt.view(newStyles(true)), "\n")
+	return sc005RawPanelResult(logical, width, height)
+}
+
+func sc005RenderModalState(state modalState, width, height int) sc005SurfaceResult {
+	logical, active := modalContent(state, newStyles(true), width, nil)
+	projection := projectModalViewport(state, logical, height, width, active)
+	return sc005ProjectedResult(logical, projection, width, height)
+}
+
+func sc005ModalControls(lines []string) []string {
+	projected := append([]string(nil), lines...)
+	projected[len(projected)-1] = modalControlLine(projected[len(projected)-1])
+	return projected
+}
+
+func sc005ProjectedResult(logical []string, projection viewportProjection, width, height int) sc005SurfaceResult {
+	rect := layoutRect{width: width + 4, height: height + 2}
+	panel := renderRegionPanelWithScrollbar("SC-005", projection.lines, rect, newStyles(true), projection.scrollbar, projection.scrollbarStart)
+	return sc005SurfaceResult{logical: logical, visible: projection.lines, panel: panel}
+}
+
+func sc005RawPanelResult(logical []string, width, height int) sc005SurfaceResult {
+	visible := viewportTruncateLines(logical[:min(len(logical), height)], width)
+	panel := renderRegionPanel("SC-005", logical, layoutRect{width: width + 4, height: height + 2})
+	return sc005SurfaceResult{logical: logical, visible: visible, panel: panel}
+}
+
+func assertSC005SurfaceResult(t *testing.T, surface sc005SurfaceCase, field sc005FieldCase, canary string, width, height int, result sc005SurfaceResult) {
+	t.Helper()
+	if len(result.visible) > height {
+		t.Fatalf("local content height = %d, want <= %d", len(result.visible), height)
+	}
+	for _, line := range result.visible {
+		assertTerminalSafe(t, line, width)
+	}
+
+	panelLines := strings.Split(result.panel, "\n")
+	if len(panelLines) != height+2 {
+		t.Fatalf("panel height = %d, want %d: %q", len(panelLines), height+2, result.panel)
+	}
+	for row, line := range panelLines {
+		assertTerminalSafe(t, line, width+4)
+		if got := ansi.StringWidth(line); got != width+4 {
+			t.Fatalf("panel row %d width = %d, want %d: %q", row, got, width+4, line)
+		}
+		if row > 0 && row < len(panelLines)-1 && (!strings.HasPrefix(line, "│") || !strings.HasSuffix(line, "│")) {
+			t.Fatalf("panel row %d overlapped its border: %q", row, line)
+		}
+	}
+
+	allOutput := strings.Join(result.logical, "\n") + "\n" + result.panel
+	if strings.Contains(allOutput, canary) {
+		t.Fatalf("secret canary rendered: %q", canary)
+	}
+	for _, identity := range result.completeIdentity {
+		projected := safeText(identity, int(^uint(0)>>1))
+		if !strings.Contains(sc005CompactIdentity(strings.Join(result.logical, "\n")), sc005CompactIdentity(projected)) {
+			t.Fatalf("required identity was not wrapped completely: source %q, logical output %#v", identity, result.logical)
+		}
+	}
+	if surface.expectEllipsis && ansi.StringWidth(safeText(field.value, int(^uint(0)>>1))) > width && !strings.Contains(allOutput, safeTextEllipsis) {
+		t.Fatalf("oversized field has neither safe ellipsis nor a full-wrap contract: %q", field.value)
+	}
+}
+
+func sc005CompactIdentity(value string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) {
+			return -1
+		}
+		return r
+	}, ansi.Strip(value))
+}
 
 func TestUS5SharedViewportUniversalOverflowMatrix(t *testing.T) {
 	longLines := make([]string, 9)
