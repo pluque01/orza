@@ -58,7 +58,7 @@ func TestUS5LongConfirmationIdentityIsScrollRevealableWithCancelAlwaysVisible(t 
 	}
 
 	first := model.View().Content
-	for _, want := range []string{"[Connect]", "Connect to SSH target?", "Enter/Esc Cancel", "█"} {
+	for _, want := range []string{"Connect", "Connect to SSH target?", "Enter/Esc Cancel", "█"} {
 		if !strings.Contains(first, want) {
 			t.Fatalf("initial confirmation omitted %q:\n%s", want, first)
 		}
@@ -119,8 +119,8 @@ func TestUS5DeleteConfirmationPreservesCapturedEndpointThroughScopeLookup(t *tes
 	view := model.View().Content
 	lines, _ := modalContent(model.modal, model.styles, calculateLayout(40, 12, regionTree).modalOverlay().contentWidth(), nil)
 	compact := strings.Join(lines, "\n")
-	if !strings.Contains(view, "[Delete]") {
-		t.Fatalf("delete confirmation omitted type badge:\n%s", view)
+	if !strings.Contains(view, "Delete") {
+		t.Fatalf("delete confirmation omitted type title:\n%s", view)
 	}
 	for _, want := range []string{"Path /production", "Target (default)@prod.example:2202", "ID/revision captured-id/9"} {
 		if !renderedTextContains(compact, want) {

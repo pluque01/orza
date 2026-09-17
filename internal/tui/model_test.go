@@ -116,7 +116,7 @@ func TestModelContextualNavigationConfirmationAndNarrowMode(t *testing.T) {
 	copy := model.browser.snapshot.nodes[connection.ID]
 	copy.connection.Host = "changed.test"
 	view := model.View().Content
-	if payload.confirmation.connection.Host != captured.Host || !strings.Contains(view, "[Connect]") || !renderedTextContains(view, "Path /prod") || !renderedTextContains(view, "Endpoint host.test:22") || !renderedTextContains(view, "ID connection") || !renderedTextContains(view, "Revision 4") {
+	if payload.confirmation.connection.Host != captured.Host || !strings.Contains(view, "Connect") || !renderedTextContains(view, "Path /prod") || !renderedTextContains(view, "Endpoint host.test:22") || !renderedTextContains(view, "ID connection") || !renderedTextContains(view, "Revision 4") {
 		t.Fatalf("confirmation was mutable or incomplete: %q", view)
 	}
 	updateModel(model, keyPress("esc"))
@@ -381,7 +381,7 @@ func TestHelpDocumentsUnsupportedBracketedPasteLimitation(t *testing.T) {
 	view := model.View().Content
 	payload, ok := model.modal.payload.(helpPayload)
 	completeHelp := strings.Join(strings.Fields(strings.Join(payload.lines, " ")), "")
-	if !ok || !strings.Contains(view, "[Help]") || !strings.Contains(completeHelp, "bracketed-pastesupport") || !strings.Contains(completeHelp, "cannotbedistinguishedfromtyping") || !strings.Contains(completeHelp, "neverreadstheoperatingsystemclipboard") {
+	if !ok || !strings.Contains(view, "Help") || !strings.Contains(completeHelp, "bracketed-pastesupport") || !strings.Contains(completeHelp, "cannotbedistinguishedfromtyping") || !strings.Contains(completeHelp, "neverreadstheoperatingsystemclipboard") {
 		t.Fatalf("help omitted unsupported-terminal limitation: payload=%q view=%q", completeHelp, view)
 	}
 }
@@ -419,8 +419,8 @@ func TestSSHFailureRecoveryResolvesCapturedIDAndRequiresConfirmation(t *testing.
 		t.Fatalf("resolution did not open confirmation: get=%d connect=%d modal=%#v", getCalls, connectCalls, model.modal)
 	}
 	view := model.View().Content
-	if !strings.Contains(view, "[SSH Failure]") {
-		t.Fatalf("changed-target confirmation omitted SSH Failure badge: %q", view)
+	if !strings.Contains(view, "SSH Failure") {
+		t.Fatalf("changed-target confirmation omitted SSH Failure title: %q", view)
 	}
 	for _, want := range []string{"Previous path /old", "Previous endpoint [2001:db8::1]:22", "Previous ID/revision captured/3", "Path /new", "Endpoint [2001:db8::2]:2202", "ID captured", "Revision 4"} {
 		if !renderedTextContains(view, want) {

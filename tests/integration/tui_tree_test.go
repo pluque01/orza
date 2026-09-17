@@ -258,9 +258,9 @@ func TestTUITreeDetailsBadgesSynchronizeWithSelectionInColorAndNoColor(t *testin
 
 		for name, view := range frames {
 			plain := ansi.Strip(view)
-			for _, region := range []string{"[Tree]", "[Details]", "[Actions]"} {
-				if strings.Count(plain, region) != 1 {
-					t.Fatalf("no-color=%t %s region badge %q count != 1:\n%s", noColor, name, region, plain)
+			for _, region := range []string{"Tree", "Details", "Actions"} {
+				if strings.Count(plain, "] "+region) != 1 {
+					t.Fatalf("no-color=%t %s region title %q count != 1:\n%s", noColor, name, region, plain)
 				}
 			}
 			contentBadge := map[string]string{
@@ -409,7 +409,7 @@ func assertKeyboardOnlyOverflowView(t *testing.T, model *tui.Model, surface, pan
 func assertActivePanelScrollbar(t *testing.T, view, surface, title string) {
 	t.Helper()
 	rows := strings.Split(view, "\n")
-	activeTitle := "[*] [" + title + "]"
+	activeTitle := "[*] " + title
 	for top, row := range rows {
 		marker := strings.Index(row, activeTitle)
 		if marker < 0 {

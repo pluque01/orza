@@ -71,22 +71,22 @@ func TestObjectActionCanonicalLabelsAndPrioritiesAreStable(t *testing.T) {
 	}
 }
 
-func TestActionsAndHelpUseSingularBracketedTypeTitles(t *testing.T) {
+func TestActionsAndHelpUseSingularTypeTitles(t *testing.T) {
 	descriptors := actionsFor(actionContext{selection: actionSelectionConnection, state: actionStateNormal, focus: actionFocusTree, canToggle: true})
 	actionLines := packActions("", descriptors, 76, 3)
 	actionRect := layoutRect{width: 80, height: 5}
 	plainActions := renderRegionPanel(newStyles(true).regionTitle("Actions", false), actionLines, actionRect)
 	coloredActions := renderRegionPanel(newStyles(false).regionTitle("Actions", false), actionLines, actionRect)
-	if strings.Count(plainActions, "[Actions]") != 1 || ansi.Strip(coloredActions) != plainActions {
-		t.Fatalf("Actions title is not a singular ANSI-equivalent badge:\nplain %q\ncolor %q", plainActions, coloredActions)
+	if strings.Count(plainActions, "[ ] Actions") != 1 || ansi.Strip(coloredActions) != plainActions {
+		t.Fatalf("Actions title is not a singular ANSI-equivalent label:\nplain %q\ncolor %q", plainActions, coloredActions)
 	}
 
 	layout := calculateLayout(80, 24, regionTree)
 	state := modalState{kind: modalKindHelp, payload: helpPayload{lines: actionHelpLines(descriptors)}}
 	plainHelp := renderModalOverlay("", state, layout, newStyles(true), nil)
 	coloredHelp := renderModalOverlay("", state, layout, newStyles(false), nil)
-	if strings.Count(plainHelp, "[Help]") != 1 || ansi.Strip(coloredHelp) != plainHelp {
-		t.Fatalf("Help title is not a singular ANSI-equivalent badge:\nplain %q\ncolor %q", plainHelp, coloredHelp)
+	if strings.Count(plainHelp, "[*] Help") != 1 || ansi.Strip(coloredHelp) != plainHelp {
+		t.Fatalf("Help title is not a singular ANSI-equivalent label:\nplain %q\ncolor %q", plainHelp, coloredHelp)
 	}
 	helpLines, _ := modalContent(state, newStyles(true), 200, nil)
 	for _, line := range helpLines {

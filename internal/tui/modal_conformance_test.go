@@ -175,8 +175,8 @@ func TestMovePickerReusesModalBadgeAndSharedFieldHierarchy(t *testing.T) {
 	if !model.openGenericModal(modalKindMovePicker, nil, movePickerPayload{picker: picker}) {
 		t.Fatal("move modal did not open")
 	}
-	if view := model.View().Content; strings.Count(view, "[Move]") != 1 || strings.Contains(view, "Move destination") {
-		t.Fatalf("move modal did not retain exactly one type badge:\n%s", view)
+	if view := model.View().Content; strings.Count(view, "[*] Move") != 1 || strings.Contains(view, "Move destination") {
+		t.Fatalf("move modal did not retain exactly one type title:\n%s", view)
 	}
 }
 

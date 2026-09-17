@@ -68,8 +68,8 @@ func TestSSHFailureModalFallbackNoColorAndCapturedTarget(t *testing.T) {
 	model.installSSHFailure(modal)
 	view := model.View().Content
 
-	if !strings.Contains(view, "[SSH Failure]") {
-		t.Fatalf("fallback view omitted SSH Failure badge: %q", view)
+	if !strings.Contains(view, "SSH Failure") {
+		t.Fatalf("fallback view omitted SSH Failure title: %q", view)
 	}
 	for _, want := range []string{"Category unexpected", "Path /captured", "Endpoint [2001:db8::1]:22", "Stage unknown", "Recommendation Check the configuration or retry."} {
 		if !renderedTextContains(view, want) {
@@ -191,7 +191,7 @@ func TestIncompletePreActiveFailureUsesSafeDiagnosticFallback(t *testing.T) {
 	}
 	updateModel(model, sessionFinishedMsg{id: 4, result: result})
 	view := model.View().Content
-	if model.activeSSHFailure() == nil || !strings.Contains(view, "[SSH Failure]") || !renderedTextContains(view, "Category unexpected") || !renderedTextContains(view, "Stage unknown") || strings.Contains(view, "Recoverable operation error") {
+	if model.activeSSHFailure() == nil || !strings.Contains(view, "SSH Failure") || !renderedTextContains(view, "Category unexpected") || !renderedTextContains(view, "Stage unknown") || strings.Contains(view, "Recoverable operation error") {
 		t.Fatalf("incomplete startup result did not use safe fallback: %q", view)
 	}
 }

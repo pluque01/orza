@@ -27,12 +27,12 @@ func TestFolderFormsReuseModalBadgeAndSharedFieldHierarchy(t *testing.T) {
 	}{
 		{
 			name: "create", kind: modalKindFolderCreate, form: newFolderForm(nil, app.ItemSelector{ID: destination.ID}),
-			payload: func(form *folderForm) any { return folderCreatePayload{form: form} }, badge: "[Create Folder]",
+			payload: func(form *folderForm) any { return folderCreatePayload{form: form} }, badge: "Create Folder",
 			values: []string{"/team", "destination", "draft"}, forbidden: []string{"Create folder", "Target:", "Destination ID:", "Name:"}, lineCount: 4, activeLine: 2,
 		},
 		{
 			name: "edit", kind: modalKindFolderEdit, form: newFolderForm(&original, app.ItemSelector{}),
-			payload: func(form *folderForm) any { return folderEditPayload{form: form} }, badge: "[Edit Folder]",
+			payload: func(form *folderForm) any { return folderEditPayload{form: form} }, badge: "Edit Folder",
 			values: []string{"/team/source", "original/7", "source"}, forbidden: []string{"Edit folder", "Target:", "ID/revision:", "Name:"}, lineCount: 4, activeLine: 2,
 		},
 	}
@@ -81,8 +81,8 @@ func TestFolderFormsReuseModalBadgeAndSharedFieldHierarchy(t *testing.T) {
 				t.Fatal("folder modal did not open")
 			}
 			view := model.View().Content
-			if strings.Count(view, test.badge) != 1 || strings.Count(strings.ToLower(view), strings.ToLower(strings.Trim(test.badge, "[]"))) != 1 {
-				t.Fatalf("folder modal did not reuse exactly one title badge %q:\n%s", test.badge, view)
+			if strings.Count(view, "[*] "+test.badge) != 1 {
+				t.Fatalf("folder modal did not reuse exactly one title %q:\n%s", test.badge, view)
 			}
 		})
 	}

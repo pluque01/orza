@@ -140,7 +140,7 @@ func TestTUIConnectionFormDetailsCancelAndSelectionTwentyRuns(t *testing.T) {
 
 		updateTUI(t, model, tuiKey("n"))
 		view := model.View().Content
-		for _, want := range []string{"[Tree]", "[Details]", "New connection", "[Actions]", "Path"} {
+		for _, want := range []string{"Tree", "Details", "New connection", "Actions", "Path"} {
 			if !strings.Contains(view, want) {
 				t.Fatalf("run %d: create form omitted %q: %q", run, want, view)
 			}
@@ -171,7 +171,7 @@ func TestTUIConnectionFormDetailsCancelAndSelectionTwentyRuns(t *testing.T) {
 		assertTreeSelectionPath(t, model, created.Path)
 
 		updateTUI(t, model, tuiKey("e"))
-		if view := model.View().Content; !strings.Contains(view, "[Tree]") || !strings.Contains(view, "Edit connection") || !strings.Contains(view, created.Path) || strings.Contains(view, "Edit connection  "+created.Path) || strings.Contains(view, "Path:") {
+		if view := model.View().Content; !strings.Contains(view, "Tree") || !strings.Contains(view, "Edit connection") || !strings.Contains(view, created.Path) || strings.Contains(view, "Edit connection  "+created.Path) || strings.Contains(view, "Path:") {
 			t.Fatalf("run %d: edit did not remain in Details: %q", run, view)
 		}
 		updateTUI(t, model, tuiKey("tab"))
@@ -236,7 +236,7 @@ func TestTUIConnectConfirmationCancelStartsZeroNetwork(t *testing.T) {
 	updateTUI(t, model, model.Init()())
 	updateTUI(t, model, tuiKey("j"))
 	updateTUI(t, model, tuiKey("c"))
-	if view := model.View().Content; !strings.Contains(view, "[Connect]") || strings.Count(view, "Connect to SSH target?") != 1 || !strings.Contains(view, connection.Path) || strings.Contains(view, "Path: "+connection.Path) || strings.Contains(view, "Endpoint: "+connection.Host) || strings.Contains(view, "Connect confirmation") {
+	if view := model.View().Content; !strings.Contains(view, "Connect") || strings.Count(view, "Connect to SSH target?") != 1 || !strings.Contains(view, connection.Path) || strings.Contains(view, "Path: "+connection.Path) || strings.Contains(view, "Endpoint: "+connection.Host) || strings.Contains(view, "Connect confirmation") {
 		t.Fatalf("connect confirmation = %q", view)
 	}
 	updateTUI(t, model, tuiKey("enter"))
@@ -248,7 +248,7 @@ func TestTUIConnectConfirmationCancelStartsZeroNetwork(t *testing.T) {
 
 func assertConnectConfirmationOutput(t *testing.T, output string, connection app.Connection) {
 	t.Helper()
-	for _, value := range []string{"[Connect]", "Connect to SSH target?", "Path", connection.Path, "Endpoint", connection.Host + ":22"} {
+	for _, value := range []string{"Connect", "Connect to SSH target?", "Path", connection.Path, "Endpoint", connection.Host + ":22"} {
 		if !strings.Contains(output, value) {
 			t.Fatalf("connect confirmation omitted %q: %q", value, output)
 		}

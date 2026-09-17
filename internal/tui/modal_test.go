@@ -58,7 +58,7 @@ func TestModalTitleBadgeInventoryAndANSIParity(t *testing.T) {
 			state := modalState{kind: test.kind, payload: test.payload}
 			plain := renderModalOverlay("", state, layout, newStyles(true), nil)
 			colored := renderModalOverlay("", state, layout, newStyles(false), nil)
-			badge := test.label
+			badge := "[*] " + test.label
 			if strings.Count(plain, badge) != 1 {
 				t.Fatalf("plain badge count for %s != 1:\n%s", test.kind, plain)
 			}
@@ -89,7 +89,7 @@ func TestModalUnknownFallbackAndKnownInvalidPayloadAreSafe(t *testing.T) {
 				t.Fatalf("invalid payload lines/active = %#v/%d", lines, active)
 			}
 			view := renderModalOverlay("", state, layout, newStyles(true), nil)
-			if strings.Count(view, test.label) != 1 || !strings.Contains(view, "Error: invalid modal payload") || !strings.Contains(view, "Esc Close") {
+			if strings.Count(view, "[*] "+test.label) != 1 || !strings.Contains(view, "Error: invalid modal payload") || !strings.Contains(view, "Esc Close") {
 				t.Fatalf("known invalid modal lost badge or safe error:\n%s", view)
 			}
 		})
