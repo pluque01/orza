@@ -2,6 +2,7 @@ package tui
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/pluque01/orza/internal/app"
@@ -112,6 +113,24 @@ func TestPanelStyleFixtureInventory(t *testing.T) {
 	}
 	if len(feature008ConnectionFormFixtures) != 2 || len(feature008FolderFormFixtures) != 2 || len(feature008MovePickerFixtures) != 1 || len(feature008TrustPromptFixtures) != 3 || len(feature008SecretPromptFixtures) != 2 {
 		t.Fatalf("surface fixture counts = connection %d folder %d move %d trust %d secret %d", len(feature008ConnectionFormFixtures), len(feature008FolderFormFixtures), len(feature008MovePickerFixtures), len(feature008TrustPromptFixtures), len(feature008SecretPromptFixtures))
+	}
+}
+
+func TestStructuralRegionTitlesArePlainTextWithoutBackground(t *testing.T) {
+	plain := newStyles(true)
+	color := newStyles(false)
+	for _, fixture := range feature008RegionFixtures {
+		t.Run(fixture.name, func(t *testing.T) {
+			active := fixture.owner != focusOwnerNone
+			plainTitle := plain.regionTitle(fixture.label, active)
+			coloredTitle := color.regionTitle(fixture.label, active)
+			if !strings.Contains(plainTitle, fixture.label) || strings.Contains(plainTitle, "["+fixture.label+"]") {
+				t.Fatalf("plain structural title = %q", plainTitle)
+			}
+			if strings.Contains(coloredTitle, ";4") {
+				t.Fatalf("colored structural title has a background: %q", coloredTitle)
+			}
+		})
 	}
 }
 

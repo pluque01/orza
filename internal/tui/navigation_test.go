@@ -40,7 +40,7 @@ func TestModelTabAndShiftTabToggleTreeAndDetailsWithoutSelectionChange(t *testin
 	if model.focusOwner != focusOwnerDetail || model.browser.selectedID != selected {
 		t.Fatalf("Tab = focus %v selection %q, want Details and %q", model.focusOwner, model.browser.selectedID, selected)
 	}
-	if view := model.View().Content; !strings.Contains(view, "[*] [Details]") || !strings.Contains(view, "[ ] [Tree]") {
+	if view := model.View().Content; !strings.Contains(view, "[*] Details") || !strings.Contains(view, "[ ] Tree") {
 		t.Fatalf("Details focus is not textual in shell:\n%s", view)
 	}
 
@@ -130,7 +130,7 @@ func TestBrowserShellIsTitledAndBoundedInWideAndStackedLayouts(t *testing.T) {
 	for _, size := range []tea.WindowSizeMsg{{Width: 80, Height: 24}, {Width: 40, Height: 12}} {
 		updateModel(model, size)
 		view := model.View().Content
-		for _, title := range []string{"[*] [Tree]", "[ ] [Details]", "[ ] [Actions]"} {
+		for _, title := range []string{"[*] Tree", "[ ] Details", "[ ] Actions"} {
 			if !strings.Contains(view, title) {
 				t.Fatalf("%dx%d shell omitted %q:\n%s", size.Width, size.Height, title, view)
 			}

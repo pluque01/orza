@@ -67,7 +67,7 @@ func newStyles(noColor bool) styles {
 	}
 
 	title := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
-	badge := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("0")).Background(lipgloss.Color("12"))
+	badge := lipgloss.NewStyle().Bold(true)
 	selected := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("14"))
 	muted := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	status := lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
@@ -108,11 +108,20 @@ func (s styles) typeBadge(label string, placement badgePlacement, active bool) (
 }
 
 func (s styles) renderTypeBadge(badge typeBadge) string {
-	text := "[" + badge.label + "]"
-	if badge.accented {
-		return s.badge.Render(text)
+	if badge.placement == badgePlacementTitle {
+		text := badge.label
+		if !badge.accented {
+			return text
+		}
+		if badge.active {
+			return s.activeTitle.Render(text)
+		}
+		return s.inactiveTitle.Render(text)
 	}
-	return text
+	if badge.accented {
+		return s.badge.Render(badge.label)
+	}
+	return badge.label
 }
 
 func (s styles) contentBadge(label string) string {

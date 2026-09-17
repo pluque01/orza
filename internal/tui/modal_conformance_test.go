@@ -70,12 +70,12 @@ func assertSC009NoColorOwner(t *testing.T, model *Model) {
 	if calculateLayout(model.width, model.height, model.focusedLayoutRegion()).mode == layoutUndersized {
 		return
 	}
-	want := "[*] [Tree]"
+	want := "[*] Tree"
 	switch model.focusOwner {
 	case focusOwnerDetail, focusOwnerConnectionForm:
-		want = "[*] [Details]"
+		want = "[*] Details"
 	case focusOwnerModal:
-		want = "[*] [" + modalTitle(model.modal.kind) + "]"
+		want = "[*] " + modalTitle(model.modal.kind)
 	}
 	if !strings.Contains(view, want) {
 		t.Fatalf("no-color frame omitted focus owner %q:\n%s", want, view)
@@ -286,7 +286,7 @@ func TestSC009ClosedModalInvariantMatrix(t *testing.T) {
 				}
 				view := model.View().Content
 				lines := strings.Split(view, "\n")
-				title := "[*] [" + modalTitle(test.kind) + "]"
+				title := "[*] " + modalTitle(test.kind)
 				if len(lines) > model.height || rect.y >= len(lines) || !strings.Contains(lines[rect.y], title) {
 					t.Fatalf("run %d: centered panel title missing at row %d", run, rect.y)
 				}

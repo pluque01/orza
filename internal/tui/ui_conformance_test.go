@@ -83,13 +83,13 @@ func TestSC001SelectionDetailActionSynchronizationTwentyRuns(t *testing.T) {
 		fixture := newSCCatalogFixture(t)
 		model := fixture.model
 		targets := []target{
-			{fixture.root.ID, fixture.root.Path, "n/f/r/?/q", []string{"[Root]", detailEmptyConnections}, []scStructuredFieldExpectation{{"Direct connections", "0"}}, []string{"direct.example", "deep.example"}},
-			{fixture.empty.ID, fixture.empty.Path, "n/f/e/m/d/r/?/q", []string{"[Folder]", detailEmptyConnections}, []scStructuredFieldExpectation{{"Direct connections", "0"}}, []string{"direct.example", "deep.example"}},
-			{fixture.direct.ID, fixture.direct.Path, "n/f/e/m/d/r/?/q", []string{"[Folder]"}, []scStructuredFieldExpectation{{"Direct connections", "1"}, {"direct-connection", "direct.example:22"}}, []string{"deep.example"}},
-			{fixture.directConn.ID, fixture.directConn.Path, "c/n/f/e/m/d/r/?/q", []string{"[Connection]"}, []scStructuredFieldExpectation{{"Endpoint", "direct.example:22"}, {"Method", "agent"}}, []string{"deep.example", detailEmptyConnections}},
-			{fixture.nested.ID, fixture.nested.Path, "n/f/e/m/d/r/?/q", []string{"[Folder]", detailEmptyConnections}, []scStructuredFieldExpectation{{"Direct connections", "0"}}, []string{"deep.example"}},
-			{fixture.child.ID, fixture.child.Path, "n/f/e/m/d/r/?/q", []string{"[Folder]"}, []scStructuredFieldExpectation{{"Direct connections", "1"}, {"deep-connection", "deep.example:22"}}, []string{"direct.example"}},
-			{fixture.deepConn.ID, fixture.deepConn.Path, "c/n/f/e/m/d/r/?/q", []string{"[Connection]"}, []scStructuredFieldExpectation{{"Endpoint", "deep.example:22"}, {"Method", "agent"}}, []string{"direct.example", detailEmptyConnections}},
+			{fixture.root.ID, fixture.root.Path, "n/f/r/?/q", []string{"Root", detailEmptyConnections}, []scStructuredFieldExpectation{{"Direct connections", "0"}}, []string{"direct.example", "deep.example"}},
+			{fixture.empty.ID, fixture.empty.Path, "n/f/e/m/d/r/?/q", []string{"Folder", detailEmptyConnections}, []scStructuredFieldExpectation{{"Direct connections", "0"}}, []string{"direct.example", "deep.example"}},
+			{fixture.direct.ID, fixture.direct.Path, "n/f/e/m/d/r/?/q", []string{"Folder"}, []scStructuredFieldExpectation{{"Direct connections", "1"}, {"direct-connection", "direct.example:22"}}, []string{"deep.example"}},
+			{fixture.directConn.ID, fixture.directConn.Path, "c/n/f/e/m/d/r/?/q", []string{"Connection"}, []scStructuredFieldExpectation{{"Endpoint", "direct.example:22"}, {"Method", "agent"}}, []string{"deep.example", detailEmptyConnections}},
+			{fixture.nested.ID, fixture.nested.Path, "n/f/e/m/d/r/?/q", []string{"Folder", detailEmptyConnections}, []scStructuredFieldExpectation{{"Direct connections", "0"}}, []string{"deep.example"}},
+			{fixture.child.ID, fixture.child.Path, "n/f/e/m/d/r/?/q", []string{"Folder"}, []scStructuredFieldExpectation{{"Direct connections", "1"}, {"deep-connection", "deep.example:22"}}, []string{"direct.example"}},
+			{fixture.deepConn.ID, fixture.deepConn.Path, "c/n/f/e/m/d/r/?/q", []string{"Connection"}, []scStructuredFieldExpectation{{"Endpoint", "deep.example:22"}, {"Method", "agent"}}, []string{"direct.example", detailEmptyConnections}},
 		}
 
 		updateModel(model, keyPress("g"))
@@ -868,7 +868,7 @@ func TestSC006NoColorPrincipalBrowserAndConnectionFormFlowsTwentyRuns(t *testing
 			selectSCNode(model, id)
 			view := model.View().Content
 			assertSCNoANSI(t, view)
-			for _, cue := range []string{"[*] [Tree]", "[ ] [Details]", "[ ] [Actions]", "> "} {
+			for _, cue := range []string{"[*] Tree", "[ ] Details", "[ ] Actions", "> "} {
 				if !strings.Contains(view, cue) {
 					t.Fatalf("run %d node %q omitted no-color cue %q", run, id, cue)
 				}
@@ -882,7 +882,7 @@ func TestSC006NoColorPrincipalBrowserAndConnectionFormFlowsTwentyRuns(t *testing
 		updateModel(model, keyPress("tab"))
 		view := model.View().Content
 		assertSCNoANSI(t, view)
-		if !strings.Contains(view, "[*] [Details]") || !strings.Contains(view, "[ ] [Tree]") {
+		if !strings.Contains(view, "[*] Details") || !strings.Contains(view, "[ ] Tree") {
 			t.Fatalf("run %d: Details focus lacked textual ownership", run)
 		}
 		updateModel(model, keyPress("tab"))
@@ -890,7 +890,7 @@ func TestSC006NoColorPrincipalBrowserAndConnectionFormFlowsTwentyRuns(t *testing
 		updateModel(model, keyPress("n"))
 		view = model.View().Content
 		assertSCNoANSI(t, view)
-		if !strings.Contains(view, "[*] [Details]") || !scContainsStructuredField(view, "Name", "") || !strings.Contains(view, "  * [ Save connection ]") {
+		if !strings.Contains(view, "[*] Details") || !scContainsStructuredField(view, "Name", "") || !strings.Contains(view, "  * [ Save connection ]") {
 			t.Fatalf("run %d: create form omitted focus/primary cues:\n%s", run, view)
 		}
 		updateModel(model, keyPress("ctrl+s"))

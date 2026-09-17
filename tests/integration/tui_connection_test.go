@@ -140,7 +140,7 @@ func TestTUIConnectionFormDetailsCancelAndSelectionTwentyRuns(t *testing.T) {
 
 		updateTUI(t, model, tuiKey("n"))
 		view := model.View().Content
-		for _, want := range []string{"[Tree]", "[Details]", "[New connection]", "[Actions]", "Path"} {
+		for _, want := range []string{"[Tree]", "[Details]", "New connection", "[Actions]", "Path"} {
 			if !strings.Contains(view, want) {
 				t.Fatalf("run %d: create form omitted %q: %q", run, want, view)
 			}
@@ -171,7 +171,7 @@ func TestTUIConnectionFormDetailsCancelAndSelectionTwentyRuns(t *testing.T) {
 		assertTreeSelectionPath(t, model, created.Path)
 
 		updateTUI(t, model, tuiKey("e"))
-		if view := model.View().Content; !strings.Contains(view, "[Tree]") || !strings.Contains(view, "[Edit connection]") || !strings.Contains(view, created.Path) || strings.Contains(view, "Edit connection  "+created.Path) || strings.Contains(view, "Path:") {
+		if view := model.View().Content; !strings.Contains(view, "[Tree]") || !strings.Contains(view, "Edit connection") || !strings.Contains(view, created.Path) || strings.Contains(view, "Edit connection  "+created.Path) || strings.Contains(view, "Path:") {
 			t.Fatalf("run %d: edit did not remain in Details: %q", run, view)
 		}
 		updateTUI(t, model, tuiKey("tab"))

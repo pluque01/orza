@@ -42,7 +42,7 @@ func TestDetailConnectionPresentationMatrix(t *testing.T) {
 			}
 			projection := state.project(20, widths[index%len(widths)])
 			joined := strings.Join(projection.lines, "\n")
-			if strings.Count(joined, "[Connection]") != 1 {
+			if strings.Count(joined, "Connection") != 1 || strings.Contains(joined, "[Connection]") {
 				t.Fatalf("connection badge count != 1:\n%s", joined)
 			}
 			if strings.Contains(joined, "Kind") || strings.Contains(joined, connection.CredentialRef) {
@@ -121,7 +121,7 @@ func TestDetailFolderUsesOrderedImmediateConnectionChildren(t *testing.T) {
 		t.Fatalf("direct connection order = %q, want %q", gotIDs, wantIDs)
 	}
 	joined := strings.Join(state.project(20, 200).lines, "\n")
-	for _, want := range []string{"[Folder]", "Name               team", "Path               /team", "Direct connections 3", "alpha              alpha-one.example:22", "alpha              alpha-two.example:22", "zeta               zeta.example:22"} {
+	for _, want := range []string{"Folder", "Name               team", "Path               /team", "Direct connections 3", "alpha              alpha-one.example:22", "alpha              alpha-two.example:22", "zeta               zeta.example:22"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("folder detail omitted %q:\n%s", want, joined)
 		}
@@ -150,11 +150,11 @@ func TestDetailRootAndFolderEmptyState(t *testing.T) {
 				t.Fatal("detail target rejected")
 			}
 			joined := strings.Join(state.project(20, 200).lines, "\n")
-			badge := "[Folder]"
+			badge := "Folder"
 			if state.kind == detailKindRoot {
-				badge = "[Root]"
+				badge = "Root"
 			}
-			if strings.Count(joined, badge) != 1 || strings.Contains(joined, "Kind") || !strings.Contains(joined, "Direct connections 0") || !strings.Contains(joined, detailEmptyConnections) {
+			if strings.Count(joined, badge) != 1 || strings.Contains(joined, "["+badge+"]") || strings.Contains(joined, "Kind") || !strings.Contains(joined, "Direct connections 0") || !strings.Contains(joined, detailEmptyConnections) {
 				t.Fatalf("missing explicit empty state:\n%s", joined)
 			}
 		})

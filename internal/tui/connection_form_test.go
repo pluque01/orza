@@ -50,7 +50,7 @@ func TestConnectionFormControlledBadgeKeepsCatalogPathInSafeStructuredValue(t *t
 				t.Fatalf("color/plain form mismatch:\ncolor %q\nplain %q", colored, plain)
 			}
 			lines := strings.Split(plain, "\n")
-			if lines[0] != "["+test.label+"]" || strings.Count(plain, "["+test.label+"]") != 1 {
+			if lines[0] != test.label || strings.Count(plain, test.label) != 1 {
 				t.Fatalf("controlled badge = %q, view:\n%s", lines[0], plain)
 			}
 			projectedPath := safeText(unsafePath, 240)

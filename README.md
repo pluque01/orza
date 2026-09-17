@@ -449,10 +449,11 @@ Every normal frame has three named regions:
   list direct child connections only, not connections in descendant folders.
 - **Actions** shows the exact available keys for the current selection and focus owner.
 
-Panel and content types use bracketed badges such as `[Details]` and `[Connection]`; Details keeps
-its stable region badge while identifying the selected content separately. Structured descriptive
-labels omit trailing colons. In color mode, badges use accent styling and labels use secondary
-emphasis while values remain primary.
+Panel titles use plain text such as `Details`; the existing `[*]` and `[ ]` markers identify active
+and inactive regions. Content types use unbracketed labels such as `Connection` and `Folder`; Details
+keeps its stable region title while identifying selected content separately. When styling is available,
+content-type labels are bold without a foreground or background color; structured descriptive labels use
+secondary emphasis while values remain primary.
 
 Read-only identity rows align values in one shared column when the local panel leaves at least eight
 display cells for values. Below that threshold, every label is followed by its indented value on the
@@ -476,7 +477,7 @@ Help requested from it is inline rather than a second stacked modal.
 The controlled interface language is English only. Catalog names, paths, hosts, users, and safe backend
 diagnostic values are displayed without translation. Run `NO_COLOR=1 orza` or `orza --no-color`
 when color is unavailable. Color adds emphasis but carries no meaning by itself. No-color mode removes
-ANSI styling while retaining the same bracketed badge text, labels, values, and textual semantics:
+ANSI styling while retaining the same title, content-type label, values, and textual semantics:
 `[*]`/`[ ]` mark active/inactive regions, `>` marks selection or focus, `!` marks invalid input, `*`
 marks a primary control, and `[/]`, `[+]`, `[-]`, `[ssh]`, `Warning:`, `Error:`, the `│`/`█` track and
 thumb, and `…` preserve node, severity, overflow position, and truncation meaning. Scrollbars are

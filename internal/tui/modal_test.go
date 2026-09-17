@@ -58,12 +58,15 @@ func TestModalTitleBadgeInventoryAndANSIParity(t *testing.T) {
 			state := modalState{kind: test.kind, payload: test.payload}
 			plain := renderModalOverlay("", state, layout, newStyles(true), nil)
 			colored := renderModalOverlay("", state, layout, newStyles(false), nil)
-			badge := "[" + test.label + "]"
+			badge := test.label
 			if strings.Count(plain, badge) != 1 {
 				t.Fatalf("plain badge count for %s != 1:\n%s", test.kind, plain)
 			}
 			if ansi.Strip(colored) != plain {
 				t.Fatalf("ANSI strip parity failed for %s:\ncolored %q\nplain   %q", test.kind, colored, plain)
+			}
+			if title := newStyles(false).regionTitle(test.label, true); strings.Contains(title, ";4") {
+				t.Fatalf("modal structural title has a background for %s: %q", test.kind, title)
 			}
 		})
 	}
@@ -74,7 +77,7 @@ func TestModalUnknownFallbackAndKnownInvalidPayloadAreSafe(t *testing.T) {
 	unknownState := modalState{kind: modalKind("future_modal")}
 	unknown := renderModalOverlay("", unknownState, layout, newStyles(true), nil)
 	coloredUnknown := renderModalOverlay("", unknownState, layout, newStyles(false), nil)
-	if strings.Count(unknown, "[Panel]") != 1 || !strings.Contains(unknown, "Error: invalid modal payload") || ansi.Strip(coloredUnknown) != unknown {
+	if strings.Count(unknown, "Panel") != 1 || !strings.Contains(unknown, "Error: invalid modal payload") || ansi.Strip(coloredUnknown) != unknown {
 		t.Fatalf("unknown modal did not use a safe equivalent fallback:\nplain %q\ncolor %q", unknown, coloredUnknown)
 	}
 
@@ -86,7 +89,7 @@ func TestModalUnknownFallbackAndKnownInvalidPayloadAreSafe(t *testing.T) {
 				t.Fatalf("invalid payload lines/active = %#v/%d", lines, active)
 			}
 			view := renderModalOverlay("", state, layout, newStyles(true), nil)
-			if strings.Count(view, "["+test.label+"]") != 1 || !strings.Contains(view, "Error: invalid modal payload") || !strings.Contains(view, "Esc Close") {
+			if strings.Count(view, test.label) != 1 || !strings.Contains(view, "Error: invalid modal payload") || !strings.Contains(view, "Esc Close") {
 				t.Fatalf("known invalid modal lost badge or safe error:\n%s", view)
 			}
 		})

@@ -38,7 +38,7 @@ func TestTrustPromptUsesControlledBadgeColonlessFieldsAndColorParity(t *testing.
 			if got := ansi.Strip(colored); got != plain {
 				t.Fatalf("color text semantics = %q, want %q", got, plain)
 			}
-			if strings.Count(plain, "["+fixture.label+"]") != 1 {
+			if strings.Count(plain, fixture.label) != 1 {
 				t.Fatalf("controlled badge inventory = %q", plain)
 			}
 			if !strings.Contains(colored, "\x1b[") {

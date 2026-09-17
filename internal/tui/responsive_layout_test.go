@@ -119,7 +119,7 @@ func TestUS3DetailIdentityRowsUseLocalEightCellValueBoundary(t *testing.T) {
 			name:  "exactly eight value cells stays aligned",
 			width: 17,
 			want: []string{
-				"[Connection]",
+				"Connection",
 				"Name     prod",
 				"Path     /prod",
 				"Endpoint host:22",
@@ -132,7 +132,7 @@ func TestUS3DetailIdentityRowsUseLocalEightCellValueBoundary(t *testing.T) {
 			name:  "seven value cells stacks every pair",
 			width: 16,
 			want: []string{
-				"[Connection]",
+				"Connection",
 				"Name", "  prod",
 				"Path", "  /prod",
 				"Endpoint", "  host:22",
@@ -156,7 +156,7 @@ func TestUS3DetailIdentityRowsUseLocalEightCellValueBoundary(t *testing.T) {
 func TestUS5Reduced40x12KeepsIdentityAndSafetyBeforeOverflow(t *testing.T) {
 	model := New(Config{Width: 40, Height: 12, NoColor: true})
 	view := model.View().Content
-	for _, required := range []string{"[*] [Tree]", "[ ] [Details]", "[ ] [Actions]", "> [/] /"} {
+	for _, required := range []string{"[*] Tree", "[ ] Details", "[ ] Actions", "> [/] /"} {
 		if !strings.Contains(view, required) {
 			t.Fatalf("40x12 reduced frame omitted priority content %q:\n%s", required, view)
 		}

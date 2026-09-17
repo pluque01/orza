@@ -17,8 +17,8 @@ func TestUS5ExactNoColorCues(t *testing.T) {
 		got  string
 		want string
 	}{
-		{name: "active region", got: style.regionTitle("Tree", true), want: "[*] [Tree]"},
-		{name: "inactive region", got: style.regionTitle("Details", false), want: "[ ] [Details]"},
+		{name: "active region", got: style.regionTitle("Tree", true), want: "[*] Tree"},
+		{name: "inactive region", got: style.regionTitle("Details", false), want: "[ ] Details"},
 		{name: "focused", got: style.item("Name", itemSemantics{focused: true}), want: ">   Name"},
 		{name: "invalid", got: style.item("Host", itemSemantics{invalid: true}), want: " !  Host"},
 		{name: "primary", got: style.item("Save", itemSemantics{primary: true}), want: "  * Save"},
@@ -152,7 +152,7 @@ func TestUS5NoColorSafeTextAcrossDisplayModes(t *testing.T) {
 				t.Fatalf("no-color %s frame contains ANSI/control sequence: %q", size.name, view)
 			}
 			if size.width >= minimumLayoutWidth && size.height >= minimumLayoutHeight {
-				for _, cue := range []string{"[*] [Tree]", "[ ] [Details]", "[ ] [Actions]", "[Connection]", "> ", "[ssh]"} {
+				for _, cue := range []string{"[*] Tree", "[ ] Details", "[ ] Actions", "Connection", "> ", "[ssh]"} {
 					if !strings.Contains(view, cue) {
 						t.Fatalf("%s frame omitted textual cue %q:\n%s", size.name, cue, view)
 					}

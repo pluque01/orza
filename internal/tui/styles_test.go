@@ -15,9 +15,9 @@ func TestStylesNoColorTextualSemantics(t *testing.T) {
 		got  string
 		want string
 	}{
-		{name: "active title", got: s.regionTitle("Tree", true), want: "[*] [Tree]"},
-		{name: "inactive title", got: s.regionTitle("Details", false), want: "[ ] [Details]"},
-		{name: "content badge", got: s.contentBadge("Connection"), want: "[Connection]"},
+		{name: "active title", got: s.regionTitle("Tree", true), want: "[*] Tree"},
+		{name: "inactive title", got: s.regionTitle("Details", false), want: "[ ] Details"},
+		{name: "content badge", got: s.contentBadge("Connection"), want: "Connection"},
 		{name: "descriptive label", got: s.descriptiveLabel("Endpoint"), want: "Endpoint"},
 		{name: "selected", got: s.item("Prod", itemSemantics{selected: true}), want: ">   Prod"},
 		{name: "focused", got: s.item("Name", itemSemantics{focused: true}), want: ">   Name"},
@@ -78,7 +78,7 @@ func TestStylesColorRetainsTextualSemantics(t *testing.T) {
 	}
 }
 
-func TestStylesTypeBadgeConstraintsAndBrightBlueRendering(t *testing.T) {
+func TestStylesTypeBadgeConstraintsAndPlacementRendering(t *testing.T) {
 	plain := newStyles(true)
 	color := newStyles(false)
 
@@ -96,11 +96,23 @@ func TestStylesTypeBadgeConstraintsAndBrightBlueRendering(t *testing.T) {
 
 	plainText := plain.renderTypeBadge(plainBadge)
 	coloredText := color.renderTypeBadge(colorBadge)
-	if plainText != "[Connection]" || ansi.Strip(coloredText) != plainText {
+	if plainText != "Connection" || ansi.Strip(coloredText) != plainText {
 		t.Fatalf("badge color/plain = %q/%q", coloredText, plainText)
 	}
-	if want := "\x1b[1;30;104m[Connection]\x1b[m"; coloredText != want {
-		t.Fatalf("bright-blue badge = %q, want exact %q", coloredText, want)
+	if want := "\x1b[1mConnection\x1b[m"; coloredText != want {
+		t.Fatalf("bold-only context badge = %q, want exact %q", coloredText, want)
+	}
+
+	plainTitle, ok := plain.typeBadge("Details", badgePlacementTitle, true)
+	if !ok || plain.renderTypeBadge(plainTitle) != "Details" {
+		t.Fatalf("plain structural title = %#v / %q", plainTitle, plain.renderTypeBadge(plainTitle))
+	}
+	coloredTitle, ok := color.typeBadge("Details", badgePlacementTitle, true)
+	if !ok || ansi.Strip(color.renderTypeBadge(coloredTitle)) != "Details" {
+		t.Fatalf("colored structural title = %#v / %q", coloredTitle, color.renderTypeBadge(coloredTitle))
+	}
+	if strings.Contains(ansi.Strip(color.renderTypeBadge(coloredTitle)), "[") {
+		t.Fatalf("structural title retained brackets: %q", color.renderTypeBadge(coloredTitle))
 	}
 
 	for _, test := range []struct {
