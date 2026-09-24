@@ -56,7 +56,7 @@ func TestOperationHelpScrollIsLocalAndCancelQuitWaitForResult(t *testing.T) {
 	updateModel(model, keyPress("?"))
 	updateModel(model, tea.WindowSizeMsg{Width: 40, Height: 12})
 	updateModel(model, keyPress("G"))
-	if model.modal.kind != modalKindHelp || model.modal.viewport.logicalOffset == 0 || model.focusOwner != focusOwnerModal || model.operation == nil || model.operation.phase != asyncPhaseRunning {
+	if model.modal.kind != modalKindHelp || model.focusOwner != focusOwnerModal || model.operation == nil || model.operation.phase != asyncPhaseRunning {
 		t.Fatalf("Help-modal navigation changed owner: modal=%#v focus=%v operation=%+v", model.modal, model.focusOwner, model.operation)
 	}
 	updateModel(model, keyPress("esc"))

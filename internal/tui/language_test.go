@@ -68,6 +68,7 @@ var sourceTechnicalLiterals = map[string]string{
 	"unknown modal kind":                          "internal state error",
 	"__tui_root__":                                "internal synthetic identifier",
 	"\x00controls\x00":                            "internal modal sentinel",
+	"\x00status\x00":                              "internal modal sentinel",
 	"%d":                                          "numeric format",
 	":%d":                                         "endpoint suffix format",
 	"%s/%d":                                       "identifier and revision format",

@@ -140,10 +140,13 @@ func TestTUIConnectionFormDetailsCancelAndSelectionTwentyRuns(t *testing.T) {
 
 		updateTUI(t, model, tuiKey("n"))
 		view := model.View().Content
-		for _, want := range []string{"Tree", "Details", "New connection", "Actions", "Path"} {
+		for _, want := range []string{"Tree", "Details", "New connection", "Path", "Ctrl+S Save", "Esc Cancel", "F1 Help"} {
 			if !strings.Contains(view, want) {
 				t.Fatalf("run %d: create form omitted %q: %q", run, want, view)
 			}
+		}
+		if strings.Contains(view, "Actions") {
+			t.Fatalf("run %d: create form retained an Actions panel: %q", run, view)
 		}
 		if strings.Contains(view, "New connection  /") || strings.Contains(view, "Path:") {
 			t.Fatalf("run %d: create form embedded or colon-prefixed its catalog path: %q", run, view)

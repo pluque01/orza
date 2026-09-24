@@ -15,7 +15,7 @@ type tuiCapturedField struct {
 	value string
 }
 
-func TestTUIActionsAndHelpUseSingularTitles(t *testing.T) {
+func TestTUIBrowserLegendAndHelpUseSingularTitles(t *testing.T) {
 	frames := make(map[bool][2]string, 2)
 	for _, noColor := range []bool{true, false} {
 		service := tui.ConnectionFuncs{ListFunc: func(context.Context, app.ListConnectionsRequest) (app.ListConnectionsResult, error) {
@@ -24,28 +24,22 @@ func TestTUIActionsAndHelpUseSingularTitles(t *testing.T) {
 		model := tui.New(tui.Config{Connections: service, Width: 80, Height: 24, NoColor: noColor})
 		updateTUI(t, model, model.Init()())
 		actions := ansi.Strip(model.View().Content)
-		if strings.Count(actions, "[ ] Actions") != 1 {
-			t.Fatalf("no-color=%t Actions title count != 1:\n%s", noColor, actions)
-		}
+		assertCompactBrowserLegend(t, actions, false)
 
 		updateTUI(t, model, tuiKey("?"))
 		help := ansi.Strip(model.View().Content)
-		if strings.Count(help, "[*] Help") != 1 || strings.Count(help, "Help") != 2 {
-			t.Fatalf("no-color=%t Help title is missing or duplicated in its body:\n%s", noColor, help)
+		if strings.Count(help, "[*] Help") != 1 {
+			t.Fatalf("no-color=%t Help title is missing or duplicated:\n%s", noColor, help)
 		}
-		for _, action := range []string{"n New connection", "f New folder", "r Reload", "? Help", "q Quit"} {
-			if !strings.Contains(help, action) {
-				t.Fatalf("no-color=%t Help omitted root action %q:\n%s", noColor, action, help)
-			}
-		}
+		updateTUI(t, model, tuiKey("G"))
+		help = ansi.Strip(model.View().Content)
+		assertHelpActions(t, help, "n New connection", "f New folder", "r Reload", "? Help", "q Quit")
 		updateTUI(t, model, tuiKey("esc"))
-		if strings.Count(ansi.Strip(model.View().Content), "[ ] Actions") != 1 {
-			t.Fatalf("no-color=%t Esc did not restore Actions", noColor)
-		}
+		assertCompactBrowserLegend(t, ansi.Strip(model.View().Content), false)
 		frames[noColor] = [2]string{actions, help}
 	}
 	if frames[false] != frames[true] {
-		t.Fatal("ANSI-stripped Actions/Help frames differ from no-color frames")
+		t.Fatal("ANSI-stripped browser legend/Help frames differ from no-color frames")
 	}
 }
 
@@ -71,27 +65,13 @@ func TestTUIContextualActionsAndCapturedConnectTarget(t *testing.T) {
 	updateTUI(t, model, model.Init()())
 
 	root := model.View().Content
-	if !strings.Contains(root, "[ ] Actions") {
-		t.Fatalf("root omitted Actions title:\n%s", root)
-	}
-	for _, action := range []string{"n New connection", "f New folder", "r Reload", "? Help", "q Quit"} {
-		if !strings.Contains(root, action) {
-			t.Fatalf("root Actions omitted %q:\n%s", action, root)
-		}
-	}
-	for _, unavailable := range []string{"c Connect", "e Edit", "m Move", "d Delete"} {
-		if strings.Contains(root, unavailable) {
-			t.Fatalf("root Actions exposed %q:\n%s", unavailable, root)
-		}
-	}
+	assertCompactBrowserLegend(t, root, false)
+	assertBrowserHelpActions(t, model, "r Reload", "? Help")
 
 	updateTUI(t, model, tuiKey("l"))
 	connectionView := model.View().Content
-	for _, action := range []string{"c Connect", "n New connection", "f New folder", "e Edit", "m Move", "d Delete", "r Reload", "? Help", "q Quit"} {
-		if !strings.Contains(connectionView, action) {
-			t.Fatalf("connection Actions omitted %q:\n%s", action, connectionView)
-		}
-	}
+	assertCompactBrowserLegend(t, connectionView, true)
+	assertBrowserHelpActions(t, model, "e Edit", "m Move", "d Delete", "r Reload", "? Help")
 	updateTUI(t, model, tuiKey("c"))
 	confirmation := model.View().Content
 	assertColonlessCapturedFields(t, confirmation, []tuiCapturedField{
@@ -131,13 +111,57 @@ func TestTUIFolderActionInventory(t *testing.T) {
 	updateTUI(t, model, model.Init()())
 	updateTUI(t, model, tuiKey("l"))
 	view := model.View().Content
-	for _, action := range []string{"n New connection", "f New folder", "e Edit", "m Move", "d Delete", "r Reload", "? Help", "q Quit"} {
+	assertCompactBrowserLegend(t, view, false)
+	assertBrowserHelpActions(t, model, "e Edit", "m Move", "d Delete", "r Reload", "? Help")
+}
+
+func assertCompactBrowserLegend(t *testing.T, view string, connect bool) {
+	t.Helper()
+	if strings.Contains(view, "Actions") {
+		t.Fatalf("browser retained Actions panel:\n%s", view)
+	}
+	want := []string{"Up/k Move up", "Down/j Move down", "n New connection", "f New folder", "q Quit"}
+	if connect {
+		want = append(want, "c Connect")
+	}
+	for _, action := range want {
 		if !strings.Contains(view, action) {
-			t.Fatalf("folder Actions omitted %q:\n%s", action, view)
+			t.Fatalf("browser legend omitted %q:\n%s", action, view)
 		}
 	}
-	if strings.Contains(view, "c Connect") {
-		t.Fatalf("folder Actions exposed Connect:\n%s", view)
+	for _, hidden := range []string{"e Edit", "m Move", "d Delete", "r Reload", "? Help"} {
+		if strings.Contains(view, hidden) {
+			t.Fatalf("browser legend exposed secondary action %q:\n%s", hidden, view)
+		}
+	}
+}
+
+func assertBrowserHelpActions(t *testing.T, model *tui.Model, actions ...string) {
+	t.Helper()
+	updateTUI(t, model, tuiKey("?"))
+	updateTUI(t, model, tuiKey("G"))
+	assertHelpActions(t, ansi.Strip(model.View().Content), actions...)
+	updateTUI(t, model, tuiKey("esc"))
+}
+
+func assertHelpActions(t *testing.T, view string, actions ...string) {
+	t.Helper()
+	for _, action := range actions {
+		found := false
+		for _, line := range strings.Split(view, "\n") {
+			for _, cell := range strings.Split(line, "│") {
+				if strings.HasPrefix(strings.Join(strings.Fields(cell), " "), action) {
+					found = true
+					break
+				}
+			}
+			if found {
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("Help omitted action %q:\n%s", action, view)
+		}
 	}
 }
 

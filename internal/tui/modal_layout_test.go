@@ -33,7 +33,7 @@ func TestModalCapturedTargetsWrapCompletelyWithoutDisplacingControls(t *testing.
 			if !strings.Contains(strings.ReplaceAll(joined, " ", ""), long) || strings.Contains(joined, safeTextEllipsis) {
 				t.Fatalf("captured target was not wrapped completely: %q", joined)
 			}
-			projection := projectModalViewport(test.state, lines, 8, 20, active)
+			projection := projectModalViewport(test.state, lines, 8, 20, active, newStyles(true))
 			projected := strings.Join(projection.lines, "\n")
 			if !strings.Contains(projected, "Cancel") && !strings.Contains(projected, "Back") {
 				t.Fatalf("fixed cancel/back control was displaced: %#v", projection.lines)
@@ -153,7 +153,7 @@ func TestModalScrollbarTrackExcludesLeadingFixedNotices(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			const rows, width = 12, 28
 			lines, active := modalContent(test.state, newStyles(true), width-4, nil)
-			projection := projectModalViewport(test.state, lines, rows, width-4, active)
+			projection := projectModalViewport(test.state, lines, rows, width-4, active, newStyles(true))
 			if !projection.scrollbar.visible || projection.scrollbarStart != test.start {
 				t.Fatalf("scrollbar = %#v start=%d, want visible start=%d", projection.scrollbar, projection.scrollbarStart, test.start)
 			}

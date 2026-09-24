@@ -71,18 +71,16 @@ func TestObjectActionCanonicalLabelsAndPrioritiesAreStable(t *testing.T) {
 	}
 }
 
-func TestActionsAndHelpUseSingularTypeTitles(t *testing.T) {
+func TestBrowserLegendAndHelpUseANSIEquivalentPairStyles(t *testing.T) {
 	descriptors := actionsFor(actionContext{selection: actionSelectionConnection, state: actionStateNormal, focus: actionFocusTree, canToggle: true})
-	actionLines := packActions("", descriptors, 76, 3)
-	actionRect := layoutRect{width: 80, height: 5}
-	plainActions := renderRegionPanel(newStyles(true).regionTitle("Actions", false), actionLines, actionRect)
-	coloredActions := renderRegionPanel(newStyles(false).regionTitle("Actions", false), actionLines, actionRect)
-	if strings.Count(plainActions, "[ ] Actions") != 1 || ansi.Strip(coloredActions) != plainActions {
-		t.Fatalf("Actions title is not a singular ANSI-equivalent label:\nplain %q\ncolor %q", plainActions, coloredActions)
+	plainLegend := strings.Join(renderBrowserLegend(newStyles(true), descriptors, 120), "\n")
+	coloredLegend := strings.Join(renderBrowserLegend(newStyles(false), descriptors, 120), "\n")
+	if strings.Contains(plainLegend, "Actions") || !strings.Contains(plainLegend, "  |  ") || ansi.Strip(coloredLegend) != plainLegend {
+		t.Fatalf("browser legend is not a borderless ANSI-equivalent set of pairs:\nplain %q\ncolor %q", plainLegend, coloredLegend)
 	}
 
 	layout := calculateLayout(80, 24, regionTree)
-	state := modalState{kind: modalKindHelp, payload: helpPayload{lines: actionHelpLines(descriptors)}}
+	state := modalState{kind: modalKindHelp, payload: helpPayload{descriptors: descriptors}}
 	plainHelp := renderModalOverlay("", state, layout, newStyles(true), nil)
 	coloredHelp := renderModalOverlay("", state, layout, newStyles(false), nil)
 	if strings.Count(plainHelp, "[*] Help") != 1 || ansi.Strip(coloredHelp) != plainHelp {
@@ -96,6 +94,138 @@ func TestActionsAndHelpUseSingularTypeTitles(t *testing.T) {
 	}
 }
 
+func TestModalFixedControlsUseANSIEquivalentPairStyles(t *testing.T) {
+	controls := []string{
+		modalControlLine("y Confirm"),
+		modalControlLine("Enter/Esc Cancel"),
+		modalControlLine("? Help"),
+		modalControlLine("Ctrl+S/Enter Save  Esc Cancel  F1 Help"),
+	}
+	plain := strings.Join(packModalControls(controls, 120, 10, newStyles(true)), "\n")
+	colored := strings.Join(packModalControls(controls, 120, 10, newStyles(false)), "\n")
+	if ansi.Strip(colored) != plain || !strings.Contains(plain, "  |  ") {
+		t.Fatalf("modal controls are not ANSI-equivalent separated pairs:\nplain %q\ncolor %q", plain, colored)
+	}
+	if !strings.Contains(colored, "\x1b[92m") || !strings.Contains(colored, "\x1b[90m") {
+		t.Fatalf("modal controls do not emphasize keys and mute actions: %q", colored)
+	}
+
+	statusPlain := packModalControls([]string{modalStatusLine("Resolving current target...")}, 80, 1, newStyles(true))[0]
+	statusColored := packModalControls([]string{modalStatusLine("Resolving current target...")}, 80, 1, newStyles(false))[0]
+	if ansi.Strip(statusColored) != statusPlain || !strings.Contains(statusColored, "\x1b[90m") || strings.Contains(statusColored, "\x1b[92m") {
+		t.Fatalf("modal status is not muted plain status:\nplain %q\ncolor %q", statusPlain, statusColored)
+	}
+}
+
+func TestBrowserHelpUsesOneIndentedGlobalKeyColumn(t *testing.T) {
+	descriptors := actionsFor(actionContext{selection: actionSelectionConnection, state: actionStateNormal, focus: actionFocusTree, canToggle: true})
+	plain := browserHelpLines(newStyles(true), descriptors, 80)
+	colored := browserHelpLines(newStyles(false), descriptors, 80)
+	if got := strings.Join(mapANSI(ansi.Strip, colored), "\n"); got != strings.Join(plain, "\n") {
+		t.Fatalf("colored Help changed plain-text semantics:\ncolor %q\nplain %q", colored, plain)
+	}
+
+	keyColumn := -1
+	for _, line := range plain {
+		if strings.TrimSpace(line) == "" || !strings.HasPrefix(line, "  ") {
+			continue
+		}
+		key := strings.Fields(line)[0]
+		if !slices.ContainsFunc(descriptors, func(descriptor actionDescriptor) bool { return descriptor.key == key }) {
+			continue
+		}
+		column := strings.Index(line, key)
+		if keyColumn < 0 {
+			keyColumn = column
+		} else if column != keyColumn {
+			t.Fatalf("Help key %q starts at %d, want global column %d:\n%s", key, column, keyColumn, strings.Join(plain, "\n"))
+		}
+	}
+	if keyColumn != 2 {
+		t.Fatalf("Help row indent = %d, want 2:\n%s", keyColumn, strings.Join(plain, "\n"))
+	}
+	for index, line := range plain {
+		if slices.Contains([]string{"Navigation", "Connection", "Management", "Application"}, line) {
+			if !strings.Contains(colored[index], "\x1b[") || ansi.Strip(colored[index]) != line {
+				t.Fatalf("Help section %q is not a colored ANSI-equivalent title: %q", line, colored[index])
+			}
+		}
+	}
+}
+
+func TestBrowserHelpNarrowFallbackRetainsIndentAndNoColorSemantics(t *testing.T) {
+	descriptors := actionsFor(actionContext{selection: actionSelectionConnection, state: actionStateNormal, focus: actionFocusTree, canToggle: true})
+	plain := browserHelpLines(newStyles(true), descriptors, 12)
+	colored := browserHelpLines(newStyles(false), descriptors, 12)
+	if got := strings.Join(mapANSI(ansi.Strip, colored), "\n"); got != strings.Join(plain, "\n") {
+		t.Fatalf("colored narrow Help changed plain-text semantics:\ncolor %q\nplain %q", colored, plain)
+	}
+	for _, line := range plain {
+		if strings.TrimSpace(line) == "" || slices.Contains([]string{"Navigation", "Connection", "Management", "Application"}, line) {
+			continue
+		}
+		if !strings.HasPrefix(line, "  ") {
+			t.Fatalf("narrow Help row lost section indent: %q", line)
+		}
+	}
+}
+
+func mapANSI(transform func(string) string, lines []string) []string {
+	result := make([]string, len(lines))
+	for index, line := range lines {
+		result[index] = transform(line)
+	}
+	return result
+}
+
+func TestBrowserLegendAndHelpSelectApplicableDescriptorsInOrder(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		context actionContext
+		legend  []actionID
+	}{
+		{"root tree", actionContext{selection: actionSelectionRoot, state: actionStateNormal, focus: actionFocusTree}, []actionID{actionUp, actionDown, actionNewConnection, actionNewFolder, actionQuit}},
+		{"folder details", actionContext{selection: actionSelectionFolder, state: actionStateNormal, focus: actionFocusDetails}, []actionID{actionUp, actionDown, actionNewConnection, actionNewFolder, actionQuit}},
+		{"connection tree", actionContext{selection: actionSelectionConnection, state: actionStateNormal, focus: actionFocusTree}, []actionID{actionUp, actionDown, actionConnect, actionNewConnection, actionNewFolder, actionQuit}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			descriptors := actionsFor(test.context)
+			got := browserLegendDescriptors(descriptors)
+			ids := make([]actionID, len(got))
+			for index, descriptor := range got {
+				ids[index] = descriptor.id
+			}
+			if !slices.Equal(ids, test.legend) {
+				t.Fatalf("legend IDs = %v, want %v", ids, test.legend)
+			}
+			help := strings.Join(browserHelpLines(newStyles(true), descriptors, 80), "\n")
+			for _, descriptor := range descriptors {
+				if !actionHelpContains(browserHelpLines(newStyles(true), descriptors, 80), descriptor.key, descriptor.label) {
+					t.Fatalf("Help omitted descriptor %q %q:\n%s", descriptor.key, descriptor.label, help)
+				}
+			}
+			for _, group := range []string{"Navigation", "Connection", "Management", "Application"} {
+				if strings.Contains(help, group) && strings.Count(help, group) != 1 {
+					t.Fatalf("Help group %q is not unique:\n%s", group, help)
+				}
+			}
+			if navigation, management, application := strings.Index(help, "Navigation"), strings.Index(help, "Management"), strings.Index(help, "Application"); navigation > management || management > application {
+				t.Fatalf("Help group order is unstable:\n%s", help)
+			}
+		})
+	}
+}
+
+func actionHelpContains(lines []string, key, label string) bool {
+	want := append([]string{key}, strings.Fields(label)...)
+	for _, line := range lines {
+		if slices.Equal(strings.Fields(ansi.Strip(line)), want) {
+			return true
+		}
+	}
+	return false
+}
+
 func TestHelpKeepsContextualDescriptorInventoryAndKeys(t *testing.T) {
 	descriptors := actionsFor(actionContext{selection: actionSelectionConnection, state: actionStateNormal, focus: actionFocusTree, canToggle: true})
 	const wantKeys = "c/n/f/e/m/d/r/?/q/Up/k/Down/j/Home/g/End/G/Left/h/Right/l/Enter/Space/Tab/Shift+Tab"
@@ -104,9 +234,6 @@ func TestHelpKeepsContextualDescriptorInventoryAndKeys(t *testing.T) {
 	}
 
 	want := []string{
-		"Paste isolation requires terminal bracketed-paste support.",
-		"Without it, input works but pasted bytes cannot be distinguished from typing.",
-		"The application never reads the operating system clipboard.",
 		"c Connect",
 		"n New connection",
 		"f New folder",

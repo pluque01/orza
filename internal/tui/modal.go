@@ -31,7 +31,10 @@ type folderDeleteConfirmation struct {
 type deleteConnectionPayload struct{ confirmation *deleteConfirmation }
 type deleteFolderPayload struct{ confirmation *folderDeleteConfirmation }
 type connectConfirmationPayload struct{ confirmation *connectConfirmation }
-type helpPayload struct{ lines []string }
+type helpPayload struct {
+	lines       []string
+	descriptors []actionDescriptor
+}
 type operationErrorPayload struct{ modal *errorModal }
 type sshFailurePayload struct {
 	modal        *errorModal
@@ -39,6 +42,12 @@ type sshFailurePayload struct {
 }
 
 const modalControlsPrefix = "\x00controls\x00"
+const modalStatusPrefix = "\x00status\x00"
+
+type modalPackedControl struct {
+	text   string
+	status bool
+}
 
 func (payload deleteConnectionPayload) validModalPayload() bool {
 	return payload.confirmation != nil && payload.confirmation.scope.ID != ""
@@ -52,7 +61,9 @@ func (payload connectConfirmationPayload) validModalPayload() bool {
 	return payload.confirmation != nil && payload.confirmation.connection.ID != ""
 }
 
-func (payload helpPayload) validModalPayload() bool { return len(payload.lines) != 0 }
+func (payload helpPayload) validModalPayload() bool {
+	return len(payload.lines) != 0 || len(payload.descriptors) != 0
+}
 func (payload operationErrorPayload) validModalPayload() bool {
 	return payload.modal != nil && payload.modal.failure == nil
 }
@@ -268,6 +279,9 @@ func modalPayloadContent(state modalState, style styles, width int) ([]string, i
 	case unsavedChangesPayload:
 		return payload.lines(width, style), noActiveLine
 	case helpPayload:
+		if len(payload.descriptors) != 0 {
+			return append(browserHelpLines(style, payload.descriptors, width), modalControlLine("?/Esc Close")), noActiveLine
+		}
 		return append(safeHelpLines(payload.lines), modalControlLine("?/Esc Close")), noActiveLine
 	case operationErrorPayload:
 		return operationErrorLines(payload.modal, width, style), noActiveLine
@@ -435,7 +449,7 @@ func sshFailureModalControlLines(modal *errorModal) []string {
 	case recoveryMissing, recoveryConflict:
 		controls = append(controls, modalControlLine("r Reload"))
 	case recoveryResolving:
-		controls = []string{modalControlLine("Resolving current target...")}
+		controls = []string{modalStatusLine("Resolving current target...")}
 	default:
 		controls = append(controls, modalControlLine("r Retry"), modalControlLine("e Edit"))
 	}
@@ -449,12 +463,12 @@ func renderModalOverlay(background string, state modalState, layout layoutState,
 	}
 	contentWidth, contentHeight := rect.contentWidth(), rect.contentHeight()
 	lines, active := modalContent(state, style, contentWidth, help)
-	projection := projectModalViewport(state, lines, contentHeight, contentWidth, active)
+	projection := projectModalViewport(state, lines, contentHeight, contentWidth, active, style)
 	panel := renderRegionPanelWithScrollbar(style.regionTitle(modalTitle(state.kind), true), projection.lines, rect, style, projection.scrollbar, projection.scrollbarStart)
 	return placeOverlay(background, panel, rect, layout.width, layout.height)
 }
 
-func projectModalViewport(state modalState, lines []string, rows, width, active int) viewportProjection {
+func projectModalViewport(state modalState, lines []string, rows, width, active int, style styles) viewportProjection {
 	priority := modalPriorityStart(lines)
 	if priority < 0 || priority >= len(lines) {
 		return state.viewport.project(lines, rows, width, active)
@@ -467,7 +481,7 @@ func projectModalViewport(state modalState, lines []string, rows, width, active 
 	if rows <= 0 || width <= 0 {
 		return projection
 	}
-	controlLines := packModalControls(lines[priority:], width, rows)
+	controlLines := packModalControls(lines[priority:], width, rows, style)
 	if len(controlLines) >= rows {
 		projection.lines = controlLines[:rows]
 		return projection
@@ -524,6 +538,10 @@ func modalControlLine(control string) string {
 	return modalControlsPrefix + control
 }
 
+func modalStatusLine(status string) string {
+	return modalControlsPrefix + modalStatusPrefix + status
+}
+
 func modalPriorityStart(lines []string) int {
 	for index, line := range lines {
 		if strings.HasPrefix(line, modalControlsPrefix) {
@@ -533,21 +551,60 @@ func modalPriorityStart(lines []string) int {
 	return noActiveLine
 }
 
-func packModalControls(lines []string, width, rows int) []string {
-	controls := make([]string, 0, len(lines))
+func packModalControls(lines []string, width, rows int, style styles) []string {
+	const divider = "  |  "
+	packed := make([][]modalPackedControl, 0, min(rows, len(lines)))
 	for _, line := range lines {
-		controls = append(controls, strings.TrimPrefix(line, modalControlsPrefix))
-	}
-	packed := make([]string, 0, min(rows, len(controls)))
-	for _, control := range controls {
-		control = viewportEllipsis(control, width)
-		if len(packed) == 0 || ansi.StringWidth(packed[len(packed)-1])+1+ansi.StringWidth(control) > width {
-			packed = append(packed, control)
-		} else {
-			packed[len(packed)-1] += " " + control
+		text := strings.TrimPrefix(line, modalControlsPrefix)
+		status := strings.HasPrefix(text, modalStatusPrefix)
+		text = strings.TrimPrefix(text, modalStatusPrefix)
+		for _, pair := range strings.Split(text, "  ") {
+			pair = viewportEllipsis(pair, width)
+			if len(packed) == 0 || modalControlWidth(packed[len(packed)-1])+ansi.StringWidth(divider)+ansi.StringWidth(pair) > width {
+				packed = append(packed, []modalPackedControl{{text: pair, status: status}})
+			} else {
+				packed[len(packed)-1] = append(packed[len(packed)-1], modalPackedControl{text: pair, status: status})
+			}
 		}
 	}
-	return packed
+	rendered := make([]string, len(packed))
+	for index, line := range packed {
+		pairs := make([]string, len(line))
+		for pairIndex, pair := range line {
+			if pair.status {
+				// A resolving notice is fixed, but it is not an input binding.
+				pairs[pairIndex] = style.descriptiveLabel(pair.text)
+			} else {
+				pairs[pairIndex] = renderModalControlPairs(style, pair.text)
+			}
+		}
+		rendered[index] = strings.Join(pairs, divider)
+	}
+	return rendered
+}
+
+func modalControlWidth(controls []modalPackedControl) int {
+	const divider = "  |  "
+	width := 0
+	for index, control := range controls {
+		if index != 0 {
+			width += ansi.StringWidth(divider)
+		}
+		width += ansi.StringWidth(control.text)
+	}
+	return width
+}
+
+func renderModalControlPairs(style styles, line string) string {
+	const divider = "  |  "
+	pairs := strings.Split(line, divider)
+	for index, pair := range pairs {
+		key, label, found := strings.Cut(pair, " ")
+		if found {
+			pairs[index] = style.actionPair(key, label)
+		}
+	}
+	return strings.Join(pairs, divider)
 }
 
 func modalTitle(kind modalKind) string {

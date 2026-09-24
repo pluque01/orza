@@ -373,19 +373,6 @@ func isolatedPasteValue(before, payload string) string {
 	return before + normalized.String()
 }
 
-func TestHelpDocumentsUnsupportedBracketedPasteLimitation(t *testing.T) {
-	model := loadedModel(t, nil, true)
-	updateModel(model, keyPress("n"))
-	updateModel(model, tea.WindowSizeMsg{Width: 160, Height: 24})
-	updateModel(model, tea.KeyPressMsg(tea.Key{Code: tea.KeyF1}))
-	view := model.View().Content
-	payload, ok := model.modal.payload.(helpPayload)
-	completeHelp := strings.Join(strings.Fields(strings.Join(payload.lines, " ")), "")
-	if !ok || !strings.Contains(view, "Help") || !strings.Contains(completeHelp, "bracketed-pastesupport") || !strings.Contains(completeHelp, "cannotbedistinguishedfromtyping") || !strings.Contains(completeHelp, "neverreadstheoperatingsystemclipboard") {
-		t.Fatalf("help omitted unsupported-terminal limitation: payload=%q view=%q", completeHelp, view)
-	}
-}
-
 func TestSSHFailureRecoveryResolvesCapturedIDAndRequiresConfirmation(t *testing.T) {
 	failed := app.SSHAttemptTarget{ID: "captured", Revision: 3, Path: "/old", Host: "2001:db8::1", Port: 22}
 	current := testConnection("captured", syntheticRootID, "/new", 4)

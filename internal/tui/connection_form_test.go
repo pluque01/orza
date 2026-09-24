@@ -114,7 +114,7 @@ func TestConnectionFormCompactRowsUseColonlessMutedLabelsAndBestAlignment(t *tes
 	}
 }
 
-func TestConnectionFormFortyByTwelvePreservesAuthMarkersErrorsSaveAndFooter(t *testing.T) {
+func TestConnectionFormFortyByTwelvePreservesAuthMarkersErrorsAndSave(t *testing.T) {
 	form := validConnectionForm()
 	form.setAuthMethod(app.AuthMethodKey)
 	form.setFocus(fieldAuth)
@@ -147,8 +147,8 @@ func TestConnectionFormFortyByTwelvePreservesAuthMarkersErrorsSaveAndFooter(t *t
 	form.setFocus(fieldSave)
 	form.setFormError("persistence failed safely")
 	view = form.view(newStyles(true), 40, 12)
-	if !strings.Contains(view, "Error: persistence failed safely") || !strings.Contains(view, "> * [ Save connection ]") || !strings.Contains(view, "Left/Right Change method") {
-		t.Fatalf("Save/error/footer priority changed at 40x12: %q", view)
+	if !strings.Contains(view, "Error: persistence failed safely") || !strings.Contains(view, "> * [ Save connection ]") {
+		t.Fatalf("Save/error priority changed at 40x12: %q", view)
 	}
 }
 
