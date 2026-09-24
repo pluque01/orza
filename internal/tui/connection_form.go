@@ -493,7 +493,6 @@ func (f *connectionForm) content(style styles) ([]string, int) {
 			}
 		}
 	}
-	lines = append(lines, "Left/Right Change method  Tab Next  Shift+Tab/F2 Previous  Ctrl+S Save  Esc Cancel  F1 Help")
 	return lines, activeLine
 }
 

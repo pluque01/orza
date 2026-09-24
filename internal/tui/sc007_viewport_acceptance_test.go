@@ -96,9 +96,9 @@ func sc007ClosedSurfaces(t testing.TB) []sc007ClosedSurface {
 			priority := modalPriorityStart(lines)
 			controlRows := 0
 			if priority >= 0 {
-				controlRows = len(packModalControls(lines[priority:], width, 100))
+				controlRows = len(packModalControls(lines[priority:], width, 100, styles))
 			}
-			return projectModalViewport(state, lines, rows+controlRows, width, active)
+			return projectModalViewport(state, lines, rows+controlRows, width, active, styles)
 		}
 	}
 
@@ -231,7 +231,7 @@ func TestSC007ScaleDetailsFormActionsAndHelpOverflowAcrossTwelveSizes(t *testing
 					}
 					for _, size := range us5ContractSizes {
 						updateModel(formModel, tea.WindowSizeMsg{Width: size.width, Height: size.height})
-						layout := calculateLayout(size.width, size.height, regionDetails)
+						layout := formModel.layout()
 						projection := formModel.form.projectAt(formModel.styles, layout.details.contentWidth(), layout.details.contentHeight())
 						view := formModel.View().Content
 						assertUS5FrameBounded(t, view, size.width, size.height)
@@ -247,15 +247,15 @@ func TestSC007ScaleDetailsFormActionsAndHelpOverflowAcrossTwelveSizes(t *testing
 				updateModel(formModel, tea.KeyPressMsg(tea.Key{Code: tea.KeyF1}))
 				for _, size := range us5ContractSizes {
 					updateModel(formModel, tea.WindowSizeMsg{Width: size.width, Height: size.height})
-					layout := calculateLayout(size.width, size.height, regionDetails)
+					layout := formModel.layout()
 					rect := layout.modalOverlay()
 					lines, active := modalContent(formModel.modal, formModel.styles, rect.contentWidth(), nil)
-					top := projectModalViewport(formModel.modal, lines, rect.contentHeight(), rect.contentWidth(), active)
+					top := projectModalViewport(formModel.modal, lines, rect.contentHeight(), rect.contentWidth(), active, formModel.styles)
 					view := formModel.View().Content
 					assertSC007Projection(t, size.name+" form Help top", top, lines, rect.contentWidth())
 					assertSC007ViewOverflow(t, size.name+" form Help top", view, top)
 					updateModel(formModel, keyPress("G"))
-					bottom := projectModalViewport(formModel.modal, lines, rect.contentHeight(), rect.contentWidth(), active)
+					bottom := projectModalViewport(formModel.modal, lines, rect.contentHeight(), rect.contentWidth(), active, formModel.styles)
 					view = formModel.View().Content
 					assertSC007Projection(t, size.name+" form Help bottom", bottom, lines, rect.contentWidth())
 					assertSC007ViewOverflow(t, size.name+" form Help bottom", view, bottom)
@@ -275,16 +275,16 @@ func TestSC007ScaleDetailsFormActionsAndHelpOverflowAcrossTwelveSizes(t *testing
 		actionModel.syncDetail()
 		for _, size := range us5ContractSizes {
 			updateModel(actionModel, tea.WindowSizeMsg{Width: size.width, Height: size.height})
-			layout := calculateLayout(size.width, size.height, regionTree)
-			lines := packActions("", actionsFor(actionModel.actionContext()), layout.actions.contentWidth(), layout.actions.contentHeight())
+			layout := actionModel.layout()
+			lines := renderBrowserLegend(actionModel.styles, actionsFor(actionModel.actionContext()), layout.width)
 			view := actionModel.View().Content
 			assertUS5FrameBounded(t, view, size.width, size.height)
-			if slices.Contains(lines, actionsOverflowMarker) && !strings.Contains(view, actionsOverflowMarker) {
-				t.Fatalf("run %d %s Actions projection overflow marker is absent from Model.View", run+1, size.name)
+			if strings.Contains(view, "Actions") || strings.Contains(view, actionsOverflowMarker) {
+				t.Fatalf("run %d %s browser retained Actions panel", run+1, size.name)
 			}
 			for _, line := range lines {
-				if ansi.StringWidth(line) > layout.actions.contentWidth() {
-					t.Fatalf("run %d %s Actions line exceeds region: %q", run+1, size.name, line)
+				if ansi.StringWidth(line) > layout.width || !strings.Contains(view, line) {
+					t.Fatalf("run %d %s legend line is not visible: %q", run+1, size.name, line)
 				}
 			}
 		}
@@ -346,7 +346,7 @@ func TestSC007PickerAndConfirmationOverflowAcrossTwelveSizesTwentyRuns(t *testin
 						layout := calculateLayout(size.width, size.height, regionTree)
 						rect := layout.modalOverlay()
 						content, active := modalContent(model.modal, model.styles, rect.contentWidth(), actionHelpLines(model.currentActionDescriptors()))
-						projection := projectModalViewport(model.modal, content, rect.contentHeight(), rect.contentWidth(), active)
+						projection := projectModalViewport(model.modal, content, rect.contentHeight(), rect.contentWidth(), active, model.styles)
 						view := model.View().Content
 						assertUS5FrameBounded(t, view, size.width, size.height)
 						assertSC007ViewOverflow(t, size.name+" "+test.name, view, projection)

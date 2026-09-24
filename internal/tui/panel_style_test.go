@@ -15,7 +15,6 @@ var feature008RegionFixtures = []struct {
 }{
 	{name: "tree", label: "Tree", owner: focusOwnerTree},
 	{name: "details", label: "Details", owner: focusOwnerDetail},
-	{name: "actions", label: "Actions", owner: focusOwnerNone},
 }
 
 var feature008DetailFixtures = []struct {
@@ -92,7 +91,7 @@ func TestPanelStyleFixtureInventory(t *testing.T) {
 		owner focusOwner
 	}) string {
 		return fixture.label
-	}); !slices.Equal(got, []string{"Tree", "Details", "Actions"}) {
+	}); !slices.Equal(got, []string{"Tree", "Details"}) {
 		t.Fatalf("region fixtures = %#v", got)
 	}
 	if got := fixtureLabels(feature008DetailFixtures, func(fixture struct {

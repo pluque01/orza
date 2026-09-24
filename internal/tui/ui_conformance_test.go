@@ -482,8 +482,9 @@ func TestSC002DisplayedAndAbsentActionDispatchTwentyRuns(t *testing.T) {
 				selectSCNode(fixture.model, context.selection(fixture))
 				view := fixture.model.View().Content
 				descriptor, present := scDescriptor(action.id, objectActions(fixture.model.actionContext()))
-				if !present || !strings.Contains(view, descriptor.text()) {
-					t.Fatalf("%s run %d: displayed action %s missing from inventory/frame", context.name, run, action.id)
+				legend := browserLegendDescriptors(actionsFor(fixture.model.actionContext()))
+				if !present || slices.ContainsFunc(legend, func(item actionDescriptor) bool { return item.id == action.id }) != strings.Contains(view, descriptor.text()) {
+					t.Fatalf("%s run %d: legend visibility for %s is incorrect", context.name, run, action.id)
 				}
 				_, command := fixture.model.Update(keyPress(action.key))
 				action.assert(t, fixture.model, command)
@@ -808,15 +809,18 @@ func TestSC004SC005ExactGeometryAndResizePreservationTwentyRuns(t *testing.T) {
 			for run := 1; run <= scConformanceRuns; run++ {
 				for _, size := range us5ContractSizes {
 					updateModel(model, tea.WindowSizeMsg{Width: size.width, Height: size.height})
-					layout := calculateLayout(size.width, size.height, model.focusedLayoutRegion())
+					layout := model.layout()
 					want := scExpectedLayout(size.width, size.height, model.focusedLayoutRegion())
+					if model.screen == screenConnectionForm {
+						want = calculateLayoutWithActions(size.width, size.height, model.focusedLayoutRegion())
+					}
 					if layout != want {
 						t.Fatalf("run %d %s: layout = %#v, want %#v", run, size.name, layout, want)
 					}
 					assertLayoutInvariants(t, layout)
 					view := model.View().Content
 					assertUS5FrameBounded(t, view, size.width, size.height)
-					for _, title := range []string{"Tree", "Details", "Actions"} {
+					for _, title := range []string{"Tree", "Details"} {
 						if !strings.Contains(view, title) {
 							t.Fatalf("run %d %s omitted %s", run, size.name, title)
 						}
@@ -828,8 +832,8 @@ func TestSC004SC005ExactGeometryAndResizePreservationTwentyRuns(t *testing.T) {
 								t.Fatalf("run %d %s omitted form priority %q", run, size.name, safety)
 							}
 						}
-					} else if !strings.Contains(view, "> ") || !strings.Contains(view, "r Reload") || !strings.Contains(view, "q Quit") || !strings.Contains(view, "? Help") {
-						t.Fatalf("run %d %s omitted selected row or browser safety controls", run, size.name)
+					} else if !strings.Contains(view, "> ") || !scBrowserLegendContains(model, view, actionUp) || !scBrowserLegendContains(model, view, actionQuit) || strings.Contains(view, "Actions") {
+						t.Fatalf("run %d %s omitted selected row or browser legend", run, size.name)
 					}
 					if got := scInteractionSnapshot(model); !reflect.DeepEqual(got, preserved) {
 						t.Fatalf("run %d %s changed interaction state", run, size.name)
@@ -868,7 +872,7 @@ func TestSC006NoColorPrincipalBrowserAndConnectionFormFlowsTwentyRuns(t *testing
 			selectSCNode(model, id)
 			view := model.View().Content
 			assertSCNoANSI(t, view)
-			for _, cue := range []string{"[*] Tree", "[ ] Details", "[ ] Actions", "> "} {
+			for _, cue := range []string{"[*] Tree", "[ ] Details", "> "} {
 				if !strings.Contains(view, cue) {
 					t.Fatalf("run %d node %q omitted no-color cue %q", run, id, cue)
 				}
@@ -1012,7 +1016,19 @@ func scKnownObjectDescriptor(id actionID) (actionDescriptor, bool) {
 func scNavigationDescriptorDisplayed(model *Model, pressed tea.KeyPressMsg) bool {
 	descriptors := focusedNavigationActions(model.actionContext())
 	descriptor, ok := actionForKey(pressed, descriptors, model.keys)
-	return ok && strings.Contains(model.View().Content, descriptor.text())
+	if !ok {
+		return false
+	}
+	return scBrowserLegendContains(model, model.View().Content, descriptor.id) || actionHelpContains(browserHelpLines(model.styles, actionsFor(model.actionContext()), 200), descriptor.key, descriptor.label)
+}
+
+func scBrowserLegendContains(model *Model, view string, id actionID) bool {
+	for _, descriptor := range browserLegendDescriptors(actionsFor(model.actionContext())) {
+		if descriptor.id == id {
+			return strings.Contains(view, descriptor.text())
+		}
+	}
+	return false
 }
 
 func selectSCNode(model *Model, id app.NodeID) {
@@ -1185,8 +1201,9 @@ func scExpectedLayout(width, height int, focus layoutRegion) layoutState {
 		return state
 	}
 	state.reduced = width < wideLayoutWidth || height < completeLayoutHeight
-	baseHeight := height - actionsOuterHeight
-	state.actions = layoutRect{x: 0, y: baseHeight, width: width, height: actionsOuterHeight}
+	legendHeight := browserLegendRows(width)
+	baseHeight := height - legendHeight
+	state.legend = layoutRect{x: 0, y: baseHeight, width: width, height: legendHeight}
 	if width >= wideLayoutWidth {
 		state.mode = layoutWide
 		baseWidth := width - wideGutterWidth

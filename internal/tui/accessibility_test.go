@@ -88,9 +88,9 @@ func TestUS5ClosedKeyboardBindingsAndF2Fallback(t *testing.T) {
 	if form.focusedField() != fieldName {
 		t.Fatalf("modified F2 was accepted as fallback, focus = %v", form.focusedField())
 	}
-	lines, _ := form.content(newStyles(true))
-	if !strings.Contains(strings.Join(lines, "\n"), "Shift+Tab/F2 Previous") {
-		t.Fatalf("form does not expose F2 fallback: %q", strings.Join(lines, "\n"))
+	legend := strings.Join(renderActionLegend(newStyles(true), connectionFormActionDescriptors, 80), "\n")
+	if !strings.Contains(legend, "Shift+Tab/F2 Previous") {
+		t.Fatalf("form legend does not expose F2 fallback: %q", legend)
 	}
 }
 
@@ -110,6 +110,9 @@ func TestUS5ReducedConnectionFormActionsKeepSafetyPrimaryAndF2Fallback(t *testin
 	}
 	if strings.Contains(view, "\x1b[") {
 		t.Fatalf("no-color connection form contains ANSI: %q", view)
+	}
+	if strings.Contains(view, "Actions") {
+		t.Fatalf("connection form retained a titled Actions panel: %q", view)
 	}
 }
 
@@ -152,7 +155,7 @@ func TestUS5NoColorSafeTextAcrossDisplayModes(t *testing.T) {
 				t.Fatalf("no-color %s frame contains ANSI/control sequence: %q", size.name, view)
 			}
 			if size.width >= minimumLayoutWidth && size.height >= minimumLayoutHeight {
-				for _, cue := range []string{"[*] Tree", "[ ] Details", "[ ] Actions", "Connection", "> ", "[ssh]"} {
+				for _, cue := range []string{"[*] Tree", "[ ] Details", "Connection", "> ", "[ssh]"} {
 					if !strings.Contains(view, cue) {
 						t.Fatalf("%s frame omitted textual cue %q:\n%s", size.name, cue, view)
 					}

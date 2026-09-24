@@ -166,16 +166,8 @@ func TestTUITreeDetailsDirectChildrenEmptyAndFallback(t *testing.T) {
 	model := tui.New(tui.Config{Folders: folders, Connections: connections, Width: 80, Height: 24, NoColor: true})
 	executeTUICommand(t, model, model.Init())
 	rootView := model.View().Content
-	for _, want := range []string{"n New connection", "f New folder", "r Reload", "? Help", "q Quit"} {
-		if !strings.Contains(rootView, want) {
-			t.Fatalf("root Actions omitted %q:\n%s", want, rootView)
-		}
-	}
-	for _, unavailable := range []string{"c Connect", "e Edit", "m Move", "d Delete"} {
-		if strings.Contains(rootView, unavailable) {
-			t.Fatalf("root Actions exposed %q:\n%s", unavailable, rootView)
-		}
-	}
+	assertCompactBrowserLegend(t, rootView, false)
+	assertBrowserHelpActions(t, model, "r Reload", "? Help")
 
 	// root -> empty
 	updateTUI(t, model, tuiKey("l"))
@@ -185,9 +177,8 @@ func TestTUITreeDetailsDirectChildrenEmptyAndFallback(t *testing.T) {
 			t.Fatalf("empty-folder Details omitted %q:\n%s", want, view)
 		}
 	}
-	if !strings.Contains(view, "e Edit") || !strings.Contains(view, "d Delete") || strings.Contains(view, "c Connect") {
-		t.Fatalf("folder Actions inventory is incorrect:\n%s", view)
-	}
+	assertCompactBrowserLegend(t, view, false)
+	assertBrowserHelpActions(t, model, "e Edit", "d Delete", "r Reload", "? Help")
 
 	// empty -> team; folder detail must exclude nested descendants.
 	updateTUI(t, model, tuiKey("j"))
@@ -211,11 +202,8 @@ func TestTUITreeDetailsDirectChildrenEmptyAndFallback(t *testing.T) {
 			t.Fatalf("connection Details omitted %q:\n%s", want, view)
 		}
 	}
-	for _, want := range []string{"c Connect", "n New connection", "f New folder", "e Edit", "m Move", "d Delete", "r Reload", "? Help", "q Quit"} {
-		if !strings.Contains(view, want) {
-			t.Fatalf("connection Actions omitted %q:\n%s", want, view)
-		}
-	}
+	assertCompactBrowserLegend(t, view, true)
+	assertBrowserHelpActions(t, model, "e Edit", "m Move", "d Delete", "r Reload", "? Help")
 
 	scope, err := connections.DeleteScope(context.Background(), app.ItemSelector{ID: direct.Connection.ID})
 	if err != nil {
@@ -258,7 +246,7 @@ func TestTUITreeDetailsBadgesSynchronizeWithSelectionInColorAndNoColor(t *testin
 
 		for name, view := range frames {
 			plain := ansi.Strip(view)
-			for _, region := range []string{"Tree", "Details", "Actions"} {
+			for _, region := range []string{"Tree", "Details"} {
 				if strings.Count(plain, "] "+region) != 1 {
 					t.Fatalf("no-color=%t %s region title %q count != 1:\n%s", noColor, name, region, plain)
 				}
@@ -341,7 +329,7 @@ func TestTUIScrollbarKeyboardOnlyOverflow(t *testing.T) {
 	updateTUI(t, model, tuiKey("tab"))
 	assertKeyboardOnlyOverflowView(t, model, "connection form next field", "Details", "New connection", ">   Host")
 	updateTUI(t, model, tuiKey("f1"))
-	assertKeyboardOnlyOverflowView(t, model, "form Help", "Help", "Connection form Help")
+	assertKeyboardOnlyOverflowView(t, model, "form Help", "Help", "Management", "Save")
 	updateTUI(t, model, tuiKey("esc"))
 	updateTUI(t, model, tuiKey("esc"))
 

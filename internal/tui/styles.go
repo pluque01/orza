@@ -49,6 +49,7 @@ type styles struct {
 	title, activeTitle, inactiveTitle   lipgloss.Style
 	selected, focused, invalid, primary lipgloss.Style
 	muted, status, warning, failure     lipgloss.Style
+	helpSection                         lipgloss.Style
 	scrollbarTrack, scrollbarThumb      lipgloss.Style
 	badge                               lipgloss.Style
 	accented                            bool
@@ -73,6 +74,7 @@ func newStyles(noColor bool) styles {
 	status := lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
 	warning := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("11"))
 	failure := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("9"))
+	helpSection := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15"))
 	return styles{
 		title:          title,
 		activeTitle:    title,
@@ -85,6 +87,7 @@ func newStyles(noColor bool) styles {
 		status:         status,
 		warning:        warning,
 		failure:        failure,
+		helpSection:    helpSection,
 		scrollbarTrack: muted,
 		scrollbarThumb: selected,
 		badge:          badge,
@@ -134,6 +137,18 @@ func (s styles) contentBadge(label string) string {
 
 func (s styles) descriptiveLabel(label string) string {
 	return s.muted.Render(strings.TrimSuffix(label, ":"))
+}
+
+func (s styles) actionKey(key string) string {
+	return s.primary.Render(key)
+}
+
+func (s styles) actionPair(key, label string) string {
+	return s.actionKey(key) + " " + s.descriptiveLabel(label)
+}
+
+func (s styles) helpSectionTitle(title string) string {
+	return s.helpSection.Render(title)
 }
 
 func newStructuredFieldGroup(fields []displayField, prefixWidth, contentWidth int, interactive bool) structuredFieldGroup {

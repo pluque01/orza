@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"net"
-	"slices"
 	"strings"
 	"testing"
 	"unicode"
@@ -129,7 +128,7 @@ func sc005RenderFolderForm(field sc005FieldCase, _ string, width, height int) sc
 	form.input.SetValue(field.value)
 	logical, active := form.modalLines(width, newStyles(true))
 	state := modalState{kind: modalKindFolderCreate, payload: folderCreatePayload{form: form}}
-	projection := projectModalViewport(state, sc005ModalControls(logical), height, width, active)
+	projection := projectModalViewport(state, sc005ModalControls(logical), height, width, active, newStyles(true))
 	return sc005ProjectedResult(logical, projection, width, height)
 }
 
@@ -193,7 +192,7 @@ func sc005RenderSecret(field sc005FieldCase, canary string, width, height int) s
 
 func sc005RenderModalState(state modalState, width, height int) sc005SurfaceResult {
 	logical, active := modalContent(state, newStyles(true), width, nil)
-	projection := projectModalViewport(state, logical, height, width, active)
+	projection := projectModalViewport(state, logical, height, width, active, newStyles(true))
 	return sc005ProjectedResult(logical, projection, width, height)
 }
 
@@ -444,7 +443,7 @@ func TestUS5CurrentTreeDetailsFormActionsAndHelpUseOverflowContract(t *testing.T
 		form.setFocus(fieldSave)
 		form.setDimensions(24, 3)
 		projection := form.project(newStyles(true))
-		if !projection.hasPrevious || !projection.hasNext || !projection.scrollbar.visible || !strings.Contains(strings.Join(projection.lines, "\n"), "Save") {
+		if !projection.hasPrevious || !projection.scrollbar.visible || !strings.Contains(strings.Join(projection.lines, "\n"), "Save") {
 			t.Fatalf("form did not retain active Save with scrollbar: %#v, geometry %#v", projection.lines, projection.scrollbar)
 		}
 		if strings.Contains(strings.Join(projection.lines, "\n"), viewportPreviousLabel) || strings.Contains(strings.Join(projection.lines, "\n"), viewportNextLabel) {
@@ -452,13 +451,13 @@ func TestUS5CurrentTreeDetailsFormActionsAndHelpUseOverflowContract(t *testing.T
 		}
 	})
 
-	t.Run("Actions", func(t *testing.T) {
+	t.Run("browser legend", func(t *testing.T) {
 		descriptors := actionsFor(actionContext{state: actionStateNormal, selection: actionSelectionConnection, focus: actionFocusTree, canToggle: true})
-		lines := packActions("", descriptors, 24, 3)
-		if !slices.Contains(lines, actionsOverflowMarker) {
-			t.Fatalf("Actions omitted exact overflow marker: %#v", lines)
+		lines := renderBrowserLegend(newStyles(true), descriptors, 24)
+		if strings.Contains(strings.Join(lines, "\n"), actionsOverflowMarker) {
+			t.Fatalf("browser legend retained overflow marker: %#v", lines)
 		}
-		for _, safety := range []string{"r Reload", "q Quit", "? Help"} {
+		for _, safety := range []string{"Up/k Move up", "Down/j Move down", "q Quit"} {
 			if !strings.Contains(strings.Join(lines, "\n"), safety) {
 				t.Fatalf("Actions marker displaced safety control %q: %#v", safety, lines)
 			}
@@ -543,5 +542,5 @@ func TestUS5PickerConfirmationAndErrorOverflowAreBoundedAndDiscoverable(t *testi
 func projectOpenModalForTest(model *Model) viewportProjection {
 	rect := calculateLayout(model.width, model.height, model.focusedLayoutRegion()).modalOverlay()
 	lines, active := modalContent(model.modal, model.styles, rect.contentWidth(), wrapHelpLines(actionHelpLines(model.currentActionDescriptors()), rect.contentWidth()))
-	return projectModalViewport(model.modal, lines, rect.contentHeight(), rect.contentWidth(), active)
+	return projectModalViewport(model.modal, lines, rect.contentHeight(), rect.contentWidth(), active, model.styles)
 }

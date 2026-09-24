@@ -332,6 +332,9 @@ func sc006ObserveModel(t *testing.T, model *Model, cell string, run int, observa
 	for _, group := range groups {
 		for _, want := range group.want {
 			assertions++
+			if group.name == "actions" && sc006BrowserHelpContains(model, want) {
+				continue
+			}
 			if !strings.Contains(view, want) {
 				t.Fatalf("%s run %d: %s observation omitted %q:\n%s", cell, run, group.name, want, view)
 			}
@@ -348,6 +351,22 @@ func sc006ObserveModel(t *testing.T, model *Model, cell string, run int, observa
 	if assertions == 0 {
 		t.Fatalf("%s run %d: frame declared no textual observations", cell, run)
 	}
+}
+
+func sc006BrowserHelpContains(model *Model, want string) bool {
+	if model.screen != screenBrowser || model.modal.isOpen() || model.operation != nil || model.connectionEdit != nil && model.connectionEdit.conflict != nil {
+		return false
+	}
+	for _, descriptor := range browserLegendDescriptors(actionsFor(model.actionContext())) {
+		if descriptor.text() == want {
+			return false
+		}
+	}
+	parts := strings.Fields(want)
+	if len(parts) < 2 {
+		return false
+	}
+	return actionHelpContains(browserHelpLines(model.styles, actionsFor(model.actionContext()), 200), parts[0], strings.Join(parts[1:], " "))
 }
 
 func sc006KindLabel(kind app.NodeKind) string {

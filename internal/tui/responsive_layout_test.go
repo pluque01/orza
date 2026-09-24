@@ -30,26 +30,26 @@ var us5ContractSizes = []us5Size{
 func TestUS5ExactResponsiveGeometryMatrix(t *testing.T) {
 	tests := []struct {
 		us5Size
-		mode                   layoutMode
-		reduced                bool
-		tree, details, actions layoutRect
+		mode                           layoutMode
+		reduced                        bool
+		tree, details, legend, actions layoutRect
 	}{
-		{us5ContractSizes[0], layoutStacked, true, layoutRect{0, 0, 40, 4}, layoutRect{0, 4, 40, 3}, layoutRect{0, 7, 40, 5}},
-		{us5ContractSizes[1], layoutStacked, true, layoutRect{0, 0, 40, 10}, layoutRect{0, 10, 40, 9}, layoutRect{0, 19, 40, 5}},
-		{us5ContractSizes[2], layoutStacked, true, layoutRect{0, 0, 60, 4}, layoutRect{0, 4, 60, 3}, layoutRect{0, 7, 60, 5}},
-		{us5ContractSizes[3], layoutStacked, true, layoutRect{0, 0, 60, 10}, layoutRect{0, 10, 60, 9}, layoutRect{0, 19, 60, 5}},
-		{us5ContractSizes[4], layoutStacked, true, layoutRect{0, 0, 79, 4}, layoutRect{0, 4, 79, 3}, layoutRect{0, 7, 79, 5}},
-		{us5ContractSizes[5], layoutStacked, true, layoutRect{0, 0, 79, 10}, layoutRect{0, 10, 79, 9}, layoutRect{0, 19, 79, 5}},
-		{us5ContractSizes[6], layoutWide, true, layoutRect{0, 0, 31, 7}, layoutRect{32, 0, 48, 7}, layoutRect{0, 7, 80, 5}},
-		{us5ContractSizes[7], layoutWide, false, layoutRect{0, 0, 31, 19}, layoutRect{32, 0, 48, 19}, layoutRect{0, 19, 80, 5}},
-		{us5ContractSizes[8], layoutWide, true, layoutRect{0, 0, 39, 7}, layoutRect{40, 0, 60, 7}, layoutRect{0, 7, 100, 5}},
-		{us5ContractSizes[9], layoutWide, false, layoutRect{0, 0, 39, 19}, layoutRect{40, 0, 60, 19}, layoutRect{0, 19, 100, 5}},
-		{us5ContractSizes[10], layoutWide, true, layoutRect{0, 0, 63, 7}, layoutRect{64, 0, 96, 7}, layoutRect{0, 7, 160, 5}},
-		{us5ContractSizes[11], layoutWide, false, layoutRect{0, 0, 63, 19}, layoutRect{64, 0, 96, 19}, layoutRect{0, 19, 160, 5}},
-		{us5Size{name: "39x12", width: 39, height: 12}, layoutUndersized, false, layoutRect{}, layoutRect{}, layoutRect{}},
-		{us5Size{name: "39x24", width: 39, height: 24}, layoutUndersized, false, layoutRect{}, layoutRect{}, layoutRect{}},
-		{us5Size{name: "40x11", width: 40, height: 11}, layoutUndersized, false, layoutRect{}, layoutRect{}, layoutRect{}},
-		{us5Size{name: "80x11", width: 80, height: 11}, layoutUndersized, false, layoutRect{}, layoutRect{}, layoutRect{}},
+		{us5ContractSizes[0], layoutStacked, true, layoutRect{0, 0, 40, 5}, layoutRect{0, 5, 40, 4}, layoutRect{0, 9, 40, 3}, layoutRect{}},
+		{us5ContractSizes[1], layoutStacked, true, layoutRect{0, 0, 40, 11}, layoutRect{0, 11, 40, 10}, layoutRect{0, 21, 40, 3}, layoutRect{}},
+		{us5ContractSizes[2], layoutStacked, true, layoutRect{0, 0, 60, 5}, layoutRect{0, 5, 60, 5}, layoutRect{0, 10, 60, 2}, layoutRect{}},
+		{us5ContractSizes[3], layoutStacked, true, layoutRect{0, 0, 60, 11}, layoutRect{0, 11, 60, 11}, layoutRect{0, 22, 60, 2}, layoutRect{}},
+		{us5ContractSizes[4], layoutStacked, true, layoutRect{0, 0, 79, 5}, layoutRect{0, 5, 79, 5}, layoutRect{0, 10, 79, 2}, layoutRect{}},
+		{us5ContractSizes[5], layoutStacked, true, layoutRect{0, 0, 79, 11}, layoutRect{0, 11, 79, 11}, layoutRect{0, 22, 79, 2}, layoutRect{}},
+		{us5ContractSizes[6], layoutWide, true, layoutRect{0, 0, 31, 10}, layoutRect{32, 0, 48, 10}, layoutRect{0, 10, 80, 2}, layoutRect{}},
+		{us5ContractSizes[7], layoutWide, false, layoutRect{0, 0, 31, 22}, layoutRect{32, 0, 48, 22}, layoutRect{0, 22, 80, 2}, layoutRect{}},
+		{us5ContractSizes[8], layoutWide, true, layoutRect{0, 0, 39, 11}, layoutRect{40, 0, 60, 11}, layoutRect{0, 11, 100, 1}, layoutRect{}},
+		{us5ContractSizes[9], layoutWide, false, layoutRect{0, 0, 39, 23}, layoutRect{40, 0, 60, 23}, layoutRect{0, 23, 100, 1}, layoutRect{}},
+		{us5ContractSizes[10], layoutWide, true, layoutRect{0, 0, 63, 11}, layoutRect{64, 0, 96, 11}, layoutRect{0, 11, 160, 1}, layoutRect{}},
+		{us5ContractSizes[11], layoutWide, false, layoutRect{0, 0, 63, 23}, layoutRect{64, 0, 96, 23}, layoutRect{0, 23, 160, 1}, layoutRect{}},
+		{us5Size{name: "39x12", width: 39, height: 12}, layoutUndersized, false, layoutRect{}, layoutRect{}, layoutRect{}, layoutRect{}},
+		{us5Size{name: "39x24", width: 39, height: 24}, layoutUndersized, false, layoutRect{}, layoutRect{}, layoutRect{}, layoutRect{}},
+		{us5Size{name: "40x11", width: 40, height: 11}, layoutUndersized, false, layoutRect{}, layoutRect{}, layoutRect{}, layoutRect{}},
+		{us5Size{name: "80x11", width: 80, height: 11}, layoutUndersized, false, layoutRect{}, layoutRect{}, layoutRect{}, layoutRect{}},
 	}
 
 	for _, tt := range tests {
@@ -58,8 +58,8 @@ func TestUS5ExactResponsiveGeometryMatrix(t *testing.T) {
 			if got.mode != tt.mode || got.reduced != tt.reduced {
 				t.Fatalf("mode/reduced = %v/%t, want %v/%t", got.mode, got.reduced, tt.mode, tt.reduced)
 			}
-			if got.tree != tt.tree || got.details != tt.details || got.actions != tt.actions {
-				t.Fatalf("rectangles = Tree %#v Details %#v Actions %#v, want %#v %#v %#v", got.tree, got.details, got.actions, tt.tree, tt.details, tt.actions)
+			if got.tree != tt.tree || got.details != tt.details || got.legend != tt.legend || got.actions != tt.actions {
+				t.Fatalf("rectangles = Tree %#v Details %#v Legend %#v Actions %#v, want %#v %#v %#v %#v", got.tree, got.details, got.legend, got.actions, tt.tree, tt.details, tt.legend, tt.actions)
 			}
 			assertLayoutInvariants(t, got)
 
@@ -73,10 +73,10 @@ func TestUS5ExactResponsiveGeometryMatrix(t *testing.T) {
 				}
 			}
 			if got.mode != layoutUndersized {
-				if got.actions.height != 5 || got.actions.y != tt.height-5 {
-					t.Fatalf("Actions geometry = %#v, want final five outer rows", got.actions)
+				if got.actions != (layoutRect{}) {
+					t.Fatalf("browser Actions geometry = %#v, want absent", got.actions)
 				}
-				for name, rect := range map[string]layoutRect{"Tree": got.tree, "Details": got.details, "Actions": got.actions} {
+				for name, rect := range map[string]layoutRect{"Tree": got.tree, "Details": got.details, "Legend": got.legend} {
 					if rect.contentWidth() != max(0, rect.width-4) || rect.contentHeight() != max(0, rect.height-2) {
 						t.Fatalf("%s content geometry does not reserve border and one-cell horizontal padding: %#v", name, rect)
 					}
@@ -89,11 +89,11 @@ func TestUS5ExactResponsiveGeometryMatrix(t *testing.T) {
 func TestUS5StackedOddRowFollowsPreservedApplicationFocus(t *testing.T) {
 	tree := calculateLayout(79, 12, regionTree)
 	details := calculateLayout(79, 12, regionDetails)
-	if tree.tree.height != 4 || tree.details.height != 3 {
-		t.Fatalf("Tree focus split = %d/%d, want 4/3", tree.tree.height, tree.details.height)
+	if tree.tree.height != 5 || tree.details.height != 5 {
+		t.Fatalf("Tree focus split = %d/%d, want 5/5", tree.tree.height, tree.details.height)
 	}
-	if details.tree.height != 3 || details.details.height != 4 {
-		t.Fatalf("Details/form focus split = %d/%d, want 3/4", details.tree.height, details.details.height)
+	if details.tree.height != 5 || details.details.height != 5 {
+		t.Fatalf("Details/form focus split = %d/%d, want 5/5", details.tree.height, details.details.height)
 	}
 }
 
@@ -156,18 +156,18 @@ func TestUS3DetailIdentityRowsUseLocalEightCellValueBoundary(t *testing.T) {
 func TestUS5Reduced40x12KeepsIdentityAndSafetyBeforeOverflow(t *testing.T) {
 	model := New(Config{Width: 40, Height: 12, NoColor: true})
 	view := model.View().Content
-	for _, required := range []string{"[*] Tree", "[ ] Details", "[ ] Actions", "> [/] /"} {
+	for _, required := range []string{"[*] Tree", "[ ] Details", "> [/] /"} {
 		if !strings.Contains(view, required) {
 			t.Fatalf("40x12 reduced frame omitted priority content %q:\n%s", required, view)
 		}
 	}
-	for _, control := range []string{"r Reload", "q Quit", "? Help"} {
+	for _, control := range []string{"Up/k Move up", "Down/j Move down", "n New connection", "f New folder", "q Quit"} {
 		if !strings.Contains(view, control) {
 			t.Fatalf("40x12 Actions omitted safety control %q:\n%s", control, view)
 		}
 	}
-	if !strings.Contains(view, actionsOverflowMarker) {
-		t.Fatalf("40x12 reduced frame omitted overflow marker:\n%s", view)
+	if strings.Contains(view, "Actions") || strings.Contains(view, actionsOverflowMarker) {
+		t.Fatalf("40x12 reduced frame retained Actions panel content:\n%s", view)
 	}
 	lines := strings.Split(view, "\n")
 	if len(lines) != 12 {

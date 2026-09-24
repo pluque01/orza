@@ -230,7 +230,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.securityInput != nil && m.securityInput.preemptsApplicationInput() {
 		return m, m.handleSecurityInputKey(msg)
 	}
-	if calculateLayout(m.width, m.height, m.focusedLayoutRegion()).mode == layoutUndersized {
+	if m.layout().mode == layoutUndersized {
 		switch {
 		case key.Matches(msg, m.keys.Help):
 			m.toggleHelp()
@@ -309,16 +309,17 @@ func (m *Model) handleOperationKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 func (m *Model) currentHelpLines() []string {
 	if m.screen == screenConnectionForm {
-		lines := []string{
-			"Connection form Help",
-			"Tab Next  Shift+Tab/F2 Previous  Ctrl+S Save  Esc Cancel  Ctrl+C Quit",
-		}
-		if m.form != nil && m.form.focusedField() == fieldAuth {
-			lines = append(lines, "Left/Right cycles Agent, Key, and Password")
-		}
-		return append(lines, actionHelpLines(connectionFormActionDescriptors)...)
+		return browserHelpLines(m.styles, m.formActionDescriptors(), minimumLayoutWidth-6)
 	}
-	return actionHelpLines(m.currentActionDescriptors())
+	return browserHelpLines(m.styles, m.currentActionDescriptors(), minimumLayoutWidth-6)
+}
+
+func (m *Model) formActionDescriptors() []actionDescriptor {
+	actions := append([]actionDescriptor(nil), connectionFormActionDescriptors...)
+	if m.form != nil && m.form.focusedField() == fieldAuth {
+		actions = append(actions, actionDescriptor{id: actionLeft, key: "Left/Right", label: "Change method", category: actionCategoryNavigation, priority: actionPriorityNavigation})
+	}
+	return actions
 }
 
 func (m *Model) handleBrowserKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -448,7 +449,7 @@ func (m *Model) focusedLayoutRegion() layoutRegion {
 }
 
 func (m *Model) detailMaximumOffset() int {
-	layout := calculateLayout(m.width, m.height, m.focusedLayoutRegion())
+	layout := m.layout()
 	return viewportMaximumOffset(len(m.detailState.content(layout.details.contentWidth(), m.styles)), layout.details.contentHeight())
 }
 
@@ -604,6 +605,14 @@ func (m *Model) toggleHelp() {
 		} else {
 			m.toggleModalHelp()
 		}
+		return
+	}
+	if m.operation == nil && m.modal.kind == modalKindClosed {
+		descriptors := m.currentActionDescriptors()
+		if m.screen == screenConnectionForm {
+			descriptors = m.formActionDescriptors()
+		}
+		m.openGenericModal(modalKindHelp, nil, helpPayload{descriptors: descriptors})
 		return
 	}
 	m.openGenericModal(modalKindHelp, nil, helpPayload{lines: wrapHelpLines(m.currentHelpLines(), minimumLayoutWidth-6)})
@@ -858,10 +867,10 @@ func (m *Model) handleSSHFailureModalKey(msg tea.KeyPressMsg, payload sshFailure
 }
 
 func (m *Model) scrollModal(msg tea.KeyPressMsg) {
-	layout := calculateLayout(m.width, m.height, m.focusedLayoutRegion())
+	layout := m.layout()
 	rect := layout.modalOverlay()
 	lines, active := modalContent(m.modal, m.styles, rect.contentWidth(), wrapHelpLines(actionHelpLines(m.currentActionDescriptors()), rect.contentWidth()))
-	projection := projectModalViewport(m.modal, lines, rect.contentHeight(), rect.contentWidth(), active)
+	projection := projectModalViewport(m.modal, lines, rect.contentHeight(), rect.contentWidth(), active, m.styles)
 	maximum := viewportMaximumOffset(projection.contentLength, projection.availableRows)
 	switch {
 	case key.Matches(msg, m.keys.Up):
@@ -1819,7 +1828,7 @@ func operationName(kind operationKind) string {
 }
 
 func (m *Model) View() tea.View {
-	layout := calculateLayout(m.width, m.height, m.focusedLayoutRegion())
+	layout := m.layout()
 	if layout.mode == layoutUndersized {
 		content := m.undersizedView()
 		view := tea.NewView(fitContent(content, m.width, m.height))
@@ -1835,7 +1844,7 @@ func (m *Model) View() tea.View {
 		if m.operation != nil {
 			modal.operationStatus = m.operation.loadingStatus()
 		}
-		content = renderModalOverlay(background, modal, layout, m.styles, wrapHelpLines(actionHelpLines(m.currentActionDescriptors()), layout.modalOverlay().contentWidth()))
+		content = renderModalOverlay(background, modal, layout, m.styles, m.currentHelpLines())
 	}
 	view := tea.NewView(fitContent(content, m.width, m.height))
 	view.AltScreen = true
@@ -1884,18 +1893,14 @@ func (m *Model) browserShell(layout layoutState) string {
 		status = m.operation.loadingStatus()
 	}
 	var actions []string
+	formLegend := false
 	if m.screen == screenConnectionForm && m.operation == nil {
 		if m.connectionEdit != nil && m.connectionEdit.conflict != nil {
 			context.state = actionStateConflict
 			actions = packActions(status, actionsFor(context), layout.actions.contentWidth(), layout.actions.contentHeight())
 		} else {
-			formActions := connectionFormActionDescriptors
-			if m.form != nil && m.form.focusedField() == fieldAuth {
-				formActions = append(append([]actionDescriptor(nil), formActions...),
-					actionDescriptor{id: actionLeft, key: "Left/Right", label: "Change method", category: actionCategoryNavigation, priority: actionPriorityNavigation},
-				)
-			}
-			actions = packActions(status, formActions, layout.actions.contentWidth(), layout.actions.contentHeight())
+			actions = renderActionLegend(m.styles, m.formActionDescriptors(), layout.actions.width)
+			formLegend = true
 		}
 	} else {
 		actions = packActions(status, actionsFor(context), layout.actions.contentWidth(), layout.actions.contentHeight())
@@ -1909,6 +1914,21 @@ func (m *Model) browserShell(layout layoutState) string {
 		}
 	}
 	detailPanel := renderRegionPanelWithScrollbar(detailTitle, details, layout.details, m.styles, detailScrollbar, detailTrackStart)
+	if layout.actions.height == 0 {
+		return strings.Join(append(strings.Split(joinBrowserPanels(treePanel, detailPanel, layout), "\n"), renderBrowserLegend(m.styles, actionsFor(context), layout.legend.width)...), "\n")
+	}
+	if formLegend {
+		actions = append(actions, make([]string, max(0, layout.actions.height-len(actions)))...)
+		if layout.mode == layoutWide {
+			left, right := strings.Split(treePanel, "\n"), strings.Split(detailPanel, "\n")
+			base := make([]string, layout.tree.height)
+			for index := range base {
+				base[index] = left[index] + strings.Repeat(" ", wideGutterWidth) + right[index]
+			}
+			return strings.Join(append(base, actions...), "\n")
+		}
+		return treePanel + "\n" + detailPanel + "\n" + strings.Join(actions, "\n")
+	}
 	actionsPanel := renderRegionPanel(m.styles.regionTitle("Actions", false), actions, layout.actions)
 
 	if layout.mode == layoutWide {
@@ -1920,6 +1940,25 @@ func (m *Model) browserShell(layout layoutState) string {
 		return strings.Join(append(base, strings.Split(actionsPanel, "\n")...), "\n")
 	}
 	return treePanel + "\n" + detailPanel + "\n" + actionsPanel
+}
+
+func (m *Model) layout() layoutState {
+	if m.screen == screenConnectionForm || m.operation != nil || m.connectionEdit != nil && m.connectionEdit.conflict != nil || m.modal.conflict != nil {
+		return calculateLayoutWithActions(m.width, m.height, m.focusedLayoutRegion())
+	}
+	return calculateLayout(m.width, m.height, m.focusedLayoutRegion())
+}
+
+func joinBrowserPanels(treePanel, detailPanel string, layout layoutState) string {
+	if layout.mode == layoutWide {
+		left, right := strings.Split(treePanel, "\n"), strings.Split(detailPanel, "\n")
+		base := make([]string, layout.tree.height)
+		for index := range base {
+			base[index] = left[index] + strings.Repeat(" ", wideGutterWidth) + right[index]
+		}
+		return strings.Join(base, "\n")
+	}
+	return treePanel + "\n" + detailPanel
 }
 
 func (m *Model) actionContext() actionContext {

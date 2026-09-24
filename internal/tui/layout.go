@@ -49,6 +49,7 @@ type layoutState struct {
 	reduced bool
 	tree    layoutRect
 	details layoutRect
+	legend  layoutRect
 	actions layoutRect
 }
 
@@ -76,8 +77,9 @@ func calculateLayout(width, height int, focusedBase layoutRegion) layoutState {
 	}
 
 	state.reduced = width < wideLayoutWidth || height < completeLayoutHeight
-	baseHeight := height - actionsOuterHeight
-	state.actions = layoutRect{x: 0, y: baseHeight, width: width, height: actionsOuterHeight}
+	legendHeight := browserLegendRows(width)
+	baseHeight := height - legendHeight
+	state.legend = layoutRect{x: 0, y: baseHeight, width: width, height: legendHeight}
 
 	if width >= wideLayoutWidth {
 		state.mode = layoutWide
@@ -101,6 +103,31 @@ func calculateLayout(width, height int, focusedBase layoutRegion) layoutState {
 	detailsHeight := baseHeight - treeHeight
 	state.tree = layoutRect{x: 0, y: 0, width: width, height: treeHeight}
 	state.details = layoutRect{x: 0, y: treeHeight, width: width, height: detailsHeight}
+	return state
+}
+
+// calculateLayoutWithActions retains the dedicated control area for surfaces
+// that accept input there, such as forms and operation/conflict states.
+func calculateLayoutWithActions(width, height int, focusedBase layoutRegion) layoutState {
+	state := calculateLayout(width, height, focusedBase)
+	if state.mode == layoutUndersized {
+		return state
+	}
+	baseHeight := state.height - actionsOuterHeight
+	state.actions = layoutRect{x: 0, y: baseHeight, width: state.width, height: actionsOuterHeight}
+	state.legend = layoutRect{}
+	if state.mode == layoutWide {
+		state.tree.height = baseHeight
+		state.details.height = baseHeight
+		return state
+	}
+	treeHeight := baseHeight / 2
+	if baseHeight%2 != 0 && focusedBase != regionDetails {
+		treeHeight++
+	}
+	state.tree.height = treeHeight
+	state.details.y = treeHeight
+	state.details.height = baseHeight - treeHeight
 	return state
 }
 

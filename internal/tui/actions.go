@@ -515,13 +515,120 @@ func actionForKey(msg tea.KeyPressMsg, descriptors []actionDescriptor, keys keyM
 }
 
 func actionHelpLines(descriptors []actionDescriptor) []string {
-	lines := []string{
-		"Paste isolation requires terminal bracketed-paste support.",
-		"Without it, input works but pasted bytes cannot be distinguished from typing.",
-		"The application never reads the operating system clipboard.",
-	}
+	lines := make([]string, 0, len(descriptors))
 	for _, descriptor := range descriptors {
 		lines = append(lines, descriptor.text())
+	}
+	return lines
+}
+
+func browserLegendDescriptors(descriptors []actionDescriptor) []actionDescriptor {
+	wanted := []actionID{actionUp, actionDown, actionConnect, actionNewConnection, actionNewFolder, actionQuit}
+	legend := make([]actionDescriptor, 0, len(wanted))
+	for _, id := range wanted {
+		for _, descriptor := range descriptors {
+			if descriptor.id == id {
+				legend = append(legend, descriptor)
+				break
+			}
+		}
+	}
+	return legend
+}
+
+func renderBrowserLegend(style styles, descriptors []actionDescriptor, width int) []string {
+	return renderActionLegend(style, browserLegendDescriptors(descriptors), width)
+}
+
+func renderActionLegend(style styles, descriptors []actionDescriptor, width int) []string {
+	width = max(1, width)
+	lines := make([]string, 0, len(descriptors))
+	for _, descriptor := range descriptors {
+		pair := style.actionPair(descriptor.key, descriptor.label)
+		if len(lines) == 0 || ansi.StringWidth(lines[len(lines)-1])+5+ansi.StringWidth(pair) > width {
+			lines = append(lines, pair)
+			continue
+		}
+		// The textual divider keeps adjacent pairs distinct without color.
+		lines[len(lines)-1] += "  |  " + pair
+	}
+	return lines
+}
+
+func browserLegendRows(width int) int {
+	// Reserve for the widest browser context so changing focus or selection
+	// never overlays panel content while the legend updates.
+	return len(renderBrowserLegend(newStyles(true), []actionDescriptor{
+		{id: actionUp, key: "Up/k", label: "Scroll up"},
+		{id: actionDown, key: "Down/j", label: "Scroll down"},
+		{id: actionConnect, key: "c", label: "Connect"},
+		{id: actionNewConnection, key: "n", label: "New connection"},
+		{id: actionNewFolder, key: "f", label: "New folder"},
+		{id: actionQuit, key: "q", label: "Quit"},
+	}, width))
+}
+
+func browserHelpLines(style styles, descriptors []actionDescriptor, width int) []string {
+	groups := []struct {
+		name string
+		ids  []actionID
+	}{
+		{"Navigation", []actionID{actionUp, actionDown, actionHome, actionEnd, actionLeft, actionRight, actionToggle, actionShowDetails, actionShowTree}},
+		{"Connection", []actionID{actionConnect}},
+		{"Management", []actionID{actionNewConnection, actionNewFolder, actionEdit, actionMove, actionDelete, actionReload, actionRetry, actionSave, actionConfirm, actionDiscard, actionMoveHere}},
+		{"Application", []actionID{actionCancel, actionCancelWarning, actionBack, actionHelp, actionQuit}},
+	}
+	available := make(map[actionID]actionDescriptor, len(descriptors))
+	for _, descriptor := range descriptors {
+		available[descriptor.id] = descriptor
+	}
+	keyWidth := 0
+	for _, descriptor := range descriptors {
+		keyWidth = max(keyWidth, ansi.StringWidth(descriptor.key))
+	}
+	lines := make([]string, 0, len(descriptors)+len(groups))
+	used := make(map[actionID]bool, len(descriptors))
+	for _, group := range groups {
+		fields := make([]displayField, 0, len(group.ids))
+		for _, id := range group.ids {
+			if descriptor, ok := available[id]; ok {
+				fields = append(fields, displayField{label: descriptor.key, value: descriptor.label})
+				used[id] = true
+			}
+		}
+		if len(fields) == 0 {
+			continue
+		}
+		lines = append(lines, style.helpSectionTitle(group.name))
+		lines = append(lines, renderActionFields(style, fields, width, keyWidth)...)
+	}
+	remaining := make([]displayField, 0, len(descriptors))
+	for _, descriptor := range descriptors {
+		if !used[descriptor.id] {
+			remaining = append(remaining, displayField{label: descriptor.key, value: descriptor.label})
+		}
+	}
+	if len(remaining) != 0 {
+		lines = append(lines, style.helpSectionTitle("Application"))
+		lines = append(lines, renderActionFields(style, remaining, width, keyWidth)...)
+	}
+	return lines
+}
+
+func renderActionFields(style styles, fields []displayField, width, keyWidth int) []string {
+	const indent = 2
+	if width-indent-keyWidth-1 >= structuredFieldMinimumValueWidth {
+		lines := make([]string, 0, len(fields))
+		for _, field := range fields {
+			padding := strings.Repeat(" ", keyWidth-ansi.StringWidth(field.label))
+			lines = append(lines, strings.Repeat(" ", indent)+style.actionKey(field.label)+padding+" "+style.descriptiveLabel(viewportEllipsis(field.value, width-indent-keyWidth-1)))
+		}
+		return lines
+	}
+	lines := make([]string, 0, len(fields)*2)
+	for _, field := range fields {
+		lines = append(lines, strings.Repeat(" ", indent)+style.actionKey(viewportEllipsis(field.label, max(0, width-indent))))
+		lines = append(lines, strings.Repeat(" ", indent*2)+style.descriptiveLabel(viewportEllipsis(field.value, max(0, width-indent*2))))
 	}
 	return lines
 }

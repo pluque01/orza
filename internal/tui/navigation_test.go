@@ -130,7 +130,7 @@ func TestBrowserShellIsTitledAndBoundedInWideAndStackedLayouts(t *testing.T) {
 	for _, size := range []tea.WindowSizeMsg{{Width: 80, Height: 24}, {Width: 40, Height: 12}} {
 		updateModel(model, size)
 		view := model.View().Content
-		for _, title := range []string{"[*] Tree", "[ ] Details", "[ ] Actions"} {
+		for _, title := range []string{"[*] Tree", "[ ] Details"} {
 			if !strings.Contains(view, title) {
 				t.Fatalf("%dx%d shell omitted %q:\n%s", size.Width, size.Height, title, view)
 			}
@@ -144,7 +144,10 @@ func TestBrowserShellIsTitledAndBoundedInWideAndStackedLayouts(t *testing.T) {
 				t.Fatalf("%dx%d frame line width = %d: %q", size.Width, size.Height, width, line)
 			}
 		}
-		if size.Width < wideLayoutWidth && !(strings.Index(view, "Tree") < strings.Index(view, "Details") && strings.Index(view, "Details") < strings.Index(view, "Actions")) {
+		if strings.Contains(view, "Actions") {
+			t.Fatalf("browser retained Actions panel:\n%s", view)
+		}
+		if size.Width < wideLayoutWidth && strings.Index(view, "Tree") >= strings.Index(view, "Details") {
 			t.Fatalf("stacked panel order is wrong:\n%s", view)
 		}
 	}
