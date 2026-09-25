@@ -98,6 +98,60 @@ func TestTrustedHostRepositoryRejectsInconsistentFingerprint(t *testing.T) {
 	}
 }
 
+func TestTrustedHostRepositoryDeleteTrustedHost(t *testing.T) {
+	store, err := Open(testCatalogPath(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	repository := NewTrustedHostRepository(store)
+	created, err := repository.TrustHost(context.Background(), TrustHostRequest{Host: catalogPresentedHost(t, "Example.COM.", 2222)})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	revision, err := repository.DeleteTrustedHost(context.Background(), HostEndpoint{CanonicalHost: "example.com", Port: 2222}, created.Revision)
+	if err != nil {
+		t.Fatalf("DeleteTrustedHost() error = %v", err)
+	}
+	if revision != 3 { // create and deletion both advance the catalog revision.
+		t.Fatalf("catalog revision = %d, want 3", revision)
+	}
+	if _, err := repository.GetTrustedHost(context.Background(), created.HostEndpoint); !errors.Is(err, ErrTrustedHostNotFound) {
+		t.Fatalf("GetTrustedHost() error = %v, want not found", err)
+	}
+	if _, err := repository.DeleteTrustedHost(context.Background(), created.HostEndpoint, created.Revision); !errors.Is(err, ErrTrustedHostNotFound) {
+		t.Fatalf("second DeleteTrustedHost() error = %v, want not found", err)
+	}
+}
+
+func TestTrustedHostRepositoryDeleteTrustedHostRejectsStaleRevision(t *testing.T) {
+	store, err := Open(testCatalogPath(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	repository := NewTrustedHostRepository(store)
+	created, err := repository.TrustHost(context.Background(), TrustHostRequest{Host: catalogPresentedHost(t, "host", 22)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	replacement, err := repository.TrustHost(context.Background(), TrustHostRequest{Host: catalogPresentedHost(t, "host", 22), ExpectedRevision: &created.Revision})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repository.DeleteTrustedHost(context.Background(), created.HostEndpoint, created.Revision); !errors.Is(err, ErrTrustedHostConflict) {
+		t.Fatalf("DeleteTrustedHost() error = %v, want conflict", err)
+	}
+	got, err := repository.GetTrustedHost(context.Background(), created.HostEndpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Revision != replacement.Revision {
+		t.Fatalf("stale delete changed record revision = %d, want %d", got.Revision, replacement.Revision)
+	}
+}
+
 func catalogPresentedHost(t *testing.T, host string, port uint16) PresentedHost {
 	t.Helper()
 	public, _, err := ed25519.GenerateKey(rand.Reader)

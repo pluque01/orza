@@ -126,3 +126,6 @@ func (noOpTrustedHosts) GetTrustedHost(context.Context, app.HostEndpoint) (app.T
 func (noOpTrustedHosts) TrustHost(context.Context, app.TrustHostRequest) (app.TrustedHost, error) {
 	return app.TrustedHost{}, nil
 }
+func (noOpTrustedHosts) DeleteTrustedHost(context.Context, app.HostEndpoint, app.Revision) (app.CatalogRevision, error) {
+	return 0, app.ErrNotFound
+}

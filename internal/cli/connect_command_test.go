@@ -300,6 +300,9 @@ func (r *cliTrustedHosts) TrustHost(_ context.Context, request app.TrustHostRequ
 	r.calls++
 	return app.TrustedHost{HostEndpoint: request.Host.Endpoint, Revision: 1}, nil
 }
+func (r *cliTrustedHosts) DeleteTrustedHost(context.Context, app.HostEndpoint, app.Revision) (app.CatalogRevision, error) {
+	return 0, app.ErrNotFound
+}
 
 // ConnectService needs the repository port. This adapter deliberately delegates
 // through ConnectionService so command tests do not bypass application behavior.

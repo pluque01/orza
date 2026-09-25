@@ -232,8 +232,8 @@ func checkedResizeConformanceCases(t *testing.T) []resizeConformanceCase {
 	t.Helper()
 	modalCases := resizeModalConformanceCases()
 	cases := resizeConformanceCases()
-	if len(us5ContractSizes) != 12 || len(modalCases) != 10 || len(newModalRegistry().payloadTypes) != len(modalCases) || len(cases) != 17 {
-		t.Fatalf("resize matrix inventory = %d sizes, %d modal cases/%d registered kinds, %d total states; want 12, 10/10, 17", len(us5ContractSizes), len(modalCases), len(newModalRegistry().payloadTypes), len(cases))
+	if len(us5ContractSizes) != 12 || len(modalCases) != 11 || len(newModalRegistry().payloadTypes) != len(modalCases) || len(cases) != 18 {
+		t.Fatalf("resize matrix inventory = %d sizes, %d modal cases/%d registered kinds, %d total states; want 12, 11/11, 18", len(us5ContractSizes), len(modalCases), len(newModalRegistry().payloadTypes), len(cases))
 	}
 	return cases
 }
@@ -332,6 +332,13 @@ func resizeModalConformanceCases() []resizeConformanceCase {
 			previous := app.SSHAttemptTarget{ID: connection.ID, Revision: connection.Revision - 1, Path: "/team/old", Host: "old.test", Port: 2200}
 			confirmation := newRetryConnectConfirmation(previous, connection)
 			openResizeModal(t, model, modalKindConnectConfirmation, capturedTargetFromConnection(connection), connectConfirmationPayload{confirmation: confirmation})
+			return model
+		}},
+		{name: "modal_forget_host_key", setup: func(t *testing.T) *Model {
+			model, _, _, connection := newResizeConformanceBase(t)
+			endpoint := app.HostEndpoint{CanonicalHost: connection.Host, Port: connection.Port}
+			target := capturedTarget{endpointOrScope: fmt.Sprintf("%s:%d", endpoint.CanonicalHost, endpoint.Port)}
+			openResizeModal(t, model, modalKindForgetHostKey, target, forgetHostKeyPayload{confirmation: newForgetHostKeyConfirmation(app.ForgetHostKeyScope{Endpoint: endpoint, TrustedHost: &app.TrustedHost{HostEndpoint: endpoint}})})
 			return model
 		}},
 		{name: "modal_unsaved_changes", setup: func(t *testing.T) *Model {

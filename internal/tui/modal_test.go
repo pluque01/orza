@@ -37,6 +37,7 @@ func feature008ModalCases() []feature008ModalCase {
 		{modalKindDeleteConnection, "Delete", deleteConnectionPayload{confirmation: newDeleteConfirmation(app.ConnectionDeleteScope{ID: connection.ID, Path: connection.Path, Host: connection.Host, Username: connection.Username, Revision: connection.Revision})}},
 		{modalKindDeleteFolder, "Delete", deleteFolderPayload{confirmation: newFolderDeleteConfirmation(app.FolderDeleteScope{ID: folder.ID, Path: folder.Path, Revision: folder.Revision, Folders: 1, Connections: 1})}},
 		{modalKindConnectConfirmation, "Connect", connectConfirmationPayload{confirmation: newConnectConfirmation(connection)}},
+		{modalKindForgetHostKey, "Forget Host Key", forgetHostKeyPayload{confirmation: newForgetHostKeyConfirmation(app.ForgetHostKeyScope{Endpoint: app.HostEndpoint{CanonicalHost: connection.Host, Port: connection.Port}, TrustedHost: &app.TrustedHost{HostEndpoint: app.HostEndpoint{CanonicalHost: connection.Host, Port: connection.Port}}})}},
 		{modalKindUnsavedChanges, "Unsaved Changes", unsavedChangesPayload{intent: unsavedIntentQuit, target: connection.Path}},
 		{modalKindHelp, "Help", helpPayload{lines: []string{"c Connect", "Esc Close"}}},
 		{modalKindOperationError, "Operation Error", operationErrorPayload{modal: newErrorModal("reload catalog", connection.Path, app.ErrConflict)}},

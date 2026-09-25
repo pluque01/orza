@@ -235,6 +235,10 @@ func TestSC009ClosedModalInvariantMatrix(t *testing.T) {
 		{"connect confirmation", modalKindConnectConfirmation, func() any {
 			return connectConfirmationPayload{confirmation: newConnectConfirmation(connection)}
 		}, keyPress("?"), []string{"Connect to SSH target?", "Path     /folder/connection", "Endpoint host.test:22", "ID       connection", "Revision 4", "y Confirm", "Enter/Esc Cancel"}},
+		{"forget host key", modalKindForgetHostKey, func() any {
+			endpoint := app.HostEndpoint{CanonicalHost: connection.Host, Port: connection.Port}
+			return forgetHostKeyPayload{confirmation: newForgetHostKeyConfirmation(app.ForgetHostKeyScope{Endpoint: endpoint, TrustedHost: &app.TrustedHost{HostEndpoint: endpoint}})}
+		}, keyPress("?"), []string{"Forget app-owned host key?", "Host", "host.test:22", "Scope", "app-owned trust only", "y Confirm", "Enter/Esc Cancel"}},
 		{"unsaved changes", modalKindUnsavedChanges, func() any {
 			return unsavedChangesPayload{intent: unsavedIntentCancel, target: connection.Path}
 		}, keyPress("?"), []string{"Action Cancel connection editing?", "Target /folder/connection", "s Save", "d Discard", "Esc Cancel"}},
@@ -256,12 +260,13 @@ func TestSC009ClosedModalInvariantMatrix(t *testing.T) {
 		modalKindDeleteConnection:    "Delete connection?",
 		modalKindDeleteFolder:        "Delete folder",
 		modalKindConnectConfirmation: "Connect confirmation",
+		modalKindForgetHostKey:       "Forget host key",
 		modalKindUnsavedChanges:      "Unsaved changes",
 		modalKindOperationError:      "Recoverable operation error",
 	}
 
-	if len(tests) != 10 || len(newModalRegistry().payloadTypes) != len(tests) {
-		t.Fatalf("closed inventory = %d cases/%d registrations, want 10/10", len(tests), len(newModalRegistry().payloadTypes))
+	if len(tests) != 11 || len(newModalRegistry().payloadTypes) != len(tests) {
+		t.Fatalf("closed inventory = %d cases/%d registrations, want 11/11", len(tests), len(newModalRegistry().payloadTypes))
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

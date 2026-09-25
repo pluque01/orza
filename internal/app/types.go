@@ -284,6 +284,34 @@ type TrustHostRequest struct {
 	ExpectedRevision *Revision
 }
 
+// ForgetHostKeyScope captures the endpoint-scoped trust record shown to a user.
+// Trust may be absent because the desired state has already been reached.
+type ForgetHostKeyScope struct {
+	Connection  Connection
+	Endpoint    HostEndpoint
+	TrustedHost *TrustedHost
+}
+
+func (scope ForgetHostKeyScope) Request() ForgetHostKeyRequest {
+	request := ForgetHostKeyRequest{Connection: ItemSelector{ID: scope.Connection.ID}}
+	if scope.TrustedHost != nil {
+		revision := scope.TrustedHost.Revision
+		request.ExpectedTrustRevision = &revision
+	}
+	return request
+}
+
+type ForgetHostKeyRequest struct {
+	Connection            ItemSelector
+	ExpectedTrustRevision *Revision
+}
+
+type ForgetHostKeyResult struct {
+	Endpoint        HostEndpoint
+	Forgotten       bool
+	CatalogRevision *CatalogRevision
+}
+
 type TrustDecision string
 
 const (

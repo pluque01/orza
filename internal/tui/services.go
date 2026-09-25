@@ -35,6 +35,13 @@ type ConnectService interface {
 	Connect(context.Context, app.ConnectRequest) (app.ConnectResult, error)
 }
 
+// HostTrustService owns the endpoint-scoped app trust workflow. It is kept
+// separate from ConnectionService because trust may be shared by connections.
+type HostTrustService interface {
+	ForgetScope(context.Context, app.ItemSelector) (app.ForgetHostKeyScope, error)
+	Forget(context.Context, app.ForgetHostKeyRequest) (app.ForgetHostKeyResult, error)
+}
+
 var errUnavailable = errors.New("TUI service is unavailable")
 
 // ConnectionFuncs is a compact deterministic adapter for model tests.
@@ -164,4 +171,24 @@ func (f ConnectFunc) Connect(ctx context.Context, request app.ConnectRequest) (a
 		return app.ConnectResult{}, errUnavailable
 	}
 	return f(ctx, request)
+}
+
+// HostTrustFuncs is a deterministic adapter for host-trust model tests.
+type HostTrustFuncs struct {
+	ForgetScopeFunc func(context.Context, app.ItemSelector) (app.ForgetHostKeyScope, error)
+	ForgetFunc      func(context.Context, app.ForgetHostKeyRequest) (app.ForgetHostKeyResult, error)
+}
+
+func (f HostTrustFuncs) ForgetScope(ctx context.Context, selector app.ItemSelector) (app.ForgetHostKeyScope, error) {
+	if f.ForgetScopeFunc == nil {
+		return app.ForgetHostKeyScope{}, errUnavailable
+	}
+	return f.ForgetScopeFunc(ctx, selector)
+}
+
+func (f HostTrustFuncs) Forget(ctx context.Context, request app.ForgetHostKeyRequest) (app.ForgetHostKeyResult, error) {
+	if f.ForgetFunc == nil {
+		return app.ForgetHostKeyResult{}, errUnavailable
+	}
+	return f.ForgetFunc(ctx, request)
 }

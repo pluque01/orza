@@ -26,6 +26,7 @@ type RootConfig struct {
 	Connections  *app.ConnectionService
 	Folders      *app.FolderService
 	Connect      *app.ConnectService
+	HostTrust    *app.HostTrustService
 	Terminal     app.Terminal
 	Stdin        io.Reader
 	Stdout       io.Writer
@@ -47,6 +48,7 @@ func NewRoot(config RootConfig) *cobra.Command {
 	connections := config.Connections
 	folders := config.Folders
 	connectService := config.Connect
+	hostTrustService := config.HostTrust
 	localTerminal := config.Terminal
 	if config.Dependencies != nil {
 		if connections == nil {
@@ -57,6 +59,9 @@ func NewRoot(config RootConfig) *cobra.Command {
 		}
 		if connectService == nil {
 			connectService = config.Dependencies.Connect
+		}
+		if hostTrustService == nil {
+			hostTrustService = config.Dependencies.HostTrust
 		}
 		if localTerminal == nil {
 			localTerminal = config.Dependencies.Terminal
@@ -87,7 +92,7 @@ func NewRoot(config RootConfig) *cobra.Command {
 				run = tui.Run
 			}
 			result, err := run(cmd.Context(), tui.Config{
-				Connections: connections, Folders: folders, Connect: connectService, Terminal: localTerminal,
+				Connections: connections, Folders: folders, Connect: connectService, HostTrust: hostTrustService, Terminal: localTerminal,
 				Stdin: cmd.InOrStdin(), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),
 				NoColor: options.NoColor,
 			})
@@ -123,6 +128,7 @@ func NewRoot(config RootConfig) *cobra.Command {
 	connection.AddCommand(newConnectionUpdateCommand(connections, localTerminal, options))
 	connection.AddCommand(newConnectionMoveCommand(connections, options))
 	connection.AddCommand(newConnectionDeleteCommand(connections, localTerminal, options))
+	connection.AddCommand(newConnectionForgetHostKeyCommand(hostTrustService, options))
 	root.AddCommand(connection, newConnectCommand(connections, connectService, localTerminal, options))
 	folder := newFolderCommand()
 	folder.AddCommand(newFolderCreateCommand(folders, options))

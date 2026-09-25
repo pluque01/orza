@@ -13,6 +13,7 @@ type actionID string
 
 const (
 	actionConnect       actionID = "connect"
+	actionForgetHostKey actionID = "forget_host_key"
 	actionNewConnection actionID = "new_connection"
 	actionNewFolder     actionID = "new_folder"
 	actionEdit          actionID = "edit"
@@ -163,6 +164,7 @@ var folderActionDescriptors = []actionDescriptor{
 
 var connectionActionDescriptors = []actionDescriptor{
 	{id: actionConnect, key: "c", label: "Connect", category: actionCategoryDomain, priority: actionPriorityDomain, target: actionTargetSelection, applicable: normalSelection(actionSelectionConnection)},
+	{id: actionForgetHostKey, key: "x", label: "Forget host key", category: actionCategoryDomain, priority: actionPriorityDomain, target: actionTargetSelection, applicable: normalSelection(actionSelectionConnection)},
 	{id: actionNewConnection, key: "n", label: "New connection", category: actionCategoryDomain, priority: actionPriorityDomain, target: actionTargetParent, applicable: normalSelection(actionSelectionConnection)},
 	{id: actionNewFolder, key: "f", label: "New folder", category: actionCategoryDomain, priority: actionPriorityDomain, target: actionTargetParent, applicable: normalSelection(actionSelectionConnection)},
 	{id: actionEdit, key: "e", label: "Edit", category: actionCategoryDomain, priority: actionPriorityDomain, target: actionTargetSelection, applicable: normalSelection(actionSelectionConnection)},
@@ -365,16 +367,18 @@ func canonicalActionOrder(id actionID) int {
 		return 13
 	case actionConnect:
 		return 20
-	case actionNewConnection:
+	case actionForgetHostKey:
 		return 21
-	case actionNewFolder:
+	case actionNewConnection:
 		return 22
-	case actionEdit:
+	case actionNewFolder:
 		return 23
-	case actionMove:
+	case actionEdit:
 		return 24
-	case actionDelete:
+	case actionMove:
 		return 25
+	case actionDelete:
+		return 26
 	case actionUp:
 		return 30
 	case actionDown:
@@ -467,6 +471,8 @@ func actionForKey(msg tea.KeyPressMsg, descriptors []actionDescriptor, keys keyM
 		switch descriptor.id {
 		case actionConnect:
 			binding = keys.Connect
+		case actionForgetHostKey:
+			binding = keys.ForgetHostKey
 		case actionNewConnection:
 			binding = keys.New
 		case actionNewFolder:
@@ -574,7 +580,7 @@ func browserHelpLines(style styles, descriptors []actionDescriptor, width int) [
 		ids  []actionID
 	}{
 		{"Navigation", []actionID{actionUp, actionDown, actionHome, actionEnd, actionLeft, actionRight, actionToggle, actionShowDetails, actionShowTree}},
-		{"Connection", []actionID{actionConnect}},
+		{"Connection", []actionID{actionConnect, actionForgetHostKey}},
 		{"Management", []actionID{actionNewConnection, actionNewFolder, actionEdit, actionMove, actionDelete, actionReload, actionRetry, actionSave, actionConfirm, actionDiscard, actionMoveHere}},
 		{"Application", []actionID{actionCancel, actionCancelWarning, actionBack, actionHelp, actionQuit}},
 	}

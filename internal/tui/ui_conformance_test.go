@@ -86,10 +86,10 @@ func TestSC001SelectionDetailActionSynchronizationTwentyRuns(t *testing.T) {
 			{fixture.root.ID, fixture.root.Path, "n/f/r/?/q", []string{"Root", detailEmptyConnections}, []scStructuredFieldExpectation{{"Direct connections", "0"}}, []string{"direct.example", "deep.example"}},
 			{fixture.empty.ID, fixture.empty.Path, "n/f/e/m/d/r/?/q", []string{"Folder", detailEmptyConnections}, []scStructuredFieldExpectation{{"Direct connections", "0"}}, []string{"direct.example", "deep.example"}},
 			{fixture.direct.ID, fixture.direct.Path, "n/f/e/m/d/r/?/q", []string{"Folder"}, []scStructuredFieldExpectation{{"Direct connections", "1"}, {"direct-connection", "direct.example:22"}}, []string{"deep.example"}},
-			{fixture.directConn.ID, fixture.directConn.Path, "c/n/f/e/m/d/r/?/q", []string{"Connection"}, []scStructuredFieldExpectation{{"Endpoint", "direct.example:22"}, {"Method", "agent"}}, []string{"deep.example", detailEmptyConnections}},
+			{fixture.directConn.ID, fixture.directConn.Path, "c/x/n/f/e/m/d/r/?/q", []string{"Connection"}, []scStructuredFieldExpectation{{"Endpoint", "direct.example:22"}, {"Method", "agent"}}, []string{"deep.example", detailEmptyConnections}},
 			{fixture.nested.ID, fixture.nested.Path, "n/f/e/m/d/r/?/q", []string{"Folder", detailEmptyConnections}, []scStructuredFieldExpectation{{"Direct connections", "0"}}, []string{"deep.example"}},
 			{fixture.child.ID, fixture.child.Path, "n/f/e/m/d/r/?/q", []string{"Folder"}, []scStructuredFieldExpectation{{"Direct connections", "1"}, {"deep-connection", "deep.example:22"}}, []string{"direct.example"}},
-			{fixture.deepConn.ID, fixture.deepConn.Path, "c/n/f/e/m/d/r/?/q", []string{"Connection"}, []scStructuredFieldExpectation{{"Endpoint", "deep.example:22"}, {"Method", "agent"}}, []string{"direct.example", detailEmptyConnections}},
+			{fixture.deepConn.ID, fixture.deepConn.Path, "c/x/n/f/e/m/d/r/?/q", []string{"Connection"}, []scStructuredFieldExpectation{{"Endpoint", "deep.example:22"}, {"Method", "agent"}}, []string{"direct.example", detailEmptyConnections}},
 		}
 
 		updateModel(model, keyPress("g"))

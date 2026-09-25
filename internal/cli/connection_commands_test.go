@@ -14,6 +14,7 @@ import (
 	"github.com/pluque01/orza/internal/catalog"
 	"github.com/pluque01/orza/internal/catalogrepo"
 	"github.com/pluque01/orza/internal/credential"
+	"github.com/pluque01/orza/internal/hostkey"
 	"github.com/pluque01/orza/internal/terminal"
 )
 
@@ -143,6 +144,8 @@ func TestRememberPasswordRequiresInteractiveExplicitConsentAndDeleteCleansIt(t *
 
 type connectionCLIFixture struct {
 	connections *app.ConnectionService
+	hostTrust   *app.HostTrustService
+	catalog     *catalog.TrustedHostRepository
 	store       *credential.Fake
 	local       *terminal.Fake
 	scope       credential.Scope
@@ -170,7 +173,12 @@ func newConnectionCLIFixture(t *testing.T) *connectionCLIFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &connectionCLIFixture{connections: connections, store: credentials, local: terminal.NewFake(terminal.Size{Columns: 80, Rows: 24}), scope: scope}
+	trustedHosts := catalog.NewTrustedHostRepository(store)
+	hostTrust, err := app.NewHostTrustService(repository, hostkey.NewCatalogTrustedHostAdapter(trustedHosts))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &connectionCLIFixture{connections: connections, hostTrust: hostTrust, catalog: trustedHosts, store: credentials, local: terminal.NewFake(terminal.Size{Columns: 80, Rows: 24}), scope: scope}
 }
 
 type commandResult struct {
@@ -187,10 +195,26 @@ func (f *connectionCLIFixture) execute(t *testing.T, args ...string) commandResu
 func (f *connectionCLIFixture) executeWithInput(t *testing.T, input string, args ...string) commandResult {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
-	root := NewRoot(RootConfig{Version: "test", Connections: f.connections, Terminal: f.local, Stdin: strings.NewReader(input), Stdout: &stdout, Stderr: &stderr})
+	root := NewRoot(RootConfig{Version: "test", Connections: f.connections, HostTrust: f.hostTrust, Terminal: f.local, Stdin: strings.NewReader(input), Stdout: &stdout, Stderr: &stderr})
 	root.SetArgs(args)
 	err := root.ExecuteContext(context.Background())
 	return commandResult{stdout: stdout.String(), stderr: stderr.String(), err: err}
+}
+
+func TestConnectionForgetHostKeyIsNonInteractiveAndIdempotent(t *testing.T) {
+	fixture := newConnectionCLIFixture(t)
+	created := fixture.execute(t, "connection", "create", "/host", "--host", "host.example", "--auth", "agent")
+	if created.err != nil {
+		t.Fatal(created.err)
+	}
+	noTrust := fixture.executeWithInput(t, "n\n", "connection", "forget-host-key", "/host")
+	if noTrust.err != nil || !strings.Contains(noTrust.stdout, "no app-owned host key for host.example:22") {
+		t.Fatalf("no-trust forget = stdout %q, error %v", noTrust.stdout, noTrust.err)
+	}
+	invalid := fixture.execute(t, "connection", "forget-host-key", "/host", "--if-revision", "0")
+	if ExitCode(invalid.err) != ExitUsage {
+		t.Fatalf("invalid revision error = %v, exit = %d", invalid.err, ExitCode(invalid.err))
+	}
 }
 
 func TestConnectionErrorsNeverRenderInternalCauses(t *testing.T) {

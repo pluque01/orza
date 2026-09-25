@@ -38,6 +38,8 @@ const (
 	operationFolderDeleteScope
 	operationFolderDelete
 	operationMove
+	operationForgetHostKeyScope
+	operationForgetHostKey
 )
 
 type operationResultMsg struct {
@@ -50,6 +52,8 @@ type operationResultMsg struct {
 	scope          app.ConnectionDeleteScope
 	deleted        app.DeleteConnectionResult
 	folderScope    app.FolderDeleteScope
+	trustScope     app.ForgetHostKeyScope
+	trustResult    app.ForgetHostKeyResult
 	snapshot       *catalogSnapshot
 	err            error
 }
@@ -89,6 +93,7 @@ type Config struct {
 	Connections ConnectionService
 	Folders     FolderService
 	Connect     ConnectService
+	HostTrust   HostTrustService
 	Terminal    app.Terminal
 	Stdin       io.Reader
 	Stdout      io.Writer
@@ -105,6 +110,7 @@ type Model struct {
 	connections          ConnectionService
 	folders              FolderService
 	connect              ConnectService
+	hostTrust            HostTrustService
 	terminal             app.Terminal
 	input                io.Reader
 	output               io.Writer
@@ -150,7 +156,7 @@ func New(config Config) *Model {
 		height = minimumHeight
 	}
 	model := &Model{
-		ctx: ctx, connections: config.Connections, folders: config.Folders, connect: config.Connect, terminal: config.Terminal,
+		ctx: ctx, connections: config.Connections, folders: config.Folders, connect: config.Connect, hostTrust: config.HostTrust, terminal: config.Terminal,
 		input: config.Stdin, output: config.Stdout, errOutput: config.Stderr,
 		keys: newKeyMap(), styles: newStyles(config.NoColor), noColor: config.NoColor, width: width, height: height,
 		focusOwner: defaultFocusOwner(), status: "READY",
@@ -423,6 +429,10 @@ func (m *Model) handleBrowserKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			confirmation := newConnectConfirmation(*selected)
 			target := m.captureConnectionTarget(*selected)
 			m.openGenericModal(modalKindConnectConfirmation, &target, connectConfirmationPayload{confirmation: confirmation})
+		}
+	case actionForgetHostKey:
+		if selected := m.browser.selection(); selected != nil {
+			return m, m.forgetHostKeyScopeCommand(*selected)
 		}
 	case actionReload:
 		return m, m.reloadCommand()
@@ -722,6 +732,15 @@ func (m *Model) handleModalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				return m, m.sessionCommandWithRecovery(connection, recovery)
 			}
 			return m, m.sessionCommand(connection)
+		}
+		if key.Matches(msg, m.keys.Back, m.keys.Open) {
+			m.closeModal()
+		} else {
+			m.scrollModal(msg)
+		}
+	case forgetHostKeyPayload:
+		if payload.confirmation.confirmed(msg) {
+			return m, m.forgetHostKeyCommand(payload.confirmation.scope)
 		}
 		if key.Matches(msg, m.keys.Back, m.keys.Open) {
 			m.closeModal()
@@ -1506,6 +1525,36 @@ func (m *Model) folderDeleteCommand(scope app.FolderDeleteScope) tea.Cmd {
 	}
 }
 
+func (m *Model) forgetHostKeyScopeCommand(connection app.Connection) tea.Cmd {
+	target := m.captureConnectionTarget(connection)
+	id, operationCtx, ok := m.beginOperationWith(asyncOperationSave, &target, operationOwnerRoot)
+	if !ok {
+		return nil
+	}
+	return func() tea.Msg {
+		if m.hostTrust == nil {
+			return operationResultMsg{id: id, kind: operationForgetHostKeyScope, err: errUnavailable}
+		}
+		scope, err := m.hostTrust.ForgetScope(operationCtx, app.ItemSelector{ID: connection.ID})
+		return operationResultMsg{id: id, kind: operationForgetHostKeyScope, trustScope: scope, err: err}
+	}
+}
+
+func (m *Model) forgetHostKeyCommand(scope app.ForgetHostKeyScope) tea.Cmd {
+	target := m.modal.target
+	id, operationCtx, ok := m.beginOperationWith(asyncOperationSave, target, operationOwnerModal)
+	if !ok {
+		return nil
+	}
+	return func() tea.Msg {
+		if m.hostTrust == nil {
+			return operationResultMsg{id: id, kind: operationForgetHostKey, err: errUnavailable}
+		}
+		result, err := m.hostTrust.Forget(operationCtx, scope.Request())
+		return operationResultMsg{id: id, kind: operationForgetHostKey, trustResult: result, err: err}
+	}
+}
+
 func (m *Model) moveCommand(source app.Node, destination app.Folder) tea.Cmd {
 	target := capturedTarget{id: source.ID, revision: source.Revision, kind: source.Kind, path: source.Path}
 	id, operationCtx, ok := m.beginOperationWith(asyncOperationSave, &target, operationOwnerModal)
@@ -1732,6 +1781,17 @@ func (m *Model) handleOperation(msg operationResultMsg) tea.Cmd {
 		}
 		m.closeGenericModal()
 		return m.reloadAfterCommit(quit)
+	case operationForgetHostKeyScope:
+		target := capturedTarget{endpointOrScope: fmt.Sprintf("%s:%d", msg.trustScope.Endpoint.CanonicalHost, msg.trustScope.Endpoint.Port)}
+		m.openGenericModal(modalKindForgetHostKey, &target, forgetHostKeyPayload{confirmation: newForgetHostKeyConfirmation(msg.trustScope)})
+	case operationForgetHostKey:
+		payload, ok := m.modal.payload.(forgetHostKeyPayload)
+		if !ok || payload.confirmation == nil {
+			return nil
+		}
+		forgotten := msg.trustResult.Forgotten
+		payload.confirmation.completed = &forgotten
+		m.modal.payload = payload
 	}
 	if quit {
 		return tea.Quit
@@ -1822,6 +1882,8 @@ func operationName(kind operationKind) string {
 		return "delete folder"
 	case operationMove:
 		return "move catalog item"
+	case operationForgetHostKeyScope, operationForgetHostKey:
+		return "forget host key"
 	default:
 		return "catalog operation"
 	}

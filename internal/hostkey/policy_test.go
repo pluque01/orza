@@ -175,6 +175,17 @@ func (f *fakeTrustedHosts) TrustHost(_ context.Context, request app.TrustHostReq
 	return trusted, nil
 }
 
+func (f *fakeTrustedHosts) DeleteTrustedHost(_ context.Context, endpoint app.HostEndpoint, expected app.Revision) (app.CatalogRevision, error) {
+	if f.trusted == nil || f.trusted.HostEndpoint != endpoint {
+		return 0, sql.ErrNoRows
+	}
+	if f.trusted.Revision != expected {
+		return 0, catalog.ErrTrustedHostConflict
+	}
+	f.trusted = nil
+	return 1, nil
+}
+
 func trustedFromKey(host string, port uint16, key ssh.PublicKey) *app.TrustedHost {
 	return &app.TrustedHost{
 		ID:                "11111111111111111111111111111111",

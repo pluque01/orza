@@ -8,6 +8,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/pluque01/orza/internal/app"
 )
 
@@ -205,7 +206,7 @@ func renderedTextContains(rendered, want string) bool {
 			return r
 		}, value)
 	}
-	return strings.Contains(compact(rendered), compact(want))
+	return strings.Contains(compact(ansi.Strip(rendered)), compact(want))
 }
 
 func allowedDetail(category app.SSHFailureReason) string {
