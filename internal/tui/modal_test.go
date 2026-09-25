@@ -464,6 +464,33 @@ func TestTrustPromptPrecedesSecretAndDefaultsToReject(t *testing.T) {
 	}
 }
 
+func TestConnectModalShowsHostTrustDecisionInsteadOfDetails(t *testing.T) {
+	connection := app.Connection{Node: app.Node{ID: "connection", Path: "/prod", Revision: 2}, Host: "prod.test", Port: 22}
+	model := New(Config{Width: 80, Height: 24, NoColor: true})
+	target := capturedTargetFromConnection(connection)
+	model.openGenericModal(modalKindConnectConfirmation, &target, connectConfirmationPayload{confirmation: newConnectConfirmation(connection)})
+	state, ok := newSecurityInputState(securityInputTrust, model.focusOwner)
+	if !ok {
+		t.Fatal("trust security state was unavailable")
+	}
+	state.trust = newTrustPrompt(app.TrustDecisionPrompt{
+		Status: app.HostTrustChanged,
+		Host:   app.PresentedHost{Endpoint: app.HostEndpoint{CanonicalHost: "prod.test", Port: 22}, RemoteAddress: "192.0.2.10:22", KeyAlgorithm: "ssh-ed25519", FingerprintSHA256: "SHA256:new"},
+		Known:  &app.TrustedHost{FingerprintSHA256: "SHA256:old"},
+	})
+	model.securityInput = &state
+
+	view := model.View().Content
+	for _, want := range []string{"Verify host identity", "SHA256:new", "SHA256:old", "y Trust once", "p Trust and persist", "Enter/Esc Reject"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("connect trust modal omitted %q: %q", want, view)
+		}
+	}
+	if strings.Contains(view, "Connect to SSH target?") {
+		t.Fatalf("connect confirmation remained visible during trust decision: %q", view)
+	}
+}
+
 func TestMovePickerProjectsDynamicValuesBeforeWrappingOrTruncation(t *testing.T) {
 	unsafeValues := []string{
 		"ansi\x1b[31mred\x1b[0m",

@@ -229,6 +229,9 @@ func modalContent(state modalState, style styles, width int, help []string) ([]s
 	if state.helpVisible {
 		return append(safeHelpLines(help), modalControlLine("?/Esc Close")), noActiveLine
 	}
+	if state.trust != nil {
+		return state.trust.modalLines(width, style), noActiveLine
+	}
 	if state.operationStatus != "" {
 		captured := state
 		captured.operationStatus = ""

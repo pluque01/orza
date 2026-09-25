@@ -161,6 +161,7 @@ type modalState struct {
 	conflict         *conflictState
 	helpVisible      bool
 	helpOpenedFrom   any
+	trust            *trustPrompt
 }
 
 var (

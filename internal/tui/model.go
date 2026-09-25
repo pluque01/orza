@@ -1903,7 +1903,10 @@ func (m *Model) View() tea.View {
 	if m.modal.isOpen() {
 		background := m.browserShell(layout)
 		modal := m.modal
-		if m.operation != nil {
+		if m.securityInput != nil && m.securityInput.trust != nil && modal.kind == modalKindConnectConfirmation {
+			// Keep the verification decision in the Connect flow that initiated it.
+			modal.trust = m.securityInput.trust
+		} else if m.operation != nil {
 			modal.operationStatus = m.operation.loadingStatus()
 		}
 		content = renderModalOverlay(background, modal, layout, m.styles, m.currentHelpLines())
@@ -1921,7 +1924,7 @@ func (m *Model) browserShell(layout layoutState) string {
 	var details []string
 	detailScrollbar := scrollbarGeometry{}
 	detailTrackStart := 0
-	if m.securityInput != nil && m.securityInput.trust != nil {
+	if m.securityInput != nil && m.securityInput.trust != nil && !m.modal.isOpen() {
 		details = strings.Split(m.securityInput.trust.view(m.styles), "\n")
 	} else if m.securityInput != nil && m.securityInput.secret != nil {
 		details = strings.Split(m.securityInput.secret.view(m.styles), "\n")
