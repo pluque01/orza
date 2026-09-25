@@ -246,7 +246,7 @@ func modalContent(state modalState, style styles, width int, help []string) ([]s
 			}
 		}
 		lines := append([]string{safeText(state.operationStatus, width)}, body...)
-		lines = append(lines, modalControlLine("Esc Cancel"), modalControlLine("? Help"), modalControlLine("q Quit"))
+		lines = append(lines, modalControlLine("Esc Cancel"), modalControlLine("q Quit"))
 		if active != noActiveLine {
 			active++
 		}
@@ -266,7 +266,7 @@ func modalContent(state modalState, style styles, width int, help []string) ([]s
 			body = body[:controls]
 		}
 		lines := append(header, body...)
-		lines = append(lines, modalControlLine("r Reload"), modalControlLine("b Back"), modalControlLine("Esc Cancel warning"), modalControlLine("? Help"), modalControlLine("q Quit"))
+		lines = append(lines, modalControlLine("r Reload"), modalControlLine("b Back"), modalControlLine("Esc Cancel warning"), modalControlLine("q Quit"))
 		return lines, max(0, active+len(header))
 	}
 	if state.recoverableError != "" {
@@ -390,7 +390,7 @@ func deleteConnectionLines(confirmation *deleteConfirmation, width int, modalSty
 		fields = append(fields, displayField{label: "Effect", value: "also deletes the saved password from the operating system credential store"})
 	}
 	lines := renderWrappedModalFields(modalRenderStyle(modalStyle), width, fields)
-	return append(lines, modalControlLine("y Confirm"), modalControlLine("Enter/Esc Cancel"), modalControlLine("? Help"))
+	return append(lines, modalControlLine("y Confirm"), modalControlLine("Enter/Esc Cancel"))
 }
 
 func deleteFolderLines(scope app.FolderDeleteScope, width int, modalStyle ...styles) []string {
@@ -400,7 +400,7 @@ func deleteFolderLines(scope app.FolderDeleteScope, width int, modalStyle ...sty
 		{label: "ID/revision", value: fmt.Sprintf("%s/%d", scope.ID, scope.Revision)},
 		{label: "Scope", value: fmt.Sprintf("%s, %s, %s", countLabel(scope.Folders, "folder"), countLabel(scope.Connections, "connection"), countLabel(scope.RememberedCredentials, "remembered credential"))},
 	})
-	return append(lines, modalControlLine("y Confirm"), modalControlLine("Enter/Esc Cancel"), modalControlLine("? Help"))
+	return append(lines, modalControlLine("y Confirm"), modalControlLine("Enter/Esc Cancel"))
 }
 
 func connectConfirmationLines(confirmation *connectConfirmation, width int, modalStyle ...styles) []string {
@@ -423,7 +423,7 @@ func connectConfirmationLines(confirmation *connectConfirmation, width int, moda
 		displayField{label: "Revision", value: fmt.Sprint(connection.Revision)},
 	)
 	lines := append([]string{"Connect to SSH target?"}, renderWrappedModalFields(modalRenderStyle(modalStyle), width, fields)...)
-	return append(lines, modalControlLine("y Confirm"), modalControlLine("Enter/Esc Cancel"), modalControlLine("? Help"))
+	return append(lines, modalControlLine("y Confirm"), modalControlLine("Enter/Esc Cancel"))
 }
 
 func forgetHostKeyLines(confirmation *forgetHostKeyConfirmation, width int, modalStyle ...styles) []string {
@@ -438,15 +438,15 @@ func forgetHostKeyLines(confirmation *forgetHostKeyConfirmation, width int, moda
 			message = "App-owned host key forgotten. Future connections may prompt for host-key trust again."
 		}
 		lines := append([]string{"Forget host key result"}, renderWrappedModalFields(modalRenderStyle(modalStyle), width, append(fields, displayField{label: "Result", value: message}))...)
-		return append(lines, modalControlLine("Enter/Esc Close"), modalControlLine("? Help"))
+		return append(lines, modalControlLine("Enter/Esc Close"))
 	}
 	if confirmation.scope.TrustedHost == nil {
 		lines := append([]string{"No app-owned host key to forget"}, renderWrappedModalFields(modalRenderStyle(modalStyle), width, fields)...)
-		return append(lines, modalControlLine("Enter/Esc Close"), modalControlLine("? Help"))
+		return append(lines, modalControlLine("Enter/Esc Close"))
 	}
 	fields = append(fields, displayField{label: "Effect", value: "future connections may prompt for host-key trust again"})
 	lines := append([]string{"Forget app-owned host key?"}, renderWrappedModalFields(modalRenderStyle(modalStyle), width, fields)...)
-	return append(lines, modalControlLine("y Confirm"), modalControlLine("Enter/Esc Cancel"), modalControlLine("? Help"))
+	return append(lines, modalControlLine("y Confirm"), modalControlLine("Enter/Esc Cancel"))
 }
 
 func operationErrorLines(modal *errorModal, width int, modalStyle ...styles) []string {
@@ -463,12 +463,12 @@ func operationErrorLines(modal *errorModal, width int, modalStyle ...styles) []s
 		{label: "Cause", value: message},
 	})
 	if modal.kind == app.ErrorKindConflict || modal.kind == app.ErrorKindNotFound {
-		return append(lines, modalControlLine("r Reload"), modalControlLine("b/Esc Back"), modalControlLine("q Quit"), modalControlLine("? Help"))
+		return append(lines, modalControlLine("r Reload"), modalControlLine("b/Esc Back"), modalControlLine("q Quit"))
 	}
 	if modal.retry != nil && modal.retry.valid() {
 		lines = append(lines, modalControlLine("r Retry"))
 	}
-	return append(lines, modalControlLine("b/Esc Back"), modalControlLine("q Quit"), modalControlLine("? Help"))
+	return append(lines, modalControlLine("b/Esc Back"), modalControlLine("q Quit"))
 }
 
 func sshFailureLines(modal *errorModal, width int, modalStyle ...styles) []string {
@@ -505,7 +505,7 @@ func sshFailureModalControlLines(modal *errorModal) []string {
 	default:
 		controls = append(controls, modalControlLine("r Retry"), modalControlLine("e Edit"))
 	}
-	return append(controls, modalControlLine("b/Esc Back"), modalControlLine("q Quit"), modalControlLine("? Help"))
+	return append(controls, modalControlLine("b/Esc Back"), modalControlLine("q Quit"))
 }
 
 func renderModalOverlay(background string, state modalState, layout layoutState, style styles, help []string) string {

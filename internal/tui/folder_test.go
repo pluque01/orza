@@ -72,7 +72,7 @@ func TestFolderFormsReuseModalBadgeAndSharedFieldHierarchy(t *testing.T) {
 					t.Fatalf("folder form retained duplicate heading or colon label %q: %q", forbidden, plain)
 				}
 			}
-			if !strings.HasPrefix(plainLines[active], "> ") || plainLines[len(plainLines)-1] != "Ctrl+S/Enter Save  Esc Cancel  F1 Help" {
+			if !strings.HasPrefix(plainLines[active], "> ") || plainLines[len(plainLines)-1] != "Ctrl+S/Enter Save  Esc Cancel" {
 				t.Fatalf("folder focus/control contract changed: %#v", plainLines)
 			}
 

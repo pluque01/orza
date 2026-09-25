@@ -288,7 +288,7 @@ func sc006US4Cells() []sc006FlowCell {
 	cells = append(cells,
 		sc006FlowCell{name: "embedded_error", run: func(t *testing.T) int { return sc006EmbeddedModalFlow(t, false) }},
 		sc006FlowCell{name: "embedded_conflict", run: func(t *testing.T) int { return sc006EmbeddedModalFlow(t, true) }},
-		sc006FlowCell{name: "inline_help_open_close", run: sc006InlineHelpFlow},
+		sc006FlowCell{name: "modal_help_unavailable", run: sc006ModalHelpIsUnavailable},
 	)
 	for _, status := range []app.HostTrustStatus{app.HostTrustUnknown, app.HostTrustChanged} {
 		status := status
@@ -818,18 +818,16 @@ func sc006EmbeddedModalFlow(t *testing.T, conflict bool) int {
 	return frames
 }
 
-func sc006InlineHelpFlow(t *testing.T) int {
+func sc006ModalHelpIsUnavailable(t *testing.T) int {
 	frames := 0
 	for run := 1; run <= scConformanceRuns; run++ {
 		fixture := newSC006ModalFixture(t, modalKindMovePicker)
 		model := fixture.model
 		sc009Update(t, model, keyPress("?"))
-		sc006ObserveModel(t, model, "inline Help open", run, sc006Observation{
-			focus: []string{"[*] Move"}, selection: []string{"> "}, actions: []string{"?/Esc Close"},
-		})
-		frames++
-		sc009Update(t, model, keyPress("esc"))
-		sc006ObserveModel(t, model, "inline Help close", run, sc006ModalObservation(fixture, modalKindMovePicker))
+		if model.modal.helpVisible {
+			t.Fatalf("modal Help opened on run %d", run)
+		}
+		sc006ObserveModel(t, model, "modal Help unavailable", run, sc006ModalObservation(fixture, modalKindMovePicker))
 		frames++
 	}
 	return frames

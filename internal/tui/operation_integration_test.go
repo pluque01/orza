@@ -95,21 +95,6 @@ func TestSC013HelpPreservesRootFormAndModalOperationOwners20Runs(t *testing.T) {
 		{name: "form", setup: func(t *testing.T) *Model {
 			return newOperationConformanceFixture(t, asyncOperationSave).model
 		}},
-		{name: "modal", modal: true, setup: func(t *testing.T) *Model {
-			model, _, _, connection := newResizeConformanceBase(t)
-			attempt := app.SSHAttemptTarget{ID: connection.ID, Revision: connection.Revision, Path: connection.Path, Host: connection.Host, Port: connection.Port}
-			failure := app.NewSSHStartError(app.SSHFailureTimeout, app.SSHFailureStageNetworkConnection, "operation timed out", context.DeadlineExceeded).Presentation()
-			diagnostic := newSSHFailureModal(attempt, failure)
-			diagnostic.detailVisible = true
-			diagnostic.recovery = recoveryResolving
-			openResizeModal(t, model, modalKindSSHFailure, capturedTargetFromConnection(connection), sshFailurePayload{modal: diagnostic})
-			model.modal.viewport = newViewportState(0)
-			target := capturedTargetFromConnection(connection)
-			if _, _, ok := model.beginOperationWith(asyncOperationReload, &target, operationOwnerModal, catalogRetryIntent(asyncOperationReload, &target, operationOwnerModal)); !ok {
-				t.Fatal("modal-owned operation setup failed")
-			}
-			return model
-		}},
 	}
 
 	for _, test := range tests {
@@ -120,11 +105,7 @@ func TestSC013HelpPreservesRootFormAndModalOperationOwners20Runs(t *testing.T) {
 				beforeOperation := snapshotResizeOperation(model.operation)
 
 				updateModel(model, keyPress("?"))
-				if test.modal {
-					if !model.modal.helpVisible || model.modal.kind != before.modal.kind || model.focusOwner != focusOwnerModal {
-						t.Fatalf("run %d: modal Help did not remain inline with its owner", run+1)
-					}
-				} else if model.modal.kind != modalKindHelp || model.modal.helpVisible || model.focusOwner != focusOwnerModal || model.modal.openedFrom != before.focus {
+				if model.modal.kind != modalKindHelp || model.modal.helpVisible || model.focusOwner != focusOwnerModal || model.modal.openedFrom != before.focus {
 					t.Fatalf("run %d: surface Help did not open a standalone modal from %s", run+1, test.name)
 				}
 				if got := snapshotResizeOperation(model.operation); !reflect.DeepEqual(got, beforeOperation) {

@@ -122,9 +122,8 @@ func TestFolderHierarchyCLIAndTUIServiceParity(t *testing.T) {
 	updateTUI(t, model, tuiKey("f"))
 	typeText(t, model, "canceled-folder")
 	updateTUI(t, model, tuiKey("f1"))
-	updateTUI(t, model, tuiKey("esc"))
 	if view := model.View().Content; !strings.Contains(view, "canceled-folder") {
-		t.Fatalf("inline Help did not restore folder field: %q", view)
+		t.Fatalf("modal Help shortcut changed folder field: %q", view)
 	}
 	updateTUI(t, model, tuiKey("esc"))
 	if _, err := folders.Get(context.Background(), app.ItemSelector{Path: "/archive/canceled-folder"}); !errors.Is(err, app.ErrNotFound) {

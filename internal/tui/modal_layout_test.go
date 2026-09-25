@@ -44,17 +44,17 @@ func TestModalCapturedTargetsWrapCompletelyWithoutDisplacingControls(t *testing.
 
 func TestModalControlInventoryAndPriorityRemainFixed(t *testing.T) {
 	want := map[modalKind][]string{
-		modalKindFolderCreate:        {modalControlLine("Ctrl+S/Enter Save  Esc Cancel  F1 Help")},
-		modalKindFolderEdit:          {modalControlLine("Ctrl+S/Enter Save  Esc Cancel  F1 Help")},
-		modalKindMovePicker:          {modalControlLine("Enter Move  Esc Cancel  ? Help")},
-		modalKindDeleteConnection:    {modalControlLine("y Confirm"), modalControlLine("Enter/Esc Cancel"), modalControlLine("? Help")},
-		modalKindDeleteFolder:        {modalControlLine("y Confirm"), modalControlLine("Enter/Esc Cancel"), modalControlLine("? Help")},
-		modalKindConnectConfirmation: {modalControlLine("y Confirm"), modalControlLine("Enter/Esc Cancel"), modalControlLine("? Help")},
-		modalKindForgetHostKey:       {modalControlLine("y Confirm"), modalControlLine("Enter/Esc Cancel"), modalControlLine("? Help")},
+		modalKindFolderCreate:        {modalControlLine("Ctrl+S/Enter Save  Esc Cancel")},
+		modalKindFolderEdit:          {modalControlLine("Ctrl+S/Enter Save  Esc Cancel")},
+		modalKindMovePicker:          {modalControlLine("Enter Move  Esc Cancel")},
+		modalKindDeleteConnection:    {modalControlLine("y Confirm"), modalControlLine("Enter/Esc Cancel")},
+		modalKindDeleteFolder:        {modalControlLine("y Confirm"), modalControlLine("Enter/Esc Cancel")},
+		modalKindConnectConfirmation: {modalControlLine("y Confirm"), modalControlLine("Enter/Esc Cancel")},
+		modalKindForgetHostKey:       {modalControlLine("y Confirm"), modalControlLine("Enter/Esc Cancel")},
 		modalKindUnsavedChanges:      {modalControlLine("s Save"), modalControlLine("d Discard"), modalControlLine("Esc Cancel")},
 		modalKindHelp:                {modalControlLine("?/Esc Close")},
-		modalKindOperationError:      {modalControlLine("r Reload"), modalControlLine("b/Esc Back"), modalControlLine("q Quit"), modalControlLine("? Help")},
-		modalKindSSHFailure:          {modalControlLine("d Detail"), modalControlLine("r Retry"), modalControlLine("e Edit"), modalControlLine("b/Esc Back"), modalControlLine("q Quit"), modalControlLine("? Help")},
+		modalKindOperationError:      {modalControlLine("r Reload"), modalControlLine("b/Esc Back"), modalControlLine("q Quit")},
+		modalKindSSHFailure:          {modalControlLine("d Detail"), modalControlLine("r Retry"), modalControlLine("e Edit"), modalControlLine("b/Esc Back"), modalControlLine("q Quit")},
 	}
 	for _, test := range feature008ModalCases() {
 		t.Run(string(test.kind), func(t *testing.T) {

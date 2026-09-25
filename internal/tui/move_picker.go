@@ -121,6 +121,6 @@ func (p *movePicker) modalLines(width int, semanticStyles ...styles) ([]string, 
 		line := marker + safeText(target.folder.Path, max(0, width-len(marker)-len(suffix))) + suffix
 		lines = append(lines, line)
 	}
-	lines = append(lines, "Enter Move  Esc Cancel  ? Help")
+	lines = append(lines, "Enter Move  Esc Cancel")
 	return lines, active
 }

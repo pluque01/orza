@@ -689,7 +689,7 @@ func TestLoadingModalSuppressesStalePayloadActions(t *testing.T) {
 				t.Fatalf("loading modal omitted priority controls:\n%s", view)
 			}
 			controls := lines[priority:]
-			wantControls := []string{modalControlLine("Esc Cancel"), modalControlLine("? Help"), modalControlLine("q Quit")}
+			wantControls := []string{modalControlLine("Esc Cancel"), modalControlLine("q Quit")}
 			if !reflect.DeepEqual(controls, wantControls) {
 				t.Fatalf("loading controls = %#v, want %#v", controls, wantControls)
 			}

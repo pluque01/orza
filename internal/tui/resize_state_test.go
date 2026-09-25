@@ -172,7 +172,7 @@ func TestUS5ResizeSequencePreservesOpaqueState20Runs(t *testing.T) {
 					t.Fatalf("run %d resize %dx%d changed opaque state\n got: %#v\nwant: %#v", run+1, width, height, got, want)
 				}
 				view := fixture.model.View().Content
-				for _, required := range []string{"Loading: Save", "retained help payload", "Esc Cancel  |  ? Help  |  q Quit"} {
+				for _, required := range []string{"Loading: Save", "retained help payload", "Esc Cancel  |  q Quit"} {
 					if !strings.Contains(view, required) {
 						t.Fatalf("run %d resize %dx%d omitted priority modal content %q:\n%s", run+1, width, height, required, view)
 					}
