@@ -314,10 +314,14 @@ func (m *Model) handleOperationKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) currentHelpLines() []string {
+	return browserHelpLines(m.styles, m.currentHelpDescriptors(), minimumLayoutWidth-6)
+}
+
+func (m *Model) currentHelpDescriptors() []actionDescriptor {
 	if m.screen == screenConnectionForm {
-		return browserHelpLines(m.styles, m.formActionDescriptors(), minimumLayoutWidth-6)
+		return m.formActionDescriptors()
 	}
-	return browserHelpLines(m.styles, m.currentActionDescriptors(), minimumLayoutWidth-6)
+	return m.currentActionDescriptors()
 }
 
 func (m *Model) formActionDescriptors() []actionDescriptor {
@@ -1908,6 +1912,9 @@ func (m *Model) View() tea.View {
 			modal.trust = m.securityInput.trust
 		} else if m.operation != nil {
 			modal.operationStatus = m.operation.loadingStatus()
+		}
+		if modal.helpVisible {
+			modal.helpDescriptors = &modalHelpDescriptors{values: m.currentHelpDescriptors()}
 		}
 		content = renderModalOverlay(background, modal, layout, m.styles, m.currentHelpLines())
 	}

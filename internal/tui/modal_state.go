@@ -161,8 +161,11 @@ type modalState struct {
 	conflict         *conflictState
 	helpVisible      bool
 	helpOpenedFrom   any
+	helpDescriptors  *modalHelpDescriptors
 	trust            *trustPrompt
 }
+
+type modalHelpDescriptors struct{ values []actionDescriptor }
 
 var (
 	errModalClosed                = errors.New("modal is closed")

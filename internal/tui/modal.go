@@ -227,6 +227,9 @@ func appendWrappedModalLine(lines []string, label, value string, width int) []st
 
 func modalContent(state modalState, style styles, width int, help []string) ([]string, int) {
 	if state.helpVisible {
+		if state.helpDescriptors != nil {
+			return append(browserHelpLines(style, state.helpDescriptors.values, width), modalControlLine("?/Esc Close")), noActiveLine
+		}
 		return append(safeHelpLines(help), modalControlLine("?/Esc Close")), noActiveLine
 	}
 	if state.trust != nil {
