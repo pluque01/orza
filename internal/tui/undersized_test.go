@@ -76,20 +76,28 @@ func TestUS5UndersizedShellAndExactRestoration20Runs(t *testing.T) {
 					t.Fatalf("run %d 39x11 mode = %v, want undersized", run+1, layout.mode)
 				}
 				assertUS5UndersizedOnlyShell(t, fixture.model.View().Content, tt.name, fixture.secret)
+				undersizedView := fixture.model.View().Content
 
 				for _, blocked := range []tea.KeyPressMsg{keyPress("j"), keyPress("y"), keyPress("tab")} {
 					updateModel(fixture.model, blocked)
 				}
 				assertUS5UndersizedSnapshot(t, fixture, before, run, "blocked input")
 
+				modalOpen := fixture.model.modal.isOpen()
 				updateModel(fixture.model, keyPress("?"))
 				help := fixture.model.View().Content
-				for _, required := range []string{"Help", "40x12", "? Close", "q Quit"} {
-					if !strings.Contains(help, required) {
-						t.Fatalf("run %d undersized Help omitted %q: %q", run+1, required, help)
+				if modalOpen {
+					if help != undersizedView {
+						t.Fatalf("run %d undersized modal opened Help: %q", run+1, help)
 					}
+				} else {
+					for _, required := range []string{"Help", "40x12", "? Close", "q Quit"} {
+						if !strings.Contains(help, required) {
+							t.Fatalf("run %d undersized Help omitted %q: %q", run+1, required, help)
+						}
+					}
+					updateModel(fixture.model, keyPress("?"))
 				}
-				updateModel(fixture.model, keyPress("?"))
 				updateModel(fixture.model, tea.WindowSizeMsg{Width: 40, Height: 12})
 				assertUS5UndersizedSnapshot(t, fixture, before, run, "recovery")
 				if recovered := fixture.model.View().Content; recovered != beforeView {

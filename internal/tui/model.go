@@ -616,8 +616,6 @@ func (m *Model) toggleHelp() {
 	if m.modal.isOpen() {
 		if m.modal.kind == modalKindHelp {
 			m.closeGenericModal()
-		} else {
-			m.toggleModalHelp()
 		}
 		return
 	}
@@ -666,13 +664,6 @@ func (m *Model) handleModalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.scrollModal(msg)
-		return m, nil
-	}
-	_, folderCreate := m.modal.payload.(folderCreatePayload)
-	_, folderEdit := m.modal.payload.(folderEditPayload)
-	editableFolder := folderCreate || folderEdit
-	if m.modal.kind != modalKindHelp && (key.Matches(msg, m.keys.FormHelp) || !editableFolder && key.Matches(msg, m.keys.Help)) {
-		m.toggleModalHelp()
 		return m, nil
 	}
 	if m.modal.conflict != nil && m.modal.conflict.blocked {

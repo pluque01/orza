@@ -67,9 +67,9 @@ func (p *trustPrompt) modalLines(width int, style styles) []string {
 		lines = append(lines, style.failureMessage("WARNING: changed key; this may indicate a possible attack."))
 	}
 	if p.prompt.Status == app.HostTrustRevoked {
-		return append(lines, "This key is revoked.", modalControlLine("Esc Back"), modalControlLine("q Quit"), modalControlLine("? Help"))
+		return append(lines, "This key is revoked.", modalControlLine("Esc Back"), modalControlLine("q Quit"))
 	}
-	return append(lines, modalControlLine("y Trust once"), modalControlLine("p Trust and persist"), modalControlLine("Enter/Esc Reject"), modalControlLine("? Help"), modalControlLine("q Quit"))
+	return append(lines, modalControlLine("y Trust once"), modalControlLine("p Trust and persist"), modalControlLine("Enter/Esc Reject"), modalControlLine("q Quit"))
 }
 
 // lineReaderView retains the non-TUI prompt consumed from stdin.

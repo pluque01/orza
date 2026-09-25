@@ -154,7 +154,7 @@ func TestMovePickerReusesModalBadgeAndSharedFieldHierarchy(t *testing.T) {
 			t.Fatalf("move picker retained duplicate heading or colon label %q: %q", forbidden, plain)
 		}
 	}
-	for _, want := range []string{"Source", "/source", "ID/revision", "source/7", "> /archive", "/source [unavailable: source subtree]", "/source/child [unavailable: source subtree]", "Enter Move  Esc Cancel  ? Help"} {
+	for _, want := range []string{"Source", "/source", "ID/revision", "source/7", "> /archive", "/source [unavailable: source subtree]", "/source/child [unavailable: source subtree]", "Enter Move  Esc Cancel"} {
 		if !strings.Contains(plain, want) {
 			t.Fatalf("move picker omitted %q: %q", want, plain)
 		}
@@ -320,12 +320,8 @@ func TestSC009ClosedModalInvariantMatrix(t *testing.T) {
 
 				if test.kind != modalKindHelp {
 					sc009Update(t, model, test.helpKey)
-					if !model.modal.helpVisible || model.modal.kind != test.kind || model.focusOwner != focusOwnerModal {
-						t.Fatalf("run %d: inline Help replaced its owner", run)
-					}
-					sc009Update(t, model, keyPress("esc"))
-					if model.modal.helpVisible || model.modal.kind != test.kind {
-						t.Fatalf("run %d: Esc did not restore the payload owner", run)
+					if model.modal.helpVisible || model.modal.kind != test.kind || model.focusOwner != focusOwnerModal {
+						t.Fatalf("run %d: Help opened from a modal", run)
 					}
 				}
 				sc009Update(t, model, keyPress("esc"))
@@ -733,7 +729,7 @@ func TestSC009UnsavedHelpAndOperationErrorPaths(t *testing.T) {
 			if model.modal.viewport.logicalOffset == 0 {
 				t.Fatalf("run %d: Help did not scroll", run)
 			}
-			sc009Update(t, model, keyPress("?"))
+			sc009Update(t, model, keyPress("esc"))
 			if model.modal.isOpen() || model.focusOwner != focusOwnerTree {
 				t.Fatalf("run %d: Help close did not restore opener", run)
 			}
@@ -1338,7 +1334,7 @@ func TestSC009DisplayedModalNavigationAliasesRemainLocalTwentyRuns(t *testing.T)
 		})
 	}
 
-	for _, closeKey := range []tea.KeyPressMsg{keyPress("?"), keyPress("esc")} {
+	for _, closeKey := range []tea.KeyPressMsg{keyPress("esc")} {
 		t.Run("help_close/"+closeKey.String(), func(t *testing.T) {
 			for run := range sc009Runs {
 				model := New(Config{Width: 80, Height: 24, NoColor: true})
@@ -1351,7 +1347,7 @@ func TestSC009DisplayedModalNavigationAliasesRemainLocalTwentyRuns(t *testing.T)
 	}
 
 	for _, recovery := range []recoveryState{recoveryMissing, recoveryConflict, recoveryResolving} {
-		for _, pressed := range []tea.KeyPressMsg{keyPress("d"), keyPress("b"), keyPress("esc"), keyPress("q"), tea.KeyPressMsg(tea.Key{Code: 'c', Mod: tea.ModCtrl}), keyPress("?")} {
+		for _, pressed := range []tea.KeyPressMsg{keyPress("d"), keyPress("b"), keyPress("esc"), keyPress("q"), tea.KeyPressMsg(tea.Key{Code: 'c', Mod: tea.ModCtrl})} {
 			t.Run("ssh_failure_state_"+string(rune('0'+recovery))+"/"+pressed.String(), func(t *testing.T) {
 				for run := range sc009Runs {
 					model := New(Config{Width: 80, Height: 24, NoColor: true})
@@ -1371,42 +1367,26 @@ func TestSC009DisplayedModalNavigationAliasesRemainLocalTwentyRuns(t *testing.T)
 						}
 					case "q", "ctrl+c":
 						sc009CheckQuitOwnerRetained(t, model, command, run)
-					case "?":
-						if command != nil || !model.modal.helpVisible || model.modal.kind != modalKindSSHFailure {
-							t.Fatalf("run %d: state %v Help did not remain inline", run, recovery)
-						}
-						sc009Update(t, model, keyPress("esc"))
-						if model.modal.helpVisible || model.modal.kind != modalKindSSHFailure {
-							t.Fatalf("run %d: state %v Help Esc did not restore diagnostic", run, recovery)
-						}
 					}
 				}
 			})
 		}
 	}
 
-	for _, closeKey := range []tea.KeyPressMsg{keyPress("?"), keyPress("esc")} {
-		t.Run("ssh_retry_confirmation_help/"+closeKey.String(), func(t *testing.T) {
-			for run := range sc009Runs {
-				model := New(Config{Width: 80, Height: 24, NoColor: true})
-				sc009Snapshot(model, root, []app.Folder{folder}, []app.Connection{connection}, connection.ID)
-				diagnostic := newSSHFailureModal(app.SSHAttemptTarget{ID: connection.ID, Revision: connection.Revision, Path: connection.Path, Host: connection.Host, Port: connection.Port}, app.NewSSHStartError(app.SSHFailureTimeout, app.SSHFailureStageNetworkConnection, "operation timed out", context.DeadlineExceeded).Presentation())
-				diagnostic.recovery = recoveryConfirming
-				model.installSSHFailure(diagnostic)
-				model.modal.payload = sshFailurePayload{modal: diagnostic, confirmation: newRetryConnectConfirmation(diagnostic.attempt, connection)}
-				confirmation := model.modal.payload.(sshFailurePayload).confirmation
-				sc009Update(t, model, keyPress("?"))
-				if !model.modal.helpVisible || model.modal.kind != modalKindSSHFailure {
-					t.Fatalf("run %d: retry confirmation Help replaced owner", run)
-				}
-				sc009Update(t, model, closeKey)
-				payload := model.modal.payload.(sshFailurePayload)
-				if model.modal.helpVisible || payload.confirmation != confirmation || payload.modal != diagnostic || model.focusOwner != focusOwnerModal {
-					t.Fatalf("run %d: retry confirmation Help close alias %q lost subphase", run, closeKey.String())
-				}
-			}
-		})
-	}
+	t.Run("ssh retry confirmation ignores Help", func(t *testing.T) {
+		model := New(Config{Width: 80, Height: 24, NoColor: true})
+		sc009Snapshot(model, root, []app.Folder{folder}, []app.Connection{connection}, connection.ID)
+		diagnostic := newSSHFailureModal(app.SSHAttemptTarget{ID: connection.ID, Revision: connection.Revision, Path: connection.Path, Host: connection.Host, Port: connection.Port}, app.NewSSHStartError(app.SSHFailureTimeout, app.SSHFailureStageNetworkConnection, "operation timed out", context.DeadlineExceeded).Presentation())
+		diagnostic.recovery = recoveryConfirming
+		model.installSSHFailure(diagnostic)
+		model.modal.payload = sshFailurePayload{modal: diagnostic, confirmation: newRetryConnectConfirmation(diagnostic.attempt, connection)}
+		confirmation := model.modal.payload.(sshFailurePayload).confirmation
+		sc009Update(t, model, keyPress("?"))
+		payload := model.modal.payload.(sshFailurePayload)
+		if model.modal.helpVisible || payload.confirmation != confirmation || payload.modal != diagnostic || model.focusOwner != focusOwnerModal {
+			t.Fatal("retry confirmation Help changed the modal")
+		}
+	})
 }
 
 func sc009CheckFailedOperationRetained(t *testing.T, model *Model, command tea.Cmd, run int) {

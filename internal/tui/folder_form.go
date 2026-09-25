@@ -122,6 +122,6 @@ func (f *folderForm) modalLines(width int, semanticStyles ...styles) ([]string, 
 	if message != "" {
 		lines = append(lines, style.failureMessage(safeText(message, max(0, width-7))))
 	}
-	lines = append(lines, "Ctrl+S/Enter Save  Esc Cancel  F1 Help")
+	lines = append(lines, "Ctrl+S/Enter Save  Esc Cancel")
 	return lines, active
 }

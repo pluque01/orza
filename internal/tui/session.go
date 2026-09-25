@@ -720,10 +720,6 @@ func (m *Model) handleSecurityInputKey(msg tea.KeyPressMsg) tea.Cmd {
 	if state.kind != securityInputTrust || state.trust == nil {
 		return nil
 	}
-	if key.Matches(msg, m.keys.Help, m.keys.FormHelp) {
-		m.toggleHelp()
-		return nil
-	}
 	pendingRuntime := m.sessionRuntime
 	if pendingRuntime == nil {
 		return nil
