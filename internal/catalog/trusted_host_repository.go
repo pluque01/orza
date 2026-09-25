@@ -159,6 +159,83 @@ func (r *TrustedHostRepository) TrustHost(ctx context.Context, request TrustHost
 	return trusted, nil
 }
 
+// DeleteTrustedHost removes one trust record only when its current revision
+// matches the revision observed by the caller.
+func (r *TrustedHostRepository) DeleteTrustedHost(ctx context.Context, endpoint HostEndpoint, expectedRevision uint64) (catalogRevision uint64, err error) {
+	endpoint.CanonicalHost = canonicalHost(endpoint.CanonicalHost)
+	if err := validateHostEndpoint(endpoint); err != nil {
+		return 0, err
+	}
+	if expectedRevision == 0 || expectedRevision > math.MaxInt64 {
+		return 0, fmt.Errorf("%w: expected revision", ErrInvalidTrustedHost)
+	}
+	if r == nil || r.store == nil || r.store.db == nil {
+		return 0, errors.New("catalog is not open")
+	}
+
+	conn, err := r.store.db.Conn(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("acquire catalog connection: %w", err)
+	}
+	defer conn.Close()
+	if _, err = conn.ExecContext(ctx, `BEGIN IMMEDIATE`); err != nil {
+		return 0, fmt.Errorf("begin trusted host transaction: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			_, _ = conn.ExecContext(context.Background(), `ROLLBACK`)
+		}
+	}()
+	if err = verifyTrustedHostWritableSchema(ctx, conn); err != nil {
+		return 0, err
+	}
+
+	result, err := conn.ExecContext(ctx, `
+		DELETE FROM trusted_hosts
+		WHERE canonical_host = ? AND port = ? AND revision = ?
+	`, endpoint.CanonicalHost, endpoint.Port, expectedRevision)
+	if err != nil {
+		return 0, fmt.Errorf("delete trusted host: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("inspect trusted host deletion: %w", err)
+	}
+	if rows != 1 {
+		var currentRevision uint64
+		scanErr := conn.QueryRowContext(ctx, `SELECT revision FROM trusted_hosts WHERE canonical_host = ? AND port = ?`, endpoint.CanonicalHost, endpoint.Port).Scan(&currentRevision)
+		if errors.Is(scanErr, sql.ErrNoRows) {
+			return 0, ErrTrustedHostNotFound
+		}
+		if scanErr != nil {
+			return 0, fmt.Errorf("read trusted host for deletion: %w", scanErr)
+		}
+		return 0, ErrTrustedHostConflict
+	}
+	metaResult, err := conn.ExecContext(ctx, `
+		UPDATE catalog_meta
+		SET catalog_revision = catalog_revision + 1
+		WHERE singleton = 1 AND catalog_revision < ?
+	`, int64(math.MaxInt64))
+	if err != nil {
+		return 0, fmt.Errorf("increment catalog revision: %w", err)
+	}
+	metaRows, err := metaResult.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("inspect catalog revision update: %w", err)
+	}
+	if metaRows != 1 {
+		return 0, fmt.Errorf("%w: catalog revision overflow", ErrInvalidTrustedHost)
+	}
+	if err = conn.QueryRowContext(ctx, `SELECT catalog_revision FROM catalog_meta WHERE singleton = 1`).Scan(&catalogRevision); err != nil {
+		return 0, fmt.Errorf("read catalog revision: %w", err)
+	}
+	if _, err = conn.ExecContext(ctx, `COMMIT`); err != nil {
+		return 0, fmt.Errorf("commit trusted host transaction: %w", err)
+	}
+	return catalogRevision, nil
+}
+
 type rowScanner interface {
 	Scan(...any) error
 }

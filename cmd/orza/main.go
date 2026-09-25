@@ -52,6 +52,10 @@ var bootstrap = func(ctx context.Context) (*app.Dependencies, error) {
 			}
 			catalogTrustedHosts := catalog.NewTrustedHostRepository(dependencies.Catalog)
 			trustedHosts := hostkey.NewCatalogTrustedHostAdapter(catalogTrustedHosts)
+			hostTrustService, err := app.NewHostTrustService(repository, trustedHosts)
+			if err != nil {
+				return err
+			}
 			hostTrust, err := hostkey.NewCatalogPolicy(catalogTrustedHosts)
 			if err != nil {
 				return err
@@ -69,6 +73,7 @@ var bootstrap = func(ctx context.Context) (*app.Dependencies, error) {
 			dependencies.Connections = connections
 			dependencies.Folders = folders
 			dependencies.Connect = connectService
+			dependencies.HostTrust = hostTrustService
 			dependencies.Credentials = saga
 			dependencies.Terminal = localTerminal
 			return nil

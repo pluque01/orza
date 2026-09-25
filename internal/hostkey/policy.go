@@ -143,6 +143,17 @@ func (a catalogRepositoryAdapter) TrustHost(ctx context.Context, request app.Tru
 	return a.GetTrustedHost(ctx, app.HostEndpoint{CanonicalHost: host.CanonicalHost, Port: host.Port})
 }
 
+func (a catalogRepositoryAdapter) DeleteTrustedHost(ctx context.Context, endpoint app.HostEndpoint, expected app.Revision) (app.CatalogRevision, error) {
+	revision, err := a.repository.DeleteTrustedHost(ctx, catalog.HostEndpoint{
+		CanonicalHost: endpoint.CanonicalHost,
+		Port:          endpoint.Port,
+	}, uint64(expected))
+	if err != nil {
+		return 0, err
+	}
+	return app.CatalogRevision(revision), nil
+}
+
 func DefaultKnownHostsFiles() ([]string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {

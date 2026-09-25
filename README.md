@@ -282,6 +282,7 @@ orza connection update PATH_OR_ID [--name NAME] [--host HOST] [--port PORT]
   [--remember-password|--forget-password] [--if-revision REVISION]
 orza connection move PATH_OR_ID DESTINATION_FOLDER [--if-revision REVISION]
 orza connection delete PATH_OR_ID [--if-revision REVISION] [--yes]
+orza connection forget-host-key PATH_OR_ID [--if-revision REVISION]
 orza connect PATH_OR_ID
 ```
 
@@ -289,6 +290,10 @@ The default port is 22. `--identity-file` is required only for `key`. `--remembe
 only for password authentication and asks for explicit confirmation before reading the password.
 Without `--yes`, deletion requires an interactive confirmation and identifies the target. A
 non-interactive deletion must deliberately use `--yes`.
+
+`connection forget-host-key` is non-interactive so it can be used in automation. It removes only
+Orza's remembered trust for the connection's host and port; a repeated command reports that no
+app-owned key remains. It does not modify `~/.ssh/known_hosts` or `~/.ssh/known_hosts2`.
 
 ### Folder commands
 

@@ -32,6 +32,7 @@ const (
 	modalKindDeleteConnection    modalKind = "delete_connection"
 	modalKindDeleteFolder        modalKind = "delete_folder"
 	modalKindConnectConfirmation modalKind = "connect_confirmation"
+	modalKindForgetHostKey       modalKind = "forget_host_key"
 	modalKindUnsavedChanges      modalKind = "unsaved_changes"
 	modalKindHelp                modalKind = "help"
 	modalKindOperationError      modalKind = "operation_error"
@@ -46,6 +47,7 @@ func (kind modalKind) valid() bool {
 		modalKindDeleteConnection,
 		modalKindDeleteFolder,
 		modalKindConnectConfirmation,
+		modalKindForgetHostKey,
 		modalKindUnsavedChanges,
 		modalKindHelp,
 		modalKindOperationError,
@@ -112,6 +114,7 @@ func newModalRegistry() modalRegistry {
 	registry, _ = registerModalPayload[deleteConnectionPayload](registry, modalKindDeleteConnection)
 	registry, _ = registerModalPayload[deleteFolderPayload](registry, modalKindDeleteFolder)
 	registry, _ = registerModalPayload[connectConfirmationPayload](registry, modalKindConnectConfirmation)
+	registry, _ = registerModalPayload[forgetHostKeyPayload](registry, modalKindForgetHostKey)
 	registry, _ = registerModalPayload[unsavedChangesPayload](registry, modalKindUnsavedChanges)
 	registry, _ = registerModalPayload[helpPayload](registry, modalKindHelp)
 	registry, _ = registerModalPayload[operationErrorPayload](registry, modalKindOperationError)

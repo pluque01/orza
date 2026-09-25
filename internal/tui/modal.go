@@ -31,6 +31,7 @@ type folderDeleteConfirmation struct {
 type deleteConnectionPayload struct{ confirmation *deleteConfirmation }
 type deleteFolderPayload struct{ confirmation *folderDeleteConfirmation }
 type connectConfirmationPayload struct{ confirmation *connectConfirmation }
+type forgetHostKeyPayload struct{ confirmation *forgetHostKeyConfirmation }
 type helpPayload struct {
 	lines       []string
 	descriptors []actionDescriptor
@@ -61,6 +62,10 @@ func (payload connectConfirmationPayload) validModalPayload() bool {
 	return payload.confirmation != nil && payload.confirmation.connection.ID != ""
 }
 
+func (payload forgetHostKeyPayload) validModalPayload() bool {
+	return payload.confirmation != nil && payload.confirmation.scope.Endpoint.CanonicalHost != "" && payload.confirmation.scope.Endpoint.Port != 0
+}
+
 func (payload helpPayload) validModalPayload() bool {
 	return len(payload.lines) != 0 || len(payload.descriptors) != 0
 }
@@ -88,6 +93,19 @@ func newRetryConnectConfirmation(previous app.SSHAttemptTarget, connection app.C
 }
 
 func (m *connectConfirmation) confirmed(msg tea.KeyPressMsg) bool { return msg.String() == "y" }
+
+type forgetHostKeyConfirmation struct {
+	scope     app.ForgetHostKeyScope
+	completed *bool
+}
+
+func newForgetHostKeyConfirmation(scope app.ForgetHostKeyScope) *forgetHostKeyConfirmation {
+	return &forgetHostKeyConfirmation{scope: scope}
+}
+
+func (m *forgetHostKeyConfirmation) confirmed(msg tea.KeyPressMsg) bool {
+	return m.completed == nil && m.scope.TrustedHost != nil && msg.String() == "y"
+}
 
 func newFolderDeleteConfirmation(scope app.FolderDeleteScope) *folderDeleteConfirmation {
 	return &folderDeleteConfirmation{scope: scope, choice: confirmationCancel}
@@ -276,6 +294,8 @@ func modalPayloadContent(state modalState, style styles, width int) ([]string, i
 		return deleteFolderLines(payload.confirmation.scope, width, style), noActiveLine
 	case connectConfirmationPayload:
 		return connectConfirmationLines(payload.confirmation, width, style), noActiveLine
+	case forgetHostKeyPayload:
+		return forgetHostKeyLines(payload.confirmation, width, style), noActiveLine
 	case unsavedChangesPayload:
 		return payload.lines(width, style), noActiveLine
 	case helpPayload:
@@ -322,6 +342,9 @@ func validModalPayloadForKind(kind modalKind, value any) bool {
 		return ok && payload.validModalPayload()
 	case modalKindConnectConfirmation:
 		payload, ok := value.(connectConfirmationPayload)
+		return ok && payload.validModalPayload()
+	case modalKindForgetHostKey:
+		payload, ok := value.(forgetHostKeyPayload)
 		return ok && payload.validModalPayload()
 	case modalKindUnsavedChanges:
 		payload, ok := value.(unsavedChangesPayload)
@@ -394,6 +417,29 @@ func connectConfirmationLines(confirmation *connectConfirmation, width int, moda
 		displayField{label: "Revision", value: fmt.Sprint(connection.Revision)},
 	)
 	lines := append([]string{"Connect to SSH target?"}, renderWrappedModalFields(modalRenderStyle(modalStyle), width, fields)...)
+	return append(lines, modalControlLine("y Confirm"), modalControlLine("Enter/Esc Cancel"), modalControlLine("? Help"))
+}
+
+func forgetHostKeyLines(confirmation *forgetHostKeyConfirmation, width int, modalStyle ...styles) []string {
+	if confirmation == nil {
+		return nil
+	}
+	endpoint := net.JoinHostPort(confirmation.scope.Endpoint.CanonicalHost, strconv.Itoa(int(confirmation.scope.Endpoint.Port)))
+	fields := []displayField{{label: "Host", value: endpoint}, {label: "Scope", value: "app-owned trust only; standard SSH trust is unchanged"}}
+	if confirmation.completed != nil {
+		message := "No app-owned host key was present; no change was made."
+		if *confirmation.completed {
+			message = "App-owned host key forgotten. Future connections may prompt for host-key trust again."
+		}
+		lines := append([]string{"Forget host key result"}, renderWrappedModalFields(modalRenderStyle(modalStyle), width, append(fields, displayField{label: "Result", value: message}))...)
+		return append(lines, modalControlLine("Enter/Esc Close"), modalControlLine("? Help"))
+	}
+	if confirmation.scope.TrustedHost == nil {
+		lines := append([]string{"No app-owned host key to forget"}, renderWrappedModalFields(modalRenderStyle(modalStyle), width, fields)...)
+		return append(lines, modalControlLine("Enter/Esc Close"), modalControlLine("? Help"))
+	}
+	fields = append(fields, displayField{label: "Effect", value: "future connections may prompt for host-key trust again"})
+	lines := append([]string{"Forget app-owned host key?"}, renderWrappedModalFields(modalRenderStyle(modalStyle), width, fields)...)
 	return append(lines, modalControlLine("y Confirm"), modalControlLine("Enter/Esc Cancel"), modalControlLine("? Help"))
 }
 
@@ -619,6 +665,8 @@ func modalTitle(kind modalKind) string {
 		return "Delete"
 	case modalKindConnectConfirmation:
 		return "Connect"
+	case modalKindForgetHostKey:
+		return "Forget Host Key"
 	case modalKindUnsavedChanges:
 		return "Unsaved Changes"
 	case modalKindHelp:

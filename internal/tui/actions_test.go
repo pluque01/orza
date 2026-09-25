@@ -18,7 +18,7 @@ func TestObjectActionInventoriesAreExact(t *testing.T) {
 	}{
 		{"root", actionSelectionRoot, "n/f/r/?/q", []actionID{actionNewConnection, actionNewFolder, actionReload, actionHelp, actionQuit}},
 		{"folder", actionSelectionFolder, "n/f/e/m/d/r/?/q", []actionID{actionNewConnection, actionNewFolder, actionEdit, actionMove, actionDelete, actionReload, actionHelp, actionQuit}},
-		{"connection", actionSelectionConnection, "c/n/f/e/m/d/r/?/q", []actionID{actionConnect, actionNewConnection, actionNewFolder, actionEdit, actionMove, actionDelete, actionReload, actionHelp, actionQuit}},
+		{"connection", actionSelectionConnection, "c/x/n/f/e/m/d/r/?/q", []actionID{actionConnect, actionForgetHostKey, actionNewConnection, actionNewFolder, actionEdit, actionMove, actionDelete, actionReload, actionHelp, actionQuit}},
 	}
 
 	for _, test := range tests {
@@ -46,6 +46,7 @@ func TestObjectActionCanonicalLabelsAndPrioritiesAreStable(t *testing.T) {
 		priority actionPriority
 	}{
 		actionConnect:       {"c", "Connect", actionCategoryDomain, actionPriorityDomain},
+		actionForgetHostKey: {"x", "Forget host key", actionCategoryDomain, actionPriorityDomain},
 		actionNewConnection: {"n", "New connection", actionCategoryDomain, actionPriorityDomain},
 		actionNewFolder:     {"f", "New folder", actionCategoryDomain, actionPriorityDomain},
 		actionEdit:          {"e", "Edit", actionCategoryDomain, actionPriorityDomain},
@@ -228,13 +229,14 @@ func actionHelpContains(lines []string, key, label string) bool {
 
 func TestHelpKeepsContextualDescriptorInventoryAndKeys(t *testing.T) {
 	descriptors := actionsFor(actionContext{selection: actionSelectionConnection, state: actionStateNormal, focus: actionFocusTree, canToggle: true})
-	const wantKeys = "c/n/f/e/m/d/r/?/q/Up/k/Down/j/Home/g/End/G/Left/h/Right/l/Enter/Space/Tab/Shift+Tab"
+	const wantKeys = "c/x/n/f/e/m/d/r/?/q/Up/k/Down/j/Home/g/End/G/Left/h/Right/l/Enter/Space/Tab/Shift+Tab"
 	if got := actionKeys(descriptors); got != wantKeys {
 		t.Fatalf("contextual keys = %q, want %q", got, wantKeys)
 	}
 
 	want := []string{
 		"c Connect",
+		"x Forget host key",
 		"n New connection",
 		"f New folder",
 		"e Edit",
@@ -327,8 +329,8 @@ func TestPackActionsUsesPriorityAndGreedyRows(t *testing.T) {
 	got := packActions("", actions, 35, 3)
 	want := []string{
 		"r Reload q Quit ? Help c Connect",
-		"n New connection f New folder",
-		"e Edit m Move d Delete",
+		"x Forget host key n New connection",
+		"f New folder e Edit m Move d Delete",
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("packed = %#v, want %#v", got, want)

@@ -9,8 +9,8 @@ import (
 
 func TestUS4ExactModalInventoryAndTypedPayloads(t *testing.T) {
 	registry := newModalRegistry()
-	if len(registry.payloadTypes) != 10 {
-		t.Fatalf("registered modal kinds = %d, want 10", len(registry.payloadTypes))
+	if len(registry.payloadTypes) != 11 {
+		t.Fatalf("registered modal kinds = %d, want 11", len(registry.payloadTypes))
 	}
 	connection := testConnection("connection", syntheticRootID, "/connection", 2)
 	folder := testFolder("folder", syntheticRootID, "/folder", 3)
@@ -28,6 +28,7 @@ func TestUS4ExactModalInventoryAndTypedPayloads(t *testing.T) {
 		{modalKindDeleteConnection, deleteConnectionPayload{newDeleteConfirmation(app.ConnectionDeleteScope{ID: connection.ID, Path: connection.Path, Revision: 2})}},
 		{modalKindDeleteFolder, deleteFolderPayload{newFolderDeleteConfirmation(app.FolderDeleteScope{ID: folder.ID, Path: folder.Path, Revision: 3})}},
 		{modalKindConnectConfirmation, connectConfirmationPayload{newConnectConfirmation(connection)}},
+		{modalKindForgetHostKey, forgetHostKeyPayload{newForgetHostKeyConfirmation(app.ForgetHostKeyScope{Endpoint: app.HostEndpoint{CanonicalHost: connection.Host, Port: connection.Port}})}},
 		{modalKindUnsavedChanges, unsavedChangesPayload{intent: unsavedIntentQuit, target: connection.Path}},
 		{modalKindHelp, helpPayload{lines: []string{"Esc Close"}}},
 		{modalKindOperationError, operationErrorPayload{newErrorModal("reload", "/", app.ErrConflict)}},

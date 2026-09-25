@@ -50,6 +50,7 @@ func TestModalControlInventoryAndPriorityRemainFixed(t *testing.T) {
 		modalKindDeleteConnection:    {modalControlLine("y Confirm"), modalControlLine("Enter/Esc Cancel"), modalControlLine("? Help")},
 		modalKindDeleteFolder:        {modalControlLine("y Confirm"), modalControlLine("Enter/Esc Cancel"), modalControlLine("? Help")},
 		modalKindConnectConfirmation: {modalControlLine("y Confirm"), modalControlLine("Enter/Esc Cancel"), modalControlLine("? Help")},
+		modalKindForgetHostKey:       {modalControlLine("y Confirm"), modalControlLine("Enter/Esc Cancel"), modalControlLine("? Help")},
 		modalKindUnsavedChanges:      {modalControlLine("s Save"), modalControlLine("d Discard"), modalControlLine("Esc Cancel")},
 		modalKindHelp:                {modalControlLine("?/Esc Close")},
 		modalKindOperationError:      {modalControlLine("r Reload"), modalControlLine("b/Esc Back"), modalControlLine("q Quit"), modalControlLine("? Help")},

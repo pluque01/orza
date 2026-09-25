@@ -230,6 +230,48 @@ func newConnectionDeleteCommand(service *app.ConnectionService, local app.Termin
 	return command
 }
 
+func newConnectionForgetHostKeyCommand(service *app.HostTrustService, options *Options) *cobra.Command {
+	var expected uint64
+	command := &cobra.Command{
+		Use: "forget-host-key PATH_OR_ID", Short: "Forget an app-owned SSH host key", Args: exactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			selector, err := parseSelector(args[0])
+			if err != nil {
+				return usageError("invalid connection path or ID", args[0], err)
+			}
+			if service == nil {
+				return NewError(CodeCatalog, "host trust service is unavailable", args[0], nil)
+			}
+			request := app.ForgetHostKeyRequest{Connection: selector}
+			if cmd.Flags().Changed("if-revision") {
+				if expected == 0 {
+					return usageError("revision must be greater than zero", args[0], domain.ErrInvalidRevision)
+				}
+				revision := app.Revision(expected)
+				request.ExpectedTrustRevision = &revision
+			}
+			result, err := service.Forget(cmd.Context(), request)
+			if err != nil {
+				return commandError(err, args[0])
+			}
+			data := struct {
+				Host      string `json:"host"`
+				Port      uint16 `json:"port"`
+				Forgotten bool   `json:"forgotten"`
+			}{result.Endpoint.CanonicalHost, result.Endpoint.Port, result.Forgotten}
+			if options.JSON {
+				return WriteSuccess(cmd.OutOrStdout(), true, data, result.CatalogRevision)
+			}
+			if result.Forgotten {
+				return WriteSuccess(cmd.OutOrStdout(), false, fmt.Sprintf("forgot app-owned host key for %s:%d", data.Host, data.Port), result.CatalogRevision)
+			}
+			return WriteSuccess(cmd.OutOrStdout(), false, fmt.Sprintf("no app-owned host key for %s:%d", data.Host, data.Port), nil)
+		},
+	}
+	command.Flags().Uint64Var(&expected, "if-revision", 0, "require this host trust revision")
+	return command
+}
+
 func exactArgs(count int) cobra.PositionalArgs {
 	return func(_ *cobra.Command, args []string) error {
 		if len(args) != count {

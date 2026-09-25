@@ -453,6 +453,10 @@ func (f *fakeTrustedHosts) TrustHost(_ context.Context, request TrustHostRequest
 	return TrustedHost{Revision: 1}, f.err
 }
 
+func (f *fakeTrustedHosts) DeleteTrustedHost(context.Context, HostEndpoint, Revision) (CatalogRevision, error) {
+	return 0, errors.New("unused")
+}
+
 type fakeSessionRunner struct {
 	run   func(context.Context, SSHSessionRequest) (SSHSessionResult, error)
 	calls int

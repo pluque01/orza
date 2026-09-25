@@ -24,6 +24,7 @@ type Dependencies struct {
 	Connections *ConnectionService
 	Folders     *FolderService
 	Connect     *ConnectService
+	HostTrust   *HostTrustService
 	Credentials CredentialLifecycle
 	Terminal    Terminal
 

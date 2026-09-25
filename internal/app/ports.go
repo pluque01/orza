@@ -41,6 +41,7 @@ type CredentialOperationRepository interface {
 type TrustedHostRepository interface {
 	GetTrustedHost(context.Context, HostEndpoint) (TrustedHost, error)
 	TrustHost(context.Context, TrustHostRequest) (TrustedHost, error)
+	DeleteTrustedHost(context.Context, HostEndpoint, Revision) (CatalogRevision, error)
 }
 
 // HostTrust checks standard and application-specific host trust sources.

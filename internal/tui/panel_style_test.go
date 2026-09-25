@@ -36,6 +36,7 @@ var feature008ModalFixtures = []struct {
 	{kind: modalKindDeleteConnection, label: "Delete"},
 	{kind: modalKindDeleteFolder, label: "Delete"},
 	{kind: modalKindConnectConfirmation, label: "Connect"},
+	{kind: modalKindForgetHostKey, label: "Forget Host Key"},
 	{kind: modalKindUnsavedChanges, label: "Unsaved Changes"},
 	{kind: modalKindHelp, label: "Help"},
 	{kind: modalKindOperationError, label: "Operation Error"},
@@ -102,8 +103,8 @@ func TestPanelStyleFixtureInventory(t *testing.T) {
 	}); !slices.Equal(got, []string{"Root", "Folder", "Connection"}) {
 		t.Fatalf("detail fixtures = %#v", got)
 	}
-	if len(feature008ModalFixtures) != 10 || len(newModalRegistry().payloadTypes) != 10 {
-		t.Fatalf("modal fixture/registry count = %d/%d, want 10/10", len(feature008ModalFixtures), len(newModalRegistry().payloadTypes))
+	if len(feature008ModalFixtures) != 11 || len(newModalRegistry().payloadTypes) != 11 {
+		t.Fatalf("modal fixture/registry count = %d/%d, want 11/11", len(feature008ModalFixtures), len(newModalRegistry().payloadTypes))
 	}
 	for _, fixture := range feature008ModalFixtures {
 		if !fixture.kind.valid() || modalTitle(fixture.kind) != fixture.label {
