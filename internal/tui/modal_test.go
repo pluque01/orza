@@ -491,6 +491,22 @@ func TestConnectModalShowsHostTrustDecisionInsteadOfDetails(t *testing.T) {
 	}
 }
 
+func TestConnectModalHelpPreservesANSIStyles(t *testing.T) {
+	connection := app.Connection{Node: app.Node{ID: "connection", Path: "/prod", Revision: 2}, Host: "prod.test", Port: 22}
+	model := New(Config{Width: 80, Height: 24})
+	target := capturedTargetFromConnection(connection)
+	model.openGenericModal(modalKindConnectConfirmation, &target, connectConfirmationPayload{confirmation: newConnectConfirmation(connection)})
+	model.modal.helpVisible = true
+
+	view := model.View().Content
+	if !strings.Contains(view, "\x1b[") || strings.Contains(view, `\x1B`) {
+		t.Fatalf("modal Help did not preserve ANSI styles: %q", view)
+	}
+	if !strings.Contains(ansi.Strip(view), "Navigation") {
+		t.Fatalf("modal Help omitted its content: %q", view)
+	}
+}
+
 func TestMovePickerProjectsDynamicValuesBeforeWrappingOrTruncation(t *testing.T) {
 	unsafeValues := []string{
 		"ansi\x1b[31mred\x1b[0m",
