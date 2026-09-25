@@ -50,6 +50,28 @@ func (p *trustPrompt) view(style styles) string {
 	return out.String()
 }
 
+func (p *trustPrompt) modalLines(width int, style styles) []string {
+	host := p.prompt.Host
+	fields := []displayField{
+		{label: "Host", value: fmt.Sprintf("%s:%d", host.Endpoint.CanonicalHost, host.Endpoint.Port)},
+		{label: "Remote address", value: host.RemoteAddress},
+		{label: "Algorithm", value: host.KeyAlgorithm},
+		{label: "SHA-256 fingerprint", value: host.FingerprintSHA256},
+	}
+	if p.prompt.Status == app.HostTrustChanged && p.prompt.Known != nil {
+		fields = append(fields, displayField{label: "Known fingerprint", value: p.prompt.Known.FingerprintSHA256})
+	}
+
+	lines := append([]string{"Verify host identity"}, renderWrappedModalFields(style, width, fields)...)
+	if p.prompt.Status == app.HostTrustChanged {
+		lines = append(lines, style.failureMessage("WARNING: changed key; this may indicate a possible attack."))
+	}
+	if p.prompt.Status == app.HostTrustRevoked {
+		return append(lines, "This key is revoked.", modalControlLine("Esc Back"), modalControlLine("q Quit"), modalControlLine("? Help"))
+	}
+	return append(lines, modalControlLine("y Trust once"), modalControlLine("p Trust and persist"), modalControlLine("Enter/Esc Reject"), modalControlLine("? Help"), modalControlLine("q Quit"))
+}
+
 // lineReaderView retains the non-TUI prompt consumed from stdin.
 func (p *trustPrompt) lineReaderView(style styles) string {
 	host := p.prompt.Host
