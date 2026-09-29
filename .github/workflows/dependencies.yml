@@ -28,7 +28,7 @@ jobs:
         uses: cachix/install-nix-action@d1ca217b388ee87b2507a9a93bf01368bde7cec2 # v31
       - name: Acquire UTC week marker and run Renovate
         env:
-          LOG_LEVEL: info
+          LOG_LEVEL: debug
           RENOVATE_ALLOWED_COMMANDS: '["^nix flake lock --update-input vulndb$"]'
           RENOVATE_REPOSITORY: ${{ github.repository }}
           RENOVATE_REVISION: ${{ github.sha }}
