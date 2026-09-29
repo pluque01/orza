@@ -36,6 +36,9 @@ func TestOperationKindsOwnExactStatusAndSuppressMutations(t *testing.T) {
 			if !strings.Contains(view, test.status) || !strings.Contains(view, "Esc Cancel") || !strings.Contains(view, "? Help") || !strings.Contains(view, "q Quit") {
 				t.Fatalf("operation view omitted exact inventory:\n%s", view)
 			}
+			if strings.Contains(view, "Actions") {
+				t.Fatalf("operation view retained an Actions panel:\n%s", view)
+			}
 			for _, value := range []string{"n", "f", "e", "m", "d", "r", "c", "j", "tab"} {
 				before := model.browser.selectedID
 				_, command := model.Update(keyPress(value))

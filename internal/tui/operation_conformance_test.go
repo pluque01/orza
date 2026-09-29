@@ -118,7 +118,7 @@ func TestSC012OperationToConflictConformanceMatrix20Runs(t *testing.T) {
 						t.Fatalf("run %d: post-cleanup conflict controls = %q", run, got)
 					}
 					view := fixture.model.View().Content
-					for _, want := range []string{"r Reload", "b Back", "Esc Cancel warning", "? Help", "q Quit"} {
+					for _, want := range []string{"r Reload", "b Back", "Esc Cancel warning", "q Quit"} {
 						if !strings.Contains(view, want) {
 							t.Fatalf("run %d: conflict frame omitted %q:\n%s", run, want, view)
 						}

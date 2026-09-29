@@ -114,7 +114,7 @@ func TestFolderHierarchyCLIAndTUIServiceParity(t *testing.T) {
 	updateTUI(t, model, tuiKey("j"))
 	assertTreeSelectionPath(t, model, "/archive")
 	updateTUI(t, model, tuiKey("?"))
-	if view := model.View().Content; !strings.Contains(view, "Help") || !strings.Contains(view, "n New connection") {
+	if view := model.View().Content; !strings.Contains(view, "Help") || !strings.Contains(view, "New connection") {
 		t.Fatalf("standalone Help view = %q", view)
 	}
 	updateTUI(t, model, tuiKey("esc"))

@@ -27,7 +27,6 @@ term	action.save	Save
 term	field.identity	Identity file
 term	field.method	Method
 term	field.remember_password	Remember password
-term	region.actions	Actions
 term	region.details	Details
 term	region.tree	Tree
 term	security.passphrase	Private key passphrase
@@ -54,7 +53,6 @@ copy	"? Help  q Quit"
 copy	"?/Esc Close"
 copy	"Agent"
 copy	"Action"
-copy	"Actions"
 copy	"Algorithm"
 copy	"Algorithm: "
 copy	"Application"

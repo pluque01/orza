@@ -1956,17 +1956,17 @@ func (m *Model) browserShell(layout layoutState) string {
 		status = m.operation.loadingStatus()
 	}
 	var actions []string
-	formLegend := false
 	if m.screen == screenConnectionForm && m.operation == nil {
 		if m.connectionEdit != nil && m.connectionEdit.conflict != nil {
 			context.state = actionStateConflict
-			actions = packActions(status, actionsFor(context), layout.actions.contentWidth(), layout.actions.contentHeight())
+			actions = packActions(status, m.visibleActionDescriptors(actionsFor(context)), layout.actions.width, layout.actions.height)
 		} else {
 			actions = renderActionLegend(m.styles, m.formActionDescriptors(), layout.actions.width)
-			formLegend = true
 		}
+	} else if m.operation == nil && context.state == actionStateNormal {
+		actions = renderBrowserLegend(m.styles, m.visibleActionDescriptors(actionsFor(context)), layout.actions.width)
 	} else {
-		actions = packActions(status, actionsFor(context), layout.actions.contentWidth(), layout.actions.contentHeight())
+		actions = packActions(status, m.visibleActionDescriptors(actionsFor(context)), layout.actions.width, layout.actions.height)
 	}
 	treePanel := renderRegionPanelWithScrollbar(m.styles.regionTitle("Tree", m.focusOwner == focusOwnerTree), tree, layout.tree, m.styles, treeProjection.scrollbar, 0)
 	detailTitle := m.styles.regionTitle("Details", m.focusOwner == focusOwnerDetail || m.focusOwner == focusOwnerConnectionForm)
@@ -1977,39 +1977,33 @@ func (m *Model) browserShell(layout layoutState) string {
 		}
 	}
 	detailPanel := renderRegionPanelWithScrollbar(detailTitle, details, layout.details, m.styles, detailScrollbar, detailTrackStart)
-	if layout.actions.height == 0 {
-		return strings.Join(append(strings.Split(joinBrowserPanels(treePanel, detailPanel, layout), "\n"), renderBrowserLegend(m.styles, actionsFor(context), layout.legend.width)...), "\n")
-	}
-	if formLegend {
-		actions = append(actions, make([]string, max(0, layout.actions.height-len(actions)))...)
-		if layout.mode == layoutWide {
-			left, right := strings.Split(treePanel, "\n"), strings.Split(detailPanel, "\n")
-			base := make([]string, layout.tree.height)
-			for index := range base {
-				base[index] = left[index] + strings.Repeat(" ", wideGutterWidth) + right[index]
-			}
-			return strings.Join(append(base, actions...), "\n")
-		}
-		return treePanel + "\n" + detailPanel + "\n" + strings.Join(actions, "\n")
-	}
-	actionsPanel := renderRegionPanel(m.styles.regionTitle("Actions", false), actions, layout.actions)
-
+	actions = append(actions, make([]string, max(0, layout.actions.height-len(actions)))...)
 	if layout.mode == layoutWide {
 		left, right := strings.Split(treePanel, "\n"), strings.Split(detailPanel, "\n")
 		base := make([]string, layout.tree.height)
 		for index := range base {
 			base[index] = left[index] + strings.Repeat(" ", wideGutterWidth) + right[index]
 		}
-		return strings.Join(append(base, strings.Split(actionsPanel, "\n")...), "\n")
+		return strings.Join(append(base, actions...), "\n")
 	}
-	return treePanel + "\n" + detailPanel + "\n" + actionsPanel
+	return treePanel + "\n" + detailPanel + "\n" + strings.Join(actions, "\n")
 }
 
 func (m *Model) layout() layoutState {
-	if m.screen == screenConnectionForm || m.operation != nil || m.connectionEdit != nil && m.connectionEdit.conflict != nil || m.modal.conflict != nil {
-		return calculateLayoutWithActions(m.width, m.height, m.focusedLayoutRegion())
+	return calculateLayoutWithActions(m.width, m.height, m.focusedLayoutRegion())
+}
+
+func (m *Model) visibleActionDescriptors(descriptors []actionDescriptor) []actionDescriptor {
+	if !m.modal.isOpen() || m.modal.kind == modalKindHelp {
+		return descriptors
 	}
-	return calculateLayout(m.width, m.height, m.focusedLayoutRegion())
+	visible := make([]actionDescriptor, 0, len(descriptors))
+	for _, descriptor := range descriptors {
+		if descriptor.id != actionHelp {
+			visible = append(visible, descriptor)
+		}
+	}
+	return visible
 }
 
 func joinBrowserPanels(treePanel, detailPanel string, layout layoutState) string {

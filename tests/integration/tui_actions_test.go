@@ -25,6 +25,9 @@ func TestTUIBrowserLegendAndHelpUseSingularTitles(t *testing.T) {
 		updateTUI(t, model, model.Init()())
 		actions := ansi.Strip(model.View().Content)
 		assertCompactBrowserLegend(t, actions, false)
+		if strings.Contains(actions, "Actions") {
+			t.Fatalf("no-color=%t browser retained an Actions panel:\n%s", noColor, actions)
+		}
 
 		updateTUI(t, model, tuiKey("?"))
 		help := ansi.Strip(model.View().Content)
