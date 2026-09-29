@@ -22,6 +22,7 @@ type sshTransport interface {
 
 type remoteSession interface {
 	SetIO(io.Reader, io.Writer, io.Writer)
+	Exec(string) error
 	RequestPty(string, int, int, ssh.TerminalModes) error
 	Shell() error
 	Wait() error
@@ -49,8 +50,45 @@ func (s *clientSession) SetIO(stdin io.Reader, stdout, stderr io.Writer) {
 	s.session.Stderr = stderr
 }
 
+func (s *clientSession) Exec(command string) error { return s.session.Start(command) }
+
 func (s *clientSession) RequestPty(name string, rows, columns int, modes ssh.TerminalModes) error {
 	return s.session.RequestPty(name, rows, columns, modes)
+}
+
+func runCommand(ctx context.Context, session remoteSession, sessionCloser *closeOnce, now func() time.Time) (app.SSHSessionResult, error) {
+	result := app.SSHSessionResult{State: app.SessionFailed, Outcome: app.SessionOutcomeTransportFailure}
+	result.StartedAt = now()
+	waitResult := make(chan error, 1)
+	go func() { waitResult <- session.Wait() }()
+	var waitErr error
+	select {
+	case waitErr = <-waitResult:
+	case <-ctx.Done():
+		_ = sessionCloser.Close()
+		waitErr = <-waitResult
+	}
+	if err := ctx.Err(); err != nil {
+		if errors.Is(err, context.Canceled) {
+			result.State, result.Outcome = app.SessionCanceled, app.SessionOutcomeCanceled
+		}
+		return result, err
+	}
+	if waitErr == nil {
+		result.State, result.Outcome = app.SessionSucceeded, app.SessionOutcomeSuccess
+		return result, nil
+	}
+	var exitErr interface {
+		error
+		ExitStatus() int
+	}
+	if errors.As(waitErr, &exitErr) {
+		status := exitErr.ExitStatus()
+		result.Outcome = app.SessionOutcomeRemoteFailure
+		result.RemoteExitStatus = &status
+		return result, &RemoteExitError{status: status}
+	}
+	return result, stageError(StageStream, waitErr)
 }
 func (s *clientSession) Shell() error { return s.session.Shell() }
 func (s *clientSession) Wait() error  { return s.session.Wait() }

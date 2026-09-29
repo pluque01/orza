@@ -338,6 +338,43 @@ func TestSecurityRegressions(t *testing.T) {
 	})
 }
 
+func TestExecRejectsUntrustedHostBeforeNoninteractiveAuthentication(t *testing.T) {
+	connections := integrationConnectionService(t)
+	created, err := connections.Create(context.Background(), app.CreateConnectionRequest{Parent: app.ItemSelector{Path: "/"}, Name: "exec-untrusted", Host: "server.example", Port: 22, Username: "tester", AuthMethod: app.AuthMethodPassword})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := &execTrustProbeRunner{}
+	service, err := app.NewCommandService(app.CommandOptions{Connections: parityConnectionRepository{connections}, Credentials: parityCredentialLifecycle{}, HostTrust: unknownExecHostTrust{}, TrustedHosts: noOpTrustedHosts{}, Store: credential.NewFake(), Scope: "integration", Runner: runner})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := service.Run(context.Background(), app.CommandRequest{Connection: app.ItemSelector{ID: created.Connection.ID}, Command: "must-not-run"})
+	if cli.ExitCode(cli.NewError(cli.CodeSecurity, "", "", err)) != cli.ExitSecurity || result.Session.Failure == nil || result.Session.Failure.Category != app.SSHFailureHostTrust {
+		t.Fatalf("Run() = %+v, %v", result, err)
+	}
+	if runner.secretRequested {
+		t.Fatal("exec requested a secret after host-trust rejection")
+	}
+}
+
+type unknownExecHostTrust struct{}
+
+func (unknownExecHostTrust) CheckHost(context.Context, app.PresentedHost) (app.HostTrustResult, error) {
+	return app.HostTrustResult{Status: app.HostTrustUnknown}, nil
+}
+
+type execTrustProbeRunner struct{ secretRequested bool }
+
+func (r *execTrustProbeRunner) RunCommand(ctx context.Context, request app.SSHCommandRequest) (app.SSHSessionResult, error) {
+	if err := request.VerifyHost(ctx, app.PresentedHost{Endpoint: app.HostEndpoint{CanonicalHost: request.Connection.Host, Port: request.Connection.Port}}); err != nil {
+		return app.SSHSessionResult{}, err
+	}
+	r.secretRequested = true
+	_, err := request.Secret(ctx, app.SecretRequest{Kind: app.SecretPassword})
+	return app.SSHSessionResult{}, err
+}
+
 func assertNoSecurityCanary(t *testing.T, surface, output string, canaries []string) {
 	t.Helper()
 	for _, canary := range canaries {

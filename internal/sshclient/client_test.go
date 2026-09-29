@@ -608,6 +608,7 @@ type fakeSession struct {
 	stderr     io.Writer
 	requestPty func(string, int, int, ssh.TerminalModes) error
 	shell      func() error
+	exec       func(string) error
 	wait       func() error
 	resize     func(int, int) error
 	close      func() error
@@ -615,6 +616,12 @@ type fakeSession struct {
 
 func (s *fakeSession) SetIO(stdin io.Reader, stdout, stderr io.Writer) {
 	s.stdin, s.stdout, s.stderr = stdin, stdout, stderr
+}
+func (s *fakeSession) Exec(command string) error {
+	if s.exec != nil {
+		return s.exec(command)
+	}
+	return nil
 }
 func (s *fakeSession) RequestPty(name string, rows, columns int, modes ssh.TerminalModes) error {
 	if s.requestPty != nil {

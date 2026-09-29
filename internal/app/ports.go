@@ -78,3 +78,8 @@ type Clock interface {
 type SSHSessionRunner interface {
 	Run(context.Context, SSHSessionRequest) (SSHSessionResult, error)
 }
+
+// SSHCommandRunner owns one non-PTY SSH command for the duration of RunCommand.
+type SSHCommandRunner interface {
+	RunCommand(context.Context, SSHCommandRequest) (SSHSessionResult, error)
+}
