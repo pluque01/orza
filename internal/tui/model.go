@@ -2018,18 +2018,6 @@ func bottomAlignActions(actions []string, height int) []string {
 	return append(make([]string, height-len(actions)), actions...)
 }
 
-func joinBrowserPanels(treePanel, detailPanel string, layout layoutState) string {
-	if layout.mode == layoutWide {
-		left, right := strings.Split(treePanel, "\n"), strings.Split(detailPanel, "\n")
-		base := make([]string, layout.tree.height)
-		for index := range base {
-			base[index] = left[index] + strings.Repeat(" ", wideGutterWidth) + right[index]
-		}
-		return strings.Join(base, "\n")
-	}
-	return treePanel + "\n" + detailPanel
-}
-
 func (m *Model) actionContext() actionContext {
 	context := actionContext{state: actionStateNormal}
 	if m.focusOwner == focusOwnerDetail {
