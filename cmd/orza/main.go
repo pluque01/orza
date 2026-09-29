@@ -70,9 +70,17 @@ var bootstrap = func(ctx context.Context) (*app.Dependencies, error) {
 			if err != nil {
 				return err
 			}
+			commandService, err := app.NewCommandService(app.CommandOptions{
+				Connections: repository, Credentials: saga, HostTrust: hostTrust,
+				TrustedHosts: trustedHosts, Store: credentialStore, Scope: scope, Runner: runner,
+			})
+			if err != nil {
+				return err
+			}
 			dependencies.Connections = connections
 			dependencies.Folders = folders
 			dependencies.Connect = connectService
+			dependencies.Command = commandService
 			dependencies.HostTrust = hostTrustService
 			dependencies.Credentials = saga
 			dependencies.Terminal = localTerminal

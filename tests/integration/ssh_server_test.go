@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
@@ -68,6 +69,29 @@ func TestSSHClientAgainstInProcessServerRestoresTerminalAndReturnsRemoteStatus(t
 	}
 	if !hasTerminalOperation(local.Calls(), terminal.OperationMakeRaw) || !hasTerminalOperation(local.Calls(), terminal.OperationRestore) {
 		t.Fatalf("terminal calls = %#v", local.Calls())
+	}
+}
+
+func TestSSHClientExecAgainstInProcessServerStreamsAndPreservesStatus(t *testing.T) {
+	server := startSSHServer(t, "test-password", 23)
+	host, portText, err := net.SplitHostPort(server.address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	port, err := strconv.ParseUint(portText, 10, 16)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdin, stdout, stderr := bytes.NewBufferString("payload\n"), new(bytes.Buffer), new(bytes.Buffer)
+	client := sshclient.New(sshclient.Options{Stdin: stdin, Stdout: stdout, Stderr: stderr})
+	command := `printf 'out\n'; printf 'err\n' >&2; cat; exit 23`
+	result, runErr := client.RunCommand(context.Background(), app.SSHCommandRequest{Connection: app.Connection{Host: host, Port: uint16(port), Username: "tester", AuthMethod: app.AuthMethodPassword}, Command: command, Stdin: stdin, Stdout: stdout, Stderr: stderr, VerifyHost: func(context.Context, app.PresentedHost) error { return nil }, Secret: func(context.Context, app.SecretRequest) ([]byte, error) { return []byte("test-password"), nil }})
+	var remote interface{ Status() int }
+	if !errors.As(runErr, &remote) || remote.Status() != 23 || result.RemoteExitStatus == nil || *result.RemoteExitStatus != 23 {
+		t.Fatalf("RunCommand() = %+v, %v", result, runErr)
+	}
+	if stdout.String() != "out\npayload\n" || stderr.String() != "err\n" {
+		t.Fatalf("stdout=%q stderr=%q", stdout.String(), stderr.String())
 	}
 }
 
@@ -259,6 +283,26 @@ func startSSHServer(t *testing.T, password string, status uint32) sshTestServer 
 				case "shell":
 					_ = request.Reply(true, nil)
 					_, _ = io.WriteString(channel, "server-output\n")
+					payload := make([]byte, 4)
+					binary.BigEndian.PutUint32(payload, status)
+					_, _ = channel.SendRequest("exit-status", false, payload)
+					_ = channel.Close()
+					return
+				case "exec":
+					var execRequest struct{ Command string }
+					if err := ssh.Unmarshal(request.Payload, &execRequest); err != nil {
+						_ = request.Reply(false, nil)
+						return
+					}
+					command := execRequest.Command
+					if command != `printf 'out\n'; printf 'err\n' >&2; cat; exit 23` {
+						_ = request.Reply(false, nil)
+						return
+					}
+					_ = request.Reply(true, nil)
+					_, _ = io.WriteString(channel, "out\n")
+					_, _ = channel.Stderr().Write([]byte("err\n"))
+					_, _ = io.Copy(channel, channel)
 					payload := make([]byte, 4)
 					binary.BigEndian.PutUint32(payload, status)
 					_, _ = channel.SendRequest("exit-status", false, payload)

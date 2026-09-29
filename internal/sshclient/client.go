@@ -208,6 +208,64 @@ func (c *Client) Run(ctx context.Context, request app.SSHSessionRequest) (result
 	return sessionResult, err
 }
 
+// RunCommand executes one remote shell-text command without touching local terminal state.
+func (c *Client) RunCommand(ctx context.Context, request app.SSHCommandRequest) (result app.SSHSessionResult, runErr error) {
+	result.State, result.Outcome = app.SessionFailed, app.SessionOutcomeTransportFailure
+	if ctx == nil || ctx.Err() != nil || request.Connection.Host == "" || request.Connection.Port == 0 || request.Connection.Username == "" || request.VerifyHost == nil || request.Command == "" {
+		if ctx != nil && ctx.Err() != nil {
+			return canceledOrFailed(ctx, result, StageSession, ctx.Err())
+		}
+		return result, normalizePreActiveFailure(StageSession, errors.New("invalid SSH command request"))
+	}
+	resources := &resourceSet{}
+	defer func() {
+		if cleanupErr := resources.close(); cleanupErr != nil {
+			runErr = errors.Join(runErr, stageError(StageCleanup, cleanupErr))
+			result.State, result.Outcome = app.SessionFailed, app.SessionOutcomeTransportFailure
+		}
+	}()
+	address := net.JoinHostPort(request.Connection.Host, strconv.Itoa(int(request.Connection.Port)))
+	raw, err := c.options.DialContext(ctx, "tcp", address)
+	if err != nil {
+		return canceledOrFailed(ctx, result, StageDial, err)
+	}
+	if raw == nil {
+		return result, normalizePreActiveFailure(StageDial, errors.New("dial returned no connection"))
+	}
+	resources.raw = newCloseOnce(raw)
+	base := app.SSHSessionRequest{Connection: request.Connection, VerifyHost: request.VerifyHost, Secret: request.Secret}
+	config, authState := c.clientConfig(ctx, base)
+	transport, err := c.options.Handshake(ctx, raw, address, config)
+	resources.auth = newCloseOnce(authState.closer())
+	if err != nil {
+		if authErr := authState.err(); authErr != nil {
+			return canceledOrFailed(ctx, result, StageAuthentication, authErr)
+		}
+		var hostErr *hostVerificationError
+		if errors.As(err, &hostErr) {
+			return canceledOrFailed(ctx, result, StageHostVerify, hostErr.err)
+		}
+		return canceledOrFailed(ctx, result, StageHandshake, err)
+	}
+	if transport == nil {
+		return result, normalizePreActiveFailure(StageHandshake, errors.New("handshake returned no client"))
+	}
+	resources.transport = newCloseOnce(transport)
+	remote, err := transport.NewSession()
+	if err != nil {
+		return canceledOrFailed(ctx, result, StageSession, err)
+	}
+	if remote == nil {
+		return result, normalizePreActiveFailure(StageSession, errors.New("SSH client returned no session"))
+	}
+	resources.session = newCloseOnce(remote)
+	remote.SetIO(request.Stdin, request.Stdout, request.Stderr)
+	if err := remote.Exec(request.Command); err != nil {
+		return canceledOrFailed(ctx, result, StageShell, err)
+	}
+	return runCommand(ctx, remote, resources.session, c.options.Now)
+}
+
 type authState struct {
 	mu          sync.Mutex
 	initialized bool

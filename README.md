@@ -207,7 +207,7 @@ Global options are:
 
 | Option | Behavior |
 |---|---|
-| `--json` | Emit one machine-readable response for a catalog command or a structured pre-active `connect` failure. Interactive `connect` success remains a terminal stream. |
+| `--json` | Emit one machine-readable response for a catalog command or a structured pre-active `connect` failure. Interactive `connect` success remains a terminal stream. It cannot be used with `exec`. |
 | `--no-color` | Disable color. A non-empty `NO_COLOR` environment variable does the same. |
 | `--help` | Print help without starting the TUI. |
 | `--version` or `version` | Print the version. |
@@ -284,6 +284,7 @@ orza connection move PATH_OR_ID DESTINATION_FOLDER [--if-revision REVISION]
 orza connection delete PATH_OR_ID [--if-revision REVISION] [--yes]
 orza connection forget-host-key PATH_OR_ID [--if-revision REVISION]
 orza connect PATH_OR_ID
+orza exec PATH_OR_ID [--timeout DURATION] -- COMMAND
 ```
 
 The default port is 22. `--identity-file` is required only for `key`. `--remember-password` is valid
@@ -294,6 +295,24 @@ non-interactive deletion must deliberately use `--yes`.
 `connection forget-host-key` is non-interactive so it can be used in automation. It removes only
 Orza's remembered trust for the connection's host and port; a repeated command reports that no
 app-owned key remains. It does not modify `~/.ssh/known_hosts` or `~/.ssh/known_hosts2`.
+
+### Remote command execution
+
+`exec` runs one shell-text command on a saved connection without opening the TUI, allocating a PTY,
+changing terminal mode, or prompting. Command text after `--` is passed unchanged to the remote SSH
+endpoint, so quote it for the local shell and use remote pipes or redirections normally:
+
+```sh
+printf 'input\n' | orza exec /work/host -- 'cat; printf "diagnostic\n" >&2'
+orza exec /work/host --timeout 30s -- 'long-running-command'
+```
+
+The caller's standard input is forwarded and stdout/stderr stream directly to their matching local
+channels. The default timeout is five minutes and `--timeout` must be positive. A remote exit status
+from 1 through 255 is returned unchanged. Local failures use the documented management statuses.
+`exec` never approves or persists an unknown or changed host identity and never prompts for passwords
+or key passphrases; approve trust through the interactive flow and use an SSH agent, unencrypted key,
+or remembered password for unattended use.
 
 ### Folder commands
 
@@ -620,8 +639,7 @@ The following are also outside v1:
 
 - FIDO/security-key and PKCS#11 providers, keyboard-interactive and GSSAPI authentication, agent
   forwarding, and automatic fallback across multiple authentication methods.
-- Dedicated file transfer, SCP/SFTP, local/remote/dynamic tunnels, port forwarding, and non-interactive
-  remote-command execution.
+- Dedicated file transfer, SCP/SFTP, local/remote/dynamic tunnels, and port forwarding.
 - Inventory import/export, synchronization between machines, shared/team catalogs, and remote server
   administration.
 

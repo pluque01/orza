@@ -81,6 +81,107 @@ func TestRunMapsRemoteExitStatus(t *testing.T) {
 	assertTerminalRestored(t, local)
 }
 
+func TestRunCommandStreamsExactTextWithoutTerminalOperations(t *testing.T) {
+	local := terminal.NewFake(terminal.Size{Columns: 80, Rows: 24})
+	stdin := bytes.NewBufferString("input")
+	stdout, stderr := new(bytes.Buffer), new(bytes.Buffer)
+	var got string
+	ptyOrShell := false
+	remote := &fakeSession{
+		exec:       func(command string) error { got = command; return nil },
+		requestPty: func(string, int, int, ssh.TerminalModes) error { ptyOrShell = true; return nil },
+		shell:      func() error { ptyOrShell = true; return nil },
+		wait: func() error {
+			_, _ = stdout.Write([]byte("out"))
+			_, _ = stderr.Write([]byte("err"))
+			return nil
+		},
+	}
+	client := successfulClient(local, &fakeTransport{session: remote}, &fakeConn{})
+	client.options.Stdin, client.options.Stdout, client.options.Stderr = stdin, stdout, stderr
+	command := `printf 'out' | cat >&2`
+	result, err := client.RunCommand(context.Background(), app.SSHCommandRequest{Connection: testRequest(local).Connection, Command: command, VerifyHost: testRequest(local).VerifyHost, Secret: testRequest(local).Secret, Stdin: stdin, Stdout: stdout, Stderr: stderr})
+	if err != nil || result.State != app.SessionSucceeded {
+		t.Fatalf("RunCommand() = %+v, %v", result, err)
+	}
+	if got != command || ptyOrShell {
+		t.Fatalf("command = %q, terminal operations = %t", got, ptyOrShell)
+	}
+	if remote.stdin != stdin || remote.stdout != stdout || remote.stderr != stderr || stdout.String() != "out" || stderr.String() != "err" {
+		t.Fatalf("streams = stdin %p stdout %q stderr %q", remote.stdin, stdout.String(), stderr.String())
+	}
+	if len(local.Calls()) != 0 || local.CurrentState().Raw() {
+		t.Fatal("command execution changed terminal state")
+	}
+}
+
+func TestRunCommandPreservesAllRemoteStatusesAndClosesOnCancellation(t *testing.T) {
+	for _, status := range []int{1, 23, 255} {
+		t.Run("status", func(t *testing.T) {
+			remote := &fakeSession{wait: func() error { return exitStatusError(status) }}
+			client := successfulClient(terminal.NewFake(terminal.Size{Columns: 80, Rows: 24}), &fakeTransport{session: remote}, &fakeConn{})
+			result, err := client.RunCommand(context.Background(), commandTestRequest())
+			var remoteErr *RemoteExitError
+			if !errors.As(err, &remoteErr) || remoteErr.Status() != status || result.RemoteExitStatus == nil || *result.RemoteExitStatus != status {
+				t.Fatalf("RunCommand() = %+v, %v", result, err)
+			}
+		})
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	started, closed := make(chan struct{}), make(chan struct{})
+	var closes atomic.Int32
+	remote := &fakeSession{wait: func() error { close(started); <-closed; return context.Canceled }, close: func() error {
+		if closes.Add(1) == 1 {
+			close(closed)
+		}
+		return nil
+	}}
+	client := successfulClient(terminal.NewFake(terminal.Size{Columns: 80, Rows: 24}), &fakeTransport{session: remote}, &fakeConn{})
+	go func() { <-started; cancel() }()
+	result, err := client.RunCommand(ctx, commandTestRequest())
+	if !errors.Is(err, context.Canceled) || result.State != app.SessionCanceled || closes.Load() != 1 {
+		t.Fatalf("RunCommand() = %+v, %v; closes=%d", result, err, closes.Load())
+	}
+}
+
+func TestRunCommandDeadlineAndLargeStreamsRemainBounded(t *testing.T) {
+	deadline, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	closed := make(chan struct{})
+	remote := &fakeSession{wait: func() error { <-closed; return context.DeadlineExceeded }, close: func() error { close(closed); return nil }}
+	client := successfulClient(terminal.NewFake(terminal.Size{Columns: 80, Rows: 24}), &fakeTransport{session: remote}, &fakeConn{})
+	result, err := client.RunCommand(deadline, commandTestRequest())
+	if !errors.Is(err, context.DeadlineExceeded) || result.State != app.SessionFailed {
+		t.Fatalf("deadline RunCommand() = %+v, %v", result, err)
+	}
+
+	const size = 4 << 20
+	stdout, stderr := newCountingWriter(), newCountingWriter()
+	remote = &fakeSession{wait: func() error {
+		chunk := bytes.Repeat([]byte("x"), 4096)
+		for _, writer := range []io.Writer{stdout, stderr} {
+			for written := 0; written < size; written += len(chunk) {
+				if _, err := writer.Write(chunk); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}}
+	client = successfulClient(terminal.NewFake(terminal.Size{Columns: 80, Rows: 24}), &fakeTransport{session: remote}, &fakeConn{})
+	request := commandTestRequest()
+	request.Stdout, request.Stderr = stdout, stderr
+	result, err = client.RunCommand(context.Background(), request)
+	if err != nil || result.State != app.SessionSucceeded || stdout.bytes.Load() != size || stderr.bytes.Load() != size {
+		t.Fatalf("stream RunCommand() = %+v, %v; stdout=%d stderr=%d", result, err, stdout.bytes.Load(), stderr.bytes.Load())
+	}
+}
+
+func commandTestRequest() app.SSHCommandRequest {
+	request := testRequest(terminal.NewFake(terminal.Size{Columns: 80, Rows: 24}))
+	return app.SSHCommandRequest{Connection: request.Connection, Command: "true", VerifyHost: request.VerifyHost, Secret: request.Secret, Stdin: bytes.NewBuffer(nil), Stdout: io.Discard, Stderr: io.Discard}
+}
+
 func TestRunMapsWaitFailureToTransport(t *testing.T) {
 	local := terminal.NewFake(terminal.Size{Columns: 80, Rows: 24})
 	local.QueueResize()

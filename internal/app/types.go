@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"io"
 	"time"
 )
 
@@ -416,6 +417,33 @@ type SSHSessionResult struct {
 	StartedAt        time.Time
 	RemoteExitStatus *int
 	Failure          *SSHFailurePresentation
+}
+
+// SSHCommandRequest describes one non-interactive SSH exec request. Its I/O is
+// streamed by the transport and is never retained by the application.
+type SSHCommandRequest struct {
+	Connection Connection
+	Command    string
+	VerifyHost func(context.Context, PresentedHost) error
+	Secret     func(context.Context, SecretRequest) ([]byte, error)
+	Stdin      io.Reader
+	Stdout     io.Writer
+	Stderr     io.Writer
+}
+
+type CommandRequest struct {
+	Connection ItemSelector
+	Expected   *Revision
+	Command    string
+	Stdin      io.Reader
+	Stdout     io.Writer
+	Stderr     io.Writer
+}
+
+type CommandResult struct {
+	Connection Connection
+	Attempt    SSHAttemptTarget
+	Session    SSHSessionResult
 }
 
 // SSHFailurePresentation is the cause-free diagnostic shared by all user
