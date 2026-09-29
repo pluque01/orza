@@ -1977,7 +1977,7 @@ func (m *Model) browserShell(layout layoutState) string {
 		}
 	}
 	detailPanel := renderRegionPanelWithScrollbar(detailTitle, details, layout.details, m.styles, detailScrollbar, detailTrackStart)
-	actions = append(actions, make([]string, max(0, layout.actions.height-len(actions)))...)
+	actions = bottomAlignActions(actions, layout.actions.height)
 	if layout.mode == layoutWide {
 		left, right := strings.Split(treePanel, "\n"), strings.Split(detailPanel, "\n")
 		base := make([]string, layout.tree.height)
@@ -2004,6 +2004,18 @@ func (m *Model) visibleActionDescriptors(descriptors []actionDescriptor) []actio
 		}
 	}
 	return visible
+}
+
+func bottomAlignActions(actions []string, height int) []string {
+	end := len(actions)
+	for end > 0 && actions[end-1] == "" {
+		end--
+	}
+	actions = actions[:end]
+	if len(actions) >= height {
+		return actions
+	}
+	return append(make([]string, height-len(actions)), actions...)
 }
 
 func joinBrowserPanels(treePanel, detailPanel string, layout layoutState) string {

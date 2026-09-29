@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 	"unicode"
@@ -9,6 +10,14 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/pluque01/orza/internal/app"
 )
+
+func TestBottomAlignActionsLeavesNoTrailingMargin(t *testing.T) {
+	got := bottomAlignActions([]string{"Loading: SSH start", "Esc Cancel  q Quit", "", "", ""}, 5)
+	want := []string{"", "", "", "Loading: SSH start", "Esc Cancel  q Quit"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("bottom-aligned actions = %#v, want %#v", got, want)
+	}
+}
 
 func TestModelCompleteTreeRevisionRetryAndSecondConflict(t *testing.T) {
 	root := testFolder("root", "", "/", 1)
