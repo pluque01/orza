@@ -72,6 +72,30 @@ func TestStackedOddRowGoesToFocusedBaseRegion(t *testing.T) {
 	}
 }
 
+func TestModelLayoutKeepsFixedLowerControlRegion(t *testing.T) {
+	tests := []struct {
+		name          string
+		width, height int
+		focus         layoutRegion
+		tree, details layoutRect
+		actions       layoutRect
+	}{
+		{"wide", 80, 24, regionTree, layoutRect{0, 0, 31, 19}, layoutRect{32, 0, 48, 19}, layoutRect{0, 19, 80, 5}},
+		{"minimum", 40, 12, regionDetails, layoutRect{0, 0, 40, 3}, layoutRect{0, 3, 40, 4}, layoutRect{0, 7, 40, 5}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			model := New(Config{Width: tt.width, Height: tt.height})
+			model.focusOwner = map[layoutRegion]focusOwner{regionTree: focusOwnerTree, regionDetails: focusOwnerDetail}[tt.focus]
+			layout := model.layout()
+			if layout.tree != tt.tree || layout.details != tt.details || layout.actions != tt.actions || layout.legend != (layoutRect{}) {
+				t.Fatalf("model layout = tree %#v details %#v legend %#v actions %#v", layout.tree, layout.details, layout.legend, layout.actions)
+			}
+		})
+	}
+}
+
 func TestLayoutInteriorDimensionsAccountForBorderAndPadding(t *testing.T) {
 	tests := []struct {
 		outerWidth, outerHeight     int

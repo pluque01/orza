@@ -810,10 +810,7 @@ func TestSC004SC005ExactGeometryAndResizePreservationTwentyRuns(t *testing.T) {
 				for _, size := range us5ContractSizes {
 					updateModel(model, tea.WindowSizeMsg{Width: size.width, Height: size.height})
 					layout := model.layout()
-					want := scExpectedLayout(size.width, size.height, model.focusedLayoutRegion())
-					if model.screen == screenConnectionForm {
-						want = calculateLayoutWithActions(size.width, size.height, model.focusedLayoutRegion())
-					}
+					want := calculateLayoutWithActions(size.width, size.height, model.focusedLayoutRegion())
 					if layout != want {
 						t.Fatalf("run %d %s: layout = %#v, want %#v", run, size.name, layout, want)
 					}
@@ -824,6 +821,9 @@ func TestSC004SC005ExactGeometryAndResizePreservationTwentyRuns(t *testing.T) {
 						if !strings.Contains(view, title) {
 							t.Fatalf("run %d %s omitted %s", run, size.name, title)
 						}
+					}
+					if strings.Contains(view, "Actions") {
+						t.Fatalf("run %d %s retained an Actions panel:\n%s", run, size.name, view)
 					}
 					if model.screen == screenConnectionForm {
 						assertSCFocusedFormField(t, model, model.form.focusedField())
@@ -1192,32 +1192,4 @@ func scContainsStructuredField(view, label, value string) bool {
 		}
 	}
 	return false
-}
-
-func scExpectedLayout(width, height int, focus layoutRegion) layoutState {
-	state := layoutState{width: width, height: height}
-	if width < minimumLayoutWidth || height < minimumLayoutHeight {
-		state.mode = layoutUndersized
-		return state
-	}
-	state.reduced = width < wideLayoutWidth || height < completeLayoutHeight
-	legendHeight := browserLegendRows(width)
-	baseHeight := height - legendHeight
-	state.legend = layoutRect{x: 0, y: baseHeight, width: width, height: legendHeight}
-	if width >= wideLayoutWidth {
-		state.mode = layoutWide
-		baseWidth := width - wideGutterWidth
-		treeWidth := baseWidth * 40 / 100
-		state.tree = layoutRect{x: 0, y: 0, width: treeWidth, height: baseHeight}
-		state.details = layoutRect{x: treeWidth + wideGutterWidth, y: 0, width: width - treeWidth - wideGutterWidth, height: baseHeight}
-		return state
-	}
-	state.mode = layoutStacked
-	treeHeight := baseHeight / 2
-	if baseHeight%2 != 0 && focus != regionDetails {
-		treeHeight++
-	}
-	state.tree = layoutRect{x: 0, y: 0, width: width, height: treeHeight}
-	state.details = layoutRect{x: 0, y: treeHeight, width: width, height: baseHeight - treeHeight}
-	return state
 }

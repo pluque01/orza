@@ -40,7 +40,6 @@ var controlledTerms = map[string]string{
 	"field.identity":          "Identity file",
 	"field.method":            "Method",
 	"field.remember_password": "Remember password",
-	"region.actions":          "Actions",
 	"region.details":          "Details",
 	"region.tree":             "Tree",
 	"security.passphrase":     "Private key passphrase",
