@@ -6,11 +6,35 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/pluque01/orza/internal/app"
 )
+
+func TestTreeSearchRemainsBoundedAcrossResizeMatrix(t *testing.T) {
+	root := testFolder("search-root", "", "/", 1)
+	connection := testConnection("search-connection", root.ID, "/"+strings.Repeat("matched-connection-", 12), 1)
+	connection.Name = strings.Repeat("matched-connection-", 12)
+	snapshot := newCatalogSnapshot(root, 1)
+	if !snapshot.addChildren(root.ID, app.ListChildrenResult{Connections: []app.Connection{connection}}) {
+		t.Fatal("search fixture rejected")
+	}
+
+	for _, noColor := range []bool{false, true} {
+		model := New(Config{Width: 80, Height: 24, NoColor: noColor})
+		model.browser.setSnapshot(snapshot, "")
+		model.ownedSelectionID = model.browser.selectedID
+		model.syncDetail()
+		updateModel(model, keyPress("/"))
+		updateModel(model, keyPress("m"))
+		for _, size := range us5ContractSizes {
+			updateModel(model, tea.WindowSizeMsg{Width: size.width, Height: size.height})
+			assertUS5FrameBounded(t, model.View().Content, size.width, size.height)
+		}
+	}
+}
 
 const resizeConformanceRuns = 20
 

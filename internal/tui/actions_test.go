@@ -185,9 +185,9 @@ func TestBrowserLegendAndHelpSelectApplicableDescriptorsInOrder(t *testing.T) {
 		context actionContext
 		legend  []actionID
 	}{
-		{"root tree", actionContext{selection: actionSelectionRoot, state: actionStateNormal, focus: actionFocusTree}, []actionID{actionUp, actionDown, actionNewConnection, actionNewFolder, actionQuit}},
+		{"root tree", actionContext{selection: actionSelectionRoot, state: actionStateNormal, focus: actionFocusTree}, []actionID{actionUp, actionDown, actionSearch, actionNewConnection, actionNewFolder, actionQuit}},
 		{"folder details", actionContext{selection: actionSelectionFolder, state: actionStateNormal, focus: actionFocusDetails}, []actionID{actionUp, actionDown, actionNewConnection, actionNewFolder, actionQuit}},
-		{"connection tree", actionContext{selection: actionSelectionConnection, state: actionStateNormal, focus: actionFocusTree}, []actionID{actionUp, actionDown, actionConnect, actionNewConnection, actionNewFolder, actionQuit}},
+		{"connection tree", actionContext{selection: actionSelectionConnection, state: actionStateNormal, focus: actionFocusTree}, []actionID{actionUp, actionDown, actionSearch, actionConnect, actionNewConnection, actionNewFolder, actionQuit}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			descriptors := actionsFor(test.context)
@@ -229,7 +229,7 @@ func actionHelpContains(lines []string, key, label string) bool {
 
 func TestHelpKeepsContextualDescriptorInventoryAndKeys(t *testing.T) {
 	descriptors := actionsFor(actionContext{selection: actionSelectionConnection, state: actionStateNormal, focus: actionFocusTree, canToggle: true})
-	const wantKeys = "c/x/n/f/e/m/d/r/?/q/Up/k/Down/j/Home/g/End/G/Left/h/Right/l/Enter/Space/Tab/Shift+Tab"
+	const wantKeys = "c/x/n/f/e/m/d/r/?/q/Up/k/Down/j/Home/g/End/G/Left/h/Right/l/Enter/Space/Tab/Shift+Tab//"
 	if got := actionKeys(descriptors); got != wantKeys {
 		t.Fatalf("contextual keys = %q, want %q", got, wantKeys)
 	}
@@ -253,6 +253,7 @@ func TestHelpKeepsContextualDescriptorInventoryAndKeys(t *testing.T) {
 		"Right/l Expand/child",
 		"Enter/Space Toggle",
 		"Tab/Shift+Tab Details",
+		"/ Filter",
 		modalControlLine("?/Esc Close"),
 	}
 	state := modalState{kind: modalKindHelp, payload: helpPayload{lines: actionHelpLines(descriptors)}}
@@ -311,11 +312,11 @@ func TestOperationAndConflictInventories(t *testing.T) {
 
 func TestFocusedNavigationDescriptors(t *testing.T) {
 	tree := focusedNavigationActions(actionContext{state: actionStateNormal, focus: actionFocusTree})
-	if got := actionKeys(tree); got != "Up/k/Down/j/Home/g/End/G/Left/h/Right/l/Tab/Shift+Tab" {
+	if got := actionKeys(tree); got != "Up/k/Down/j/Home/g/End/G/Left/h/Right/l/Tab/Shift+Tab//" {
 		t.Fatalf("tree navigation = %q", got)
 	}
 	tree = focusedNavigationActions(actionContext{state: actionStateNormal, focus: actionFocusTree, canToggle: true})
-	if got := actionKeys(tree); got != "Up/k/Down/j/Home/g/End/G/Left/h/Right/l/Enter/Space/Tab/Shift+Tab" {
+	if got := actionKeys(tree); got != "Up/k/Down/j/Home/g/End/G/Left/h/Right/l/Enter/Space/Tab/Shift+Tab//" {
 		t.Fatalf("expandable tree navigation = %q", got)
 	}
 	details := focusedNavigationActions(actionContext{state: actionStateNormal, focus: actionFocusDetails})

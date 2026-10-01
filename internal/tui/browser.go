@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"regexp"
 	"sort"
 	"strings"
 
@@ -99,6 +100,34 @@ type treeRow struct {
 	hasChildren bool
 }
 
+// treeFilter is a read-only projection of a snapshot. It never changes the
+// catalog and includes folders only as paths to matching connections.
+type treeFilter struct {
+	nodes   map[app.NodeID]struct{}
+	matches map[app.NodeID][][]int
+}
+
+func filteredTree(snapshot catalogSnapshot, expression *regexp.Regexp) treeFilter {
+	filter := treeFilter{nodes: make(map[app.NodeID]struct{}), matches: make(map[app.NodeID][][]int)}
+	if expression == nil {
+		return filter
+	}
+	for id, node := range snapshot.nodes {
+		if node.connection == nil {
+			continue
+		}
+		spans := expression.FindAllStringIndex(node.node.Name, -1)
+		if len(spans) == 0 {
+			continue
+		}
+		filter.matches[id] = spans
+		for ancestor := id; ancestor != ""; ancestor = snapshot.parents[ancestor] {
+			filter.nodes[ancestor] = struct{}{}
+		}
+	}
+	return filter
+}
+
 type browserModel struct {
 	snapshot    catalogSnapshot
 	expanded    map[app.NodeID]struct{}
@@ -108,6 +137,7 @@ type browserModel struct {
 	revision    app.CatalogRevision
 	changed     bool
 	initialized bool
+	filter      *treeFilter
 }
 
 func (b *browserModel) setConnectionsPending(result app.ListConnectionsResult, pending app.NodeID) {
@@ -124,6 +154,7 @@ func (b *browserModel) setSnapshot(snapshot catalogSnapshot, pending app.NodeID)
 	previousExpanded := b.expanded
 
 	b.snapshot = snapshot
+	b.filter = nil
 	b.revision = snapshot.revision
 	b.expanded = make(map[app.NodeID]struct{})
 	for id := range previousExpanded {
@@ -184,7 +215,7 @@ func (b *browserModel) expandAncestors(id app.NodeID) {
 
 func (b *browserModel) rebuildRows() {
 	b.rows = b.rows[:0]
-	if b.snapshot.rootID == "" {
+	if b.snapshot.rootID == "" || b.filter != nil && len(b.filter.nodes) == 0 {
 		return
 	}
 	var appendNode func(app.NodeID, int)
@@ -197,6 +228,11 @@ func (b *browserModel) rebuildRows() {
 			return
 		}
 		for _, child := range children {
+			if b.filter != nil {
+				if _, included := b.filter.nodes[child]; !included {
+					continue
+				}
+			}
 			appendNode(child, depth+1)
 		}
 	}
@@ -408,14 +444,32 @@ func (b browserModel) projectTree(style styles, width, rows int) viewportProject
 			marker = "[+]"
 		}
 		prefix := selector + strings.Repeat("  ", row.depth) + marker + " "
-		line := prefix + safeText(name, width-len(prefix))
-		if row.id == b.selectedID {
+		line := prefix + b.renderName(style, row.id, name, width-len(prefix))
+		if row.id == b.selectedID && (b.filter == nil || len(b.filter.matches[row.id]) == 0) {
 			line = style.selected.Render(line)
 		}
 		content[index] = line
 	}
 
 	return b.viewport.project(content, rows, width, b.selectedIndex())
+}
+
+func (b browserModel) renderName(style styles, id app.NodeID, name string, width int) string {
+	if b.filter == nil || len(b.filter.matches[id]) == 0 {
+		return safeText(name, width)
+	}
+	var rendered strings.Builder
+	start := 0
+	for _, span := range b.filter.matches[id] {
+		if span[0] < start || span[1] < span[0] || span[1] > len(name) {
+			continue
+		}
+		rendered.WriteString(safeText(name[start:span[0]], width))
+		rendered.WriteString(style.match.Render(safeText(name[span[0]:span[1]], width)))
+		start = span[1]
+	}
+	rendered.WriteString(safeText(name[start:], width))
+	return viewportEllipsis(rendered.String(), width)
 }
 func rootFolder() app.Folder {
 	return app.Folder{Node: app.Node{ID: syntheticRootID, Kind: app.NodeKindFolder, Name: "/", Path: "/", Revision: 1}}

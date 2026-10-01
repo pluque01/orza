@@ -34,16 +34,16 @@ func TestUS5ExactResponsiveGeometryMatrix(t *testing.T) {
 		reduced                        bool
 		tree, details, legend, actions layoutRect
 	}{
-		{us5ContractSizes[0], layoutStacked, true, layoutRect{0, 0, 40, 5}, layoutRect{0, 5, 40, 4}, layoutRect{0, 9, 40, 3}, layoutRect{}},
-		{us5ContractSizes[1], layoutStacked, true, layoutRect{0, 0, 40, 11}, layoutRect{0, 11, 40, 10}, layoutRect{0, 21, 40, 3}, layoutRect{}},
+		{us5ContractSizes[0], layoutStacked, true, layoutRect{0, 0, 40, 4}, layoutRect{0, 4, 40, 4}, layoutRect{0, 8, 40, 4}, layoutRect{}},
+		{us5ContractSizes[1], layoutStacked, true, layoutRect{0, 0, 40, 10}, layoutRect{0, 10, 40, 10}, layoutRect{0, 20, 40, 4}, layoutRect{}},
 		{us5ContractSizes[2], layoutStacked, true, layoutRect{0, 0, 60, 5}, layoutRect{0, 5, 60, 5}, layoutRect{0, 10, 60, 2}, layoutRect{}},
 		{us5ContractSizes[3], layoutStacked, true, layoutRect{0, 0, 60, 11}, layoutRect{0, 11, 60, 11}, layoutRect{0, 22, 60, 2}, layoutRect{}},
 		{us5ContractSizes[4], layoutStacked, true, layoutRect{0, 0, 79, 5}, layoutRect{0, 5, 79, 5}, layoutRect{0, 10, 79, 2}, layoutRect{}},
 		{us5ContractSizes[5], layoutStacked, true, layoutRect{0, 0, 79, 11}, layoutRect{0, 11, 79, 11}, layoutRect{0, 22, 79, 2}, layoutRect{}},
 		{us5ContractSizes[6], layoutWide, true, layoutRect{0, 0, 31, 10}, layoutRect{32, 0, 48, 10}, layoutRect{0, 10, 80, 2}, layoutRect{}},
 		{us5ContractSizes[7], layoutWide, false, layoutRect{0, 0, 31, 22}, layoutRect{32, 0, 48, 22}, layoutRect{0, 22, 80, 2}, layoutRect{}},
-		{us5ContractSizes[8], layoutWide, true, layoutRect{0, 0, 39, 11}, layoutRect{40, 0, 60, 11}, layoutRect{0, 11, 100, 1}, layoutRect{}},
-		{us5ContractSizes[9], layoutWide, false, layoutRect{0, 0, 39, 23}, layoutRect{40, 0, 60, 23}, layoutRect{0, 23, 100, 1}, layoutRect{}},
+		{us5ContractSizes[8], layoutWide, true, layoutRect{0, 0, 39, 10}, layoutRect{40, 0, 60, 10}, layoutRect{0, 10, 100, 2}, layoutRect{}},
+		{us5ContractSizes[9], layoutWide, false, layoutRect{0, 0, 39, 22}, layoutRect{40, 0, 60, 22}, layoutRect{0, 22, 100, 2}, layoutRect{}},
 		{us5ContractSizes[10], layoutWide, true, layoutRect{0, 0, 63, 11}, layoutRect{64, 0, 96, 11}, layoutRect{0, 11, 160, 1}, layoutRect{}},
 		{us5ContractSizes[11], layoutWide, false, layoutRect{0, 0, 63, 23}, layoutRect{64, 0, 96, 23}, layoutRect{0, 23, 160, 1}, layoutRect{}},
 		{us5Size{name: "39x12", width: 39, height: 12}, layoutUndersized, false, layoutRect{}, layoutRect{}, layoutRect{}, layoutRect{}},

@@ -10,16 +10,16 @@ func TestLayoutMatrix(t *testing.T) {
 		reduced                        bool
 		tree, details, legend, actions layoutRect
 	}{
-		{"40x12", 40, 12, layoutStacked, true, layoutRect{0, 0, 40, 5}, layoutRect{0, 5, 40, 4}, layoutRect{0, 9, 40, 3}, layoutRect{}},
-		{"40x24", 40, 24, layoutStacked, true, layoutRect{0, 0, 40, 11}, layoutRect{0, 11, 40, 10}, layoutRect{0, 21, 40, 3}, layoutRect{}},
+		{"40x12", 40, 12, layoutStacked, true, layoutRect{0, 0, 40, 4}, layoutRect{0, 4, 40, 4}, layoutRect{0, 8, 40, 4}, layoutRect{}},
+		{"40x24", 40, 24, layoutStacked, true, layoutRect{0, 0, 40, 10}, layoutRect{0, 10, 40, 10}, layoutRect{0, 20, 40, 4}, layoutRect{}},
 		{"60x12", 60, 12, layoutStacked, true, layoutRect{0, 0, 60, 5}, layoutRect{0, 5, 60, 5}, layoutRect{0, 10, 60, 2}, layoutRect{}},
 		{"60x24", 60, 24, layoutStacked, true, layoutRect{0, 0, 60, 11}, layoutRect{0, 11, 60, 11}, layoutRect{0, 22, 60, 2}, layoutRect{}},
 		{"79x12", 79, 12, layoutStacked, true, layoutRect{0, 0, 79, 5}, layoutRect{0, 5, 79, 5}, layoutRect{0, 10, 79, 2}, layoutRect{}},
 		{"79x24", 79, 24, layoutStacked, true, layoutRect{0, 0, 79, 11}, layoutRect{0, 11, 79, 11}, layoutRect{0, 22, 79, 2}, layoutRect{}},
 		{"80x12", 80, 12, layoutWide, true, layoutRect{0, 0, 31, 10}, layoutRect{32, 0, 48, 10}, layoutRect{0, 10, 80, 2}, layoutRect{}},
 		{"80x24", 80, 24, layoutWide, false, layoutRect{0, 0, 31, 22}, layoutRect{32, 0, 48, 22}, layoutRect{0, 22, 80, 2}, layoutRect{}},
-		{"100x12", 100, 12, layoutWide, true, layoutRect{0, 0, 39, 11}, layoutRect{40, 0, 60, 11}, layoutRect{0, 11, 100, 1}, layoutRect{}},
-		{"100x24", 100, 24, layoutWide, false, layoutRect{0, 0, 39, 23}, layoutRect{40, 0, 60, 23}, layoutRect{0, 23, 100, 1}, layoutRect{}},
+		{"100x12", 100, 12, layoutWide, true, layoutRect{0, 0, 39, 10}, layoutRect{40, 0, 60, 10}, layoutRect{0, 10, 100, 2}, layoutRect{}},
+		{"100x24", 100, 24, layoutWide, false, layoutRect{0, 0, 39, 22}, layoutRect{40, 0, 60, 22}, layoutRect{0, 22, 100, 2}, layoutRect{}},
 		{"160x12", 160, 12, layoutWide, true, layoutRect{0, 0, 63, 11}, layoutRect{64, 0, 96, 11}, layoutRect{0, 11, 160, 1}, layoutRect{}},
 		{"160x24", 160, 24, layoutWide, false, layoutRect{0, 0, 63, 23}, layoutRect{64, 0, 96, 23}, layoutRect{0, 23, 160, 1}, layoutRect{}},
 		{"39x12", 39, 12, layoutUndersized, false, layoutRect{}, layoutRect{}, layoutRect{}, layoutRect{}},
@@ -56,9 +56,9 @@ func TestStackedOddRowGoesToFocusedBaseRegion(t *testing.T) {
 		focus                    layoutRegion
 		treeHeight, detailHeight int
 	}{
-		{"tree", regionTree, 5, 4},
-		{"details", regionDetails, 4, 5},
-		{"invalid defaults to tree", layoutRegion(99), 5, 4},
+		{"tree", regionTree, 4, 4},
+		{"details", regionDetails, 4, 4},
+		{"invalid defaults to tree", layoutRegion(99), 4, 4},
 	}
 
 	for _, tt := range tests {

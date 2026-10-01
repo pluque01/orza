@@ -46,13 +46,13 @@ type structuredFieldGroup struct {
 }
 
 type styles struct {
-	title, activeTitle, inactiveTitle   lipgloss.Style
-	selected, focused, invalid, primary lipgloss.Style
-	muted, status, warning, failure     lipgloss.Style
-	helpSection                         lipgloss.Style
-	scrollbarTrack, scrollbarThumb      lipgloss.Style
-	badge                               lipgloss.Style
-	accented                            bool
+	title, activeTitle, inactiveTitle          lipgloss.Style
+	selected, focused, invalid, primary, match lipgloss.Style
+	muted, status, warning, failure            lipgloss.Style
+	helpSection                                lipgloss.Style
+	scrollbarTrack, scrollbarThumb             lipgloss.Style
+	badge                                      lipgloss.Style
+	accented                                   bool
 }
 
 type itemSemantics struct {
@@ -83,6 +83,7 @@ func newStyles(noColor bool) styles {
 		focused:        selected,
 		invalid:        failure,
 		primary:        status,
+		match:          lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("11")),
 		muted:          muted,
 		status:         status,
 		warning:        warning,

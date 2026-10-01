@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -22,6 +23,36 @@ const (
 )
 
 var us5RetentionSink int
+
+func TestTreeSearchProjectionPerformance100Connections(t *testing.T) {
+	root := testFolder("root", "", "/", 1)
+	snapshot := newCatalogSnapshot(root, 1)
+	folders := make([]app.Folder, 10)
+	for folderIndex := 0; folderIndex < 10; folderIndex++ {
+		folder := testFolder(fmt.Sprintf("folder-%02d", folderIndex), root.ID, fmt.Sprintf("/folder-%02d", folderIndex), 1)
+		folders[folderIndex] = folder
+	}
+	if !snapshot.addChildren(root.ID, app.ListChildrenResult{Folders: folders}) {
+		t.Fatal("fixture root rejected")
+	}
+	for folderIndex, folder := range folders {
+		connections := make([]app.Connection, 10)
+		for connectionIndex := range connections {
+			connections[connectionIndex] = testConnection(fmt.Sprintf("connection-%02d-%02d", folderIndex, connectionIndex), folder.ID, fmt.Sprintf("/folder-%02d/connection-%02d-%02d", folderIndex, folderIndex, connectionIndex), 1)
+		}
+		if !snapshot.addChildren(folder.ID, app.ListChildrenResult{Connections: connections}) {
+			t.Fatal("fixture children rejected")
+		}
+	}
+	started := time.Now()
+	filter := filteredTree(snapshot, regexp.MustCompile(`connection-(0[0-9])-0[0-9]`))
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("100-connection filter took %s, want <= 1s", elapsed)
+	}
+	if len(filter.matches) != 100 {
+		t.Fatalf("matching connections = %d, want 100", len(filter.matches))
+	}
+}
 
 func TestUS5PerformanceAcceptance1100NodeFixture(t *testing.T) {
 	service, _, detailFolder := scaleTreeService(100, 1000)
