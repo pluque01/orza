@@ -58,11 +58,11 @@ func (s layoutState) modalOverlay() layoutRect {
 		return layoutRect{}
 	}
 	width := min(72, max(0, s.width-4))
-	height := min(18, max(0, s.height-2))
-	if s.reduced {
-		width = max(1, s.width-2)
-		height = max(1, s.height-2)
+	if s.width <= minimumLayoutWidth+2 {
+		// Preserve room for the confirmation controls and their shortest critical values.
+		width = s.width - 2
 	}
+	height := min(18, max(0, s.height-2))
 	return s.centeredOverlay(width, height)
 }
 

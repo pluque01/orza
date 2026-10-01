@@ -77,9 +77,24 @@ func folderDeleteScopeForModalLayout(path string) app.FolderDeleteScope {
 }
 
 func TestUS4CenteredOverlayBoundsBackgroundUnicodeAndReduced(t *testing.T) {
-	for _, size := range [][2]int{{80, 24}, {60, 12}, {40, 12}} {
+	tests := []struct {
+		width, height int
+		want          layoutRect
+	}{
+		{width: 80, height: 24, want: layoutRect{x: 4, y: 3, width: 72, height: 18}},
+		{width: 79, height: 24, want: layoutRect{x: 3, y: 3, width: 72, height: 18}},
+		{width: 60, height: 24, want: layoutRect{x: 2, y: 3, width: 56, height: 18}},
+		{width: 60, height: 12, want: layoutRect{x: 2, y: 1, width: 56, height: 10}},
+		{width: 40, height: 12, want: layoutRect{x: 1, y: 1, width: 38, height: 10}},
+		{width: 42, height: 12, want: layoutRect{x: 1, y: 1, width: 40, height: 10}},
+	}
+	for _, test := range tests {
+		size := [2]int{test.width, test.height}
 		layout := calculateLayout(size[0], size[1], regionTree)
 		rect := layout.modalOverlay()
+		if rect != test.want {
+			t.Fatalf("%dx%d overlay = %#v, want %#v", size[0], size[1], rect, test.want)
+		}
 		assertRectBounded(t, rect, size[0], size[1])
 		state, err := (modalState{}).open(newModalRegistry(), modalOpenRequest{kind: modalKindHelp, openedFrom: focusOwnerTree, payload: helpPayload{lines: []string{"Unicode 界🙂", strings.Repeat("long ", 100)}}})
 		if err != nil {
