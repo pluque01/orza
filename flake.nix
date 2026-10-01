@@ -19,7 +19,7 @@
       ...
     }:
     let
-      version = "0.1.0";
+      version = "unstable-${self.shortRev or self.dirtyShortRev or "unknown"}";
       systems = [
         "x86_64-linux"
         "aarch64-linux"
