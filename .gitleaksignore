@@ -1,6 +1,6 @@
 # Reviewed non-secret UI/test literals.
 internal/tui/actions.go:generic-api-key:196
-internal/tui/actions.go:generic-api-key:198
+internal/tui/actions.go:generic-api-key:199
 tests/integration/security_test.go:generic-api-key:81
 
 # Generated modernc SQLite Windows API names and public constants.
