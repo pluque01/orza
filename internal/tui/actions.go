@@ -41,6 +41,7 @@ const (
 	actionShowTree      actionID = "focus_tree"
 	actionNextField     actionID = "next_field"
 	actionPreviousField actionID = "previous_field"
+	actionSearch        actionID = "search"
 )
 
 type actionCategory uint8
@@ -207,6 +208,14 @@ var treeNavigationDescriptors = []actionDescriptor{
 	{id: actionRight, key: "Right/l", label: "Expand/child", category: actionCategoryNavigation, priority: actionPriorityNavigation, applicable: focusedOn(actionFocusTree)},
 	{id: actionToggle, key: "Enter/Space", label: "Toggle", category: actionCategoryNavigation, priority: actionPriorityNavigation, applicable: toggleApplies},
 	{id: actionShowDetails, key: "Tab/Shift+Tab", label: "Details", category: actionCategoryNavigation, priority: actionPriorityNavigation, applicable: focusedOn(actionFocusTree)},
+	{id: actionSearch, key: "/", label: "Filter", category: actionCategoryNavigation, priority: actionPriorityNavigation, applicable: focusedOn(actionFocusTree)},
+}
+
+var treeSearchActionDescriptors = []actionDescriptor{
+	{id: actionUp, key: "Up/Ctrl+P", label: "Move up", category: actionCategoryNavigation, priority: actionPriorityNavigation},
+	{id: actionDown, key: "Down/Ctrl+N", label: "Move down", category: actionCategoryNavigation, priority: actionPriorityNavigation},
+	{id: actionConfirm, key: "Enter", label: "Accept result", category: actionCategoryNavigation, priority: actionPriorityPrimary},
+	{id: actionCancel, key: "Esc", label: "Cancel", category: actionCategoryRecovery, priority: actionPriorityRecovery},
 }
 
 var detailsNavigationDescriptors = []actionDescriptor{
@@ -399,6 +408,8 @@ func canonicalActionOrder(id actionID) int {
 		return 38
 	case actionPreviousField:
 		return 39
+	case actionSearch:
+		return 40
 	default:
 		return 100
 	}
@@ -510,6 +521,8 @@ func actionForKey(msg tea.KeyPressMsg, descriptors []actionDescriptor, keys keyM
 				return descriptor, true
 			}
 			continue
+		case actionSearch:
+			binding = keys.Search
 		default:
 			continue
 		}
@@ -529,7 +542,7 @@ func actionHelpLines(descriptors []actionDescriptor) []string {
 }
 
 func browserLegendDescriptors(descriptors []actionDescriptor) []actionDescriptor {
-	wanted := []actionID{actionUp, actionDown, actionConnect, actionNewConnection, actionNewFolder, actionQuit}
+	wanted := []actionID{actionUp, actionDown, actionSearch, actionConnect, actionNewConnection, actionNewFolder, actionQuit}
 	legend := make([]actionDescriptor, 0, len(wanted))
 	for _, id := range wanted {
 		for _, descriptor := range descriptors {
@@ -570,6 +583,7 @@ func browserLegendRows(width int) int {
 		{id: actionConnect, key: "c", label: "Connect"},
 		{id: actionNewConnection, key: "n", label: "New connection"},
 		{id: actionNewFolder, key: "f", label: "New folder"},
+		{id: actionSearch, key: "/", label: "Filter"},
 		{id: actionQuit, key: "q", label: "Quit"},
 	}, width))
 }
@@ -579,7 +593,7 @@ func browserHelpLines(style styles, descriptors []actionDescriptor, width int) [
 		name string
 		ids  []actionID
 	}{
-		{"Navigation", []actionID{actionUp, actionDown, actionHome, actionEnd, actionLeft, actionRight, actionToggle, actionShowDetails, actionShowTree}},
+		{"Navigation", []actionID{actionUp, actionDown, actionHome, actionEnd, actionLeft, actionRight, actionToggle, actionShowDetails, actionShowTree, actionSearch}},
 		{"Connection", []actionID{actionConnect, actionForgetHostKey}},
 		{"Management", []actionID{actionNewConnection, actionNewFolder, actionEdit, actionMove, actionDelete, actionReload, actionRetry, actionSave, actionConfirm, actionDiscard, actionMoveHere}},
 		{"Application", []actionID{actionCancel, actionCancelWarning, actionBack, actionHelp, actionQuit}},

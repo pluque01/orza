@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -8,6 +9,71 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pluque01/orza/internal/app"
 )
+
+func TestFilteredTreeProjectsOnlyMatchingConnectionsAndAncestors(t *testing.T) {
+	root := testFolder("root", "", "/", 1)
+	team := testFolder("team", root.ID, "/team", 1)
+	archive := testFolder("archive", root.ID, "/archive", 1)
+	match := testConnection("match", team.ID, "/team/api-prod", 1)
+	match.Name = "api-prod"
+	other := testConnection("other", archive.ID, "/archive/api-prod-old", 1)
+	other.Name = "api-prod-old"
+	folderNamedLikeMatch := testFolder("folder-match", root.ID, "/api-prod-folder", 1)
+	snapshot := newCatalogSnapshot(root, 1)
+	_ = snapshot.addChildren(root.ID, app.ListChildrenResult{Folders: []app.Folder{team, archive, folderNamedLikeMatch}})
+	_ = snapshot.addChildren(team.ID, app.ListChildrenResult{Connections: []app.Connection{match}})
+	_ = snapshot.addChildren(archive.ID, app.ListChildrenResult{Connections: []app.Connection{other}})
+
+	filter := filteredTree(snapshot, regexp.MustCompile(`^api-prod$`))
+	if len(filter.matches) != 1 || len(filter.matches[match.ID]) != 1 {
+		t.Fatalf("matches = %#v, want only %q", filter.matches, match.ID)
+	}
+	for _, id := range []app.NodeID{root.ID, team.ID, match.ID} {
+		if _, exists := filter.nodes[id]; !exists {
+			t.Fatalf("filtered path omitted %q", id)
+		}
+	}
+	if _, exists := filter.nodes[folderNamedLikeMatch.ID]; exists {
+		t.Fatal("folder was treated as a search candidate")
+	}
+
+	var browser browserModel
+	browser.setSnapshot(snapshot, "")
+	browser.filter = &filter
+	browser.expanded[team.ID] = struct{}{}
+	browser.rebuildRows()
+	got := make([]app.NodeID, len(browser.rows))
+	for i, row := range browser.rows {
+		got[i] = row.id
+	}
+	if want := []app.NodeID{root.ID, team.ID, match.ID}; !slices.Equal(got, want) {
+		t.Fatalf("filtered rows = %#v, want %#v", got, want)
+	}
+}
+
+func TestFilteredTreeEmptyAndMatchRendering(t *testing.T) {
+	root := testFolder("root", "", "/", 1)
+	connection := testConnection("connection", root.ID, "/banana", 1)
+	connection.Name = "banana"
+	snapshot := newCatalogSnapshot(root, 1)
+	_ = snapshot.addChildren(root.ID, app.ListChildrenResult{Connections: []app.Connection{connection}})
+	var browser browserModel
+	browser.setSnapshot(snapshot, "")
+	filter := filteredTree(snapshot, regexp.MustCompile("a"))
+	browser.filter = &filter
+	browser.rebuildRows()
+	browser.selectedID = connection.ID
+	colored := browser.renderTree(newStyles(false), 40, 4)
+	if strings.Count(colored, "\x1b[") < 4 || !strings.Contains(ansi.Strip(colored), ">   [ssh] banana") {
+		t.Fatalf("all match spans or non-color selection marker missing: %q", colored)
+	}
+	empty := filteredTree(snapshot, regexp.MustCompile("missing"))
+	browser.filter = &empty
+	browser.rebuildRows()
+	if len(browser.rows) != 0 {
+		t.Fatalf("no-match rows = %#v, want none", browser.rows)
+	}
+}
 
 func TestBrowserOrderingIndentationMarkersAndInitialRoot(t *testing.T) {
 	root := testFolder("root", "", "/", 1)

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pluque01/orza/internal/app"
 	"github.com/pluque01/orza/internal/catalog"
@@ -16,6 +17,61 @@ import (
 	"github.com/pluque01/orza/internal/credential"
 	"github.com/pluque01/orza/internal/tui"
 )
+
+func TestTUITreeConnectionSearchPreservesHierarchyAndRestoresState(t *testing.T) {
+	folders, connections := integrationTreeServices(t)
+	for _, path := range []string{"/archive", "/team", "/team/prod"} {
+		parent, name := splitTreePath(path)
+		if _, err := folders.Create(context.Background(), app.CreateFolderRequest{Parent: app.ItemSelector{Path: parent}, Name: name}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	api, err := connections.Create(context.Background(), app.CreateConnectionRequest{Parent: app.ItemSelector{Path: "/team/prod"}, Name: "api-primary", Host: "api.test", Port: 22, AuthMethod: app.AuthMethodAgent})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := connections.Create(context.Background(), app.CreateConnectionRequest{Parent: app.ItemSelector{Path: "/archive"}, Name: "database", Host: "db.test", Port: 22, AuthMethod: app.AuthMethodAgent}); err != nil {
+		t.Fatal(err)
+	}
+
+	model := tui.New(tui.Config{Folders: folders, Connections: connections, Width: 80, Height: 24, NoColor: true})
+	executeTUICommand(t, model, model.Init())
+	if strings.Contains(model.View().Content, "[-] team") {
+		t.Fatalf("team should start collapsed:\n%s", model.View().Content)
+	}
+
+	updateTUI(t, model, tuiKey("/"))
+	typeText(t, model, "api")
+	filtered := model.View().Content
+	for _, want := range []string{"Filter: api", "[-] team", "[-] prod", "api-primary"} {
+		if !strings.Contains(filtered, want) {
+			t.Fatalf("filtered tree omitted %q:\n%s", want, filtered)
+		}
+	}
+	if strings.Contains(filtered, "database") || strings.Contains(filtered, "archive") {
+		t.Fatalf("filtered tree kept unrelated nodes:\n%s", filtered)
+	}
+
+	updateTUI(t, model, tea.KeyPressMsg(tea.Key{Code: tea.KeyEscape}))
+	restored := model.View().Content
+	if !strings.Contains(restored, "[+] archive") || !strings.Contains(restored, "[+] team") || strings.Contains(restored, "Filter:") {
+		t.Fatalf("escape did not restore the original tree:\n%s", restored)
+	}
+
+	updateTUI(t, model, tuiKey("/"))
+	typeText(t, model, "api")
+	updateTUI(t, model, tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
+	accepted := model.View().Content
+	if strings.Contains(accepted, "Filter:") || strings.Contains(accepted, "Connect to SSH target?") {
+		t.Fatalf("enter did not close search without action:\n%s", accepted)
+	}
+	for _, want := range []string{"[-] team", "[-] prod", "api-primary"} {
+		if !strings.Contains(accepted, want) {
+			t.Fatalf("enter did not expand the accepted connection path %q:\n%s", want, accepted)
+		}
+	}
+	assertTreeSelectionPath(t, model, api.Connection.Path)
+}
 
 func TestTUITreeContextualActionMatrixAndReconciliation(t *testing.T) {
 	folders, connections := integrationTreeServices(t)

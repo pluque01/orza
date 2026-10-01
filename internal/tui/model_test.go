@@ -19,6 +19,96 @@ func TestBottomAlignActionsLeavesNoTrailingMargin(t *testing.T) {
 	}
 }
 
+func TestTreeSearchFiltersNavigatesAndRestoresContext(t *testing.T) {
+	root := testFolder("root", "", "/", 1)
+	folder := testFolder("folder", root.ID, "/folder", 1)
+	first := testConnection("first", folder.ID, "/folder/api-one", 1)
+	first.Name = "api-one"
+	second := testConnection("second", folder.ID, "/folder/api-two", 1)
+	second.Name = "api-two"
+	snapshot := newCatalogSnapshot(root, 1)
+	_ = snapshot.addChildren(root.ID, app.ListChildrenResult{Folders: []app.Folder{folder}})
+	_ = snapshot.addChildren(folder.ID, app.ListChildrenResult{Connections: []app.Connection{first, second}})
+	model := New(Config{Width: 80, Height: 24, NoColor: true})
+	model.browser.setSnapshot(snapshot, "")
+	model.browser.viewport = newViewportState(3)
+	model.ownedSelectionID = model.browser.selectedID
+
+	_, _ = model.Update(keyPress("/"))
+	if model.search == nil || !model.search.input.Focused() {
+		t.Fatal("slash did not open a focused search field")
+	}
+	_, _ = model.Update(keyPress("a"))
+	if model.browser.selectedID != first.ID || !model.browser.visible(second.ID) {
+		t.Fatalf("filtered search selection/rows = %q/%#v", model.browser.selectedID, model.browser.rows)
+	}
+	legend := model.View().Content
+	for _, want := range []string{"Up/Ctrl+P Move up", "Down/Ctrl+N Move down", "Enter Accept result", "Esc Cancel"} {
+		if !strings.Contains(legend, want) {
+			t.Fatalf("search legend omitted %q:\n%s", want, legend)
+		}
+	}
+	if strings.Contains(legend, "New connection") {
+		t.Fatalf("search legend exposed an unavailable action:\n%s", legend)
+	}
+	_, _ = model.Update(tea.KeyPressMsg(tea.Key{Code: 'n', Mod: tea.ModCtrl}))
+	if model.browser.selectedID != second.ID {
+		t.Fatalf("Ctrl+N selected %q, want %q", model.browser.selectedID, second.ID)
+	}
+	_, _ = model.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
+	if model.browser.selectedID != second.ID {
+		t.Fatalf("Down moved past the final match to %q", model.browser.selectedID)
+	}
+	_, _ = model.Update(tea.KeyPressMsg(tea.Key{Code: 'p', Mod: tea.ModCtrl}))
+	if model.browser.selectedID != first.ID {
+		t.Fatalf("Ctrl+P selected %q, want %q", model.browser.selectedID, first.ID)
+	}
+	_, _ = model.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyUp}))
+	if model.browser.selectedID != first.ID {
+		t.Fatalf("Up moved before the first match to %q", model.browser.selectedID)
+	}
+	_, _ = model.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEscape}))
+	if model.search != nil || model.browser.selectedID != root.ID || model.browser.viewport != (newViewportState(3)) {
+		t.Fatalf("escape did not restore exact tree context: search=%#v selected=%q viewport=%#v", model.search, model.browser.selectedID, model.browser.viewport)
+	}
+
+	_, _ = model.Update(keyPress("/"))
+	_, _ = model.Update(keyPress("j"))
+	_, _ = model.Update(keyPress("k"))
+	if model.search.input.Value() != "jk" {
+		t.Fatalf("filter did not accept j/k text: %q", model.search.input.Value())
+	}
+	_, _ = model.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEscape}))
+
+	_, _ = model.Update(keyPress("/"))
+	_, _ = model.Update(keyPress("["))
+	if model.search.error == "" || model.browser.filter != nil || model.browser.selectedID != root.ID {
+		t.Fatalf("invalid expression changed tree or gave no feedback: %#v", model.search)
+	}
+	_, _ = model.Update(keyPress("esc"))
+
+	_, _ = model.Update(keyPress("/"))
+	_, _ = model.Update(keyPress("a"))
+	_, _ = model.Update(keyPress("enter"))
+	if model.search != nil || model.operation != nil || model.modal.isOpen() || model.browser.selectedID != first.ID {
+		t.Fatalf("enter did not accept only the connection selection: search=%#v operation=%#v modal=%#v selected=%q", model.search, model.operation, model.modal, model.browser.selectedID)
+	}
+	if !model.browser.visible(first.ID) {
+		t.Fatal("enter did not expand the accepted connection path")
+	}
+}
+
+func TestTreeSearchActionIsShownInTreeLegendAndHelp(t *testing.T) {
+	model := New(Config{Width: 80, Height: 24, NoColor: true})
+	if view := model.View().Content; !strings.Contains(view, "/ Filter") {
+		t.Fatalf("tree legend omitted search action:\n%s", view)
+	}
+	_, _ = model.Update(keyPress("?"))
+	if view := model.View().Content; !strings.Contains(view, "/") || !strings.Contains(view, "Filter") {
+		t.Fatalf("tree help omitted search action:\n%s", view)
+	}
+}
+
 func TestModelCompleteTreeRevisionRetryAndSecondConflict(t *testing.T) {
 	root := testFolder("root", "", "/", 1)
 	child := testFolder("child", root.ID, "/child", 1)

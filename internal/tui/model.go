@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -87,6 +88,13 @@ type connectionEditState struct {
 	quitAfterSave bool
 }
 
+type treeSearchState struct {
+	input   textField
+	context connectionTreeContext
+	matches []app.NodeID
+	error   string
+}
+
 // Config supplies shared application use cases and deterministic presentation
 // boundaries. Width and Height are primarily useful to model tests.
 type Config struct {
@@ -141,6 +149,7 @@ type Model struct {
 	sessionTrustResponse chan sessionTrustResponse
 	credentialInput      *credentialMutationReadyMsg
 	pendingSelection     app.NodeID
+	search               *treeSearchState
 }
 
 func New(config Config) *Model {
@@ -208,6 +217,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handlePaste(msg tea.PasteMsg) tea.Cmd {
+	if m.search != nil {
+		command := m.search.input.Update(msg)
+		m.updateTreeSearch()
+		return command
+	}
 	if m.modal.isOpen() {
 		if m.modal.helpVisible {
 			return nil
@@ -333,6 +347,12 @@ func (m *Model) formActionDescriptors() []actionDescriptor {
 }
 
 func (m *Model) handleBrowserKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if m.search != nil {
+		return m.handleTreeSearchKey(msg)
+	}
+	if m.focusOwner == focusOwnerTree && key.Matches(msg, m.keys.Search) {
+		return m, m.openTreeSearch()
+	}
 	m.navigationNotice = navigationNoticeNone
 	selectionWasExternallyChanged := m.ownedSelectionID != m.browser.selectedID
 	m.syncDetail()
@@ -444,6 +464,123 @@ func (m *Model) handleBrowserKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 	return m, nil
+}
+
+func (m *Model) openTreeSearch() tea.Cmd {
+	state := &treeSearchState{context: connectionTreeContext{
+		selectedID: m.browser.selectedID,
+		expanded:   cloneExpanded(m.browser.expanded),
+		viewport:   m.browser.viewport,
+		focus:      m.focusOwner,
+	}}
+	state.input = newTextField()
+	m.search = state
+	return m.search.input.Focus()
+}
+
+func (m *Model) handleTreeSearchKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.Back):
+		m.closeTreeSearch("")
+		return m, nil
+	case key.Matches(msg, m.keys.Open):
+		if len(m.search.matches) != 0 {
+			m.closeTreeSearch(m.browser.selectedID)
+		}
+		return m, nil
+	case msg.Key().Code == tea.KeyUp || msg.Key().Code == tea.KeyKpUp || key.Matches(msg, m.keys.SearchPrevious):
+		m.moveTreeSearch(-1)
+		return m, nil
+	case msg.Key().Code == tea.KeyDown || msg.Key().Code == tea.KeyKpDown || key.Matches(msg, m.keys.SearchNext):
+		m.moveTreeSearch(1)
+		return m, nil
+	default:
+		command := m.search.input.Update(msg)
+		m.updateTreeSearch()
+		return m, command
+	}
+}
+
+func (m *Model) updateTreeSearch() {
+	search := m.search
+	if search == nil {
+		return
+	}
+	query := search.input.Value()
+	search.error, search.matches = "", nil
+	if query == "" {
+		m.restoreTreeSearchContext(search.context)
+		return
+	}
+	expression, err := regexp.Compile(query)
+	if err != nil {
+		search.error = "Invalid expression: " + err.Error()
+		m.restoreTreeSearchContext(search.context)
+		return
+	}
+	filter := filteredTree(m.browser.snapshot, expression)
+	m.browser.filter = &filter
+	for id := range filter.nodes {
+		if node := m.browser.snapshot.nodes[id]; node.folder != nil {
+			m.browser.expanded[id] = struct{}{}
+		}
+	}
+	m.browser.rebuildRows()
+	for _, row := range m.browser.rows {
+		if _, matched := filter.matches[row.id]; matched {
+			search.matches = append(search.matches, row.id)
+		}
+	}
+	if len(search.matches) != 0 {
+		m.browser.selectedID = search.matches[0]
+		m.ownedSelectionID = m.browser.selectedID
+		m.syncDetail()
+	}
+}
+
+func (m *Model) restoreTreeSearchContext(context connectionTreeContext) {
+	m.browser.filter = nil
+	m.browser.expanded = cloneExpanded(context.expanded)
+	m.browser.viewport = context.viewport
+	m.browser.selectedID = context.selectedID
+	m.browser.rebuildRows()
+	m.ownedSelectionID = m.browser.selectedID
+	m.syncDetail()
+}
+
+func (m *Model) moveTreeSearch(delta int) {
+	if m.search == nil || len(m.search.matches) == 0 {
+		return
+	}
+	index := 0
+	for i, id := range m.search.matches {
+		if id == m.browser.selectedID {
+			index = i
+			break
+		}
+	}
+	index = min(max(0, index+delta), len(m.search.matches)-1)
+	m.browser.selectedID = m.search.matches[index]
+	m.ownedSelectionID = m.browser.selectedID
+	m.syncDetail()
+}
+
+func (m *Model) closeTreeSearch(accepted app.NodeID) {
+	search := m.search
+	if search == nil {
+		return
+	}
+	search.input.Blur()
+	m.restoreTreeSearchContext(search.context)
+	if accepted != "" && m.browser.hasNode(accepted) {
+		m.browser.selectedID = accepted
+		m.browser.expandAncestors(accepted)
+		m.browser.rebuildRows()
+		m.ownedSelectionID = accepted
+		m.syncDetail()
+	}
+	m.focusOwner = search.context.focus
+	m.search = nil
 }
 
 func (m *Model) syncDetail() {
@@ -1916,8 +2053,20 @@ func (m *Model) View() tea.View {
 }
 
 func (m *Model) browserShell(layout layoutState) string {
-	treeProjection := m.browser.projectTree(m.styles, layout.tree.contentWidth(), layout.tree.contentHeight())
-	tree := treeProjection.lines
+	treeRows := layout.tree.contentHeight()
+	var searchLines []string
+	if m.search != nil {
+		m.searchInputWidth(layout.tree.contentWidth())
+		searchLines = append(searchLines, "Filter: "+m.search.input.View())
+		if m.search.error != "" {
+			searchLines = append(searchLines, m.styles.failureMessage(safeText(m.search.error, layout.tree.contentWidth())))
+		} else if m.search.input.Value() != "" && len(m.search.matches) == 0 {
+			searchLines = append(searchLines, m.styles.warningMessage("No matching connections"))
+		}
+		treeRows = max(0, treeRows-len(searchLines))
+	}
+	treeProjection := m.browser.projectTree(m.styles, layout.tree.contentWidth(), treeRows)
+	tree := append(searchLines, treeProjection.lines...)
 
 	var details []string
 	detailScrollbar := scrollbarGeometry{}
@@ -1963,6 +2112,8 @@ func (m *Model) browserShell(layout layoutState) string {
 		} else {
 			actions = renderActionLegend(m.styles, m.formActionDescriptors(), layout.actions.width)
 		}
+	} else if m.search != nil {
+		actions = renderActionLegend(m.styles, treeSearchActionDescriptors, layout.actions.width)
 	} else if m.operation == nil && context.state == actionStateNormal {
 		actions = renderBrowserLegend(m.styles, m.visibleActionDescriptors(actionsFor(context)), layout.actions.width)
 	} else {
@@ -1987,6 +2138,12 @@ func (m *Model) browserShell(layout layoutState) string {
 		return strings.Join(append(base, actions...), "\n")
 	}
 	return treePanel + "\n" + detailPanel + "\n" + strings.Join(actions, "\n")
+}
+
+func (m *Model) searchInputWidth(width int) {
+	if m.search != nil {
+		m.search.input.SetWidth(max(0, width-len("Filter: ")))
+	}
 }
 
 func (m *Model) layout() layoutState {
@@ -2042,6 +2199,9 @@ func (m *Model) actionContext() actionContext {
 }
 
 func (m *Model) currentActionDescriptors() []actionDescriptor {
+	if m.search != nil {
+		return treeSearchActionDescriptors
+	}
 	if m.operation != nil {
 		return actionsFor(actionContext{state: actionStateOperation})
 	}
