@@ -13,7 +13,7 @@ At 80x24, a proposed exact baseline allocates the following rectangles, includin
 | Tunnels | 32 | 11 | 48 | 10 |
 | Borderless legend | 0 | 21 | 80 | 3 |
 
-At 40x12: Tree `(0,0,40,3)`, Details `(0,3,40,3)`, Tunnels `(0,6,40,3)`, legend `(0,9,40,3)`. Each panel retains one content row plus its borders/title. At intermediate narrow sizes keep the same stacked topology and give extra rows to the focused panel while preserving at least one content row in every region. At wide sizes preserve the left Tree/right Details+Tunnels topology and distribute additional space proportionally, favoring the active region.
+At 40x12: Tree `(0,0,40,3)`, Details `(0,3,40,3)`, Tunnels `(0,6,40,3)`, legend `(0,9,40,3)`. Each panel retains one content row plus its borders/title. At larger narrow sizes divide the available panel height equally, assigning remainder rows in the fixed order Tree, Details, Tunnels. At wide sizes preserve the 40% Tree/60% right-column split and divide the right-column height equally between Details and Tunnels, assigning an odd remainder row to Details. Panel geometry depends only on terminal dimensions; changing focus changes styling and input ownership, never panel position or size.
 
 Below 40x12, retain existing undersized notice with Help/safe Quit; no trust approval or secret submission. Modal/security overlays may preempt browser content according to existing ownership rules. A healthy shell temporarily owns the terminal instead of drawing browser panels. These are the only existing overlay/lifecycle exceptions to normal-browser permanent visibility.
 

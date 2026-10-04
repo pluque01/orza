@@ -1,6 +1,62 @@
 package tui
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+
+	tea "charm.land/bubbletea/v2"
+)
+
+func TestPanelFocusChangesPreserveGeometry(t *testing.T) {
+	for _, size := range [][2]int{{40, 12}, {40, 13}, {40, 14}, {40, 24}, {60, 16}, {79, 24}, {80, 24}, {80, 30}, {100, 24}, {100, 30}, {160, 40}} {
+		for _, noColor := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%dx%d/noColor=%t", size[0], size[1], noColor), func(t *testing.T) {
+				model := New(Config{Width: size[0], Height: size[1], NoColor: noColor})
+				want := model.layout()
+				for _, step := range []struct {
+					key   tea.Key
+					owner focusOwner
+				}{
+					{tea.Key{Code: tea.KeyTab}, focusOwnerDetail},
+					{tea.Key{Code: tea.KeyTab}, focusOwnerTunnels},
+					{tea.Key{Code: tea.KeyTab}, focusOwnerTree},
+					{tea.Key{Code: tea.KeyTab, Mod: tea.ModShift}, focusOwnerTunnels},
+					{tea.Key{Code: tea.KeyF2}, focusOwnerDetail},
+					{tea.Key{Code: 't', Text: "t"}, focusOwnerTunnels},
+					{tea.Key{Code: tea.KeyEscape}, focusOwnerTree},
+				} {
+					model.Update(tea.KeyPressMsg(step.key))
+					if model.focusOwner != step.owner {
+						t.Fatalf("focus = %v, want %v", model.focusOwner, step.owner)
+					}
+					if got := model.layout(); got != want {
+						t.Fatalf("focus %v changed geometry:\ngot  %+v\nwant %+v", step.owner, got, want)
+					}
+					assertUS5FrameBounded(t, model.View().Content, size[0], size[1])
+				}
+			})
+		}
+	}
+}
+
+func TestStackedTunnelLayoutSharesSpaceBetweenPanels(t *testing.T) {
+	for _, test := range []struct {
+		height int
+		rows   [3]int
+	}{
+		{12, [3]int{3, 3, 3}},
+		{13, [3]int{4, 3, 3}},
+		{14, [3]int{4, 4, 3}},
+		{24, [3]int{7, 7, 7}},
+	} {
+		layout := calculateTunnelLayout(40, test.height, regionTree)
+		got := [3]int{layout.tree.height, layout.details.height, layout.tunnels.height}
+		if got != test.rows {
+			t.Errorf("40x%d panel heights = %v, want %v", test.height, got, test.rows)
+		}
+		assertLayoutInvariants(t, layout)
+	}
+}
 
 func TestLayoutMatrix(t *testing.T) {
 	tests := []struct {

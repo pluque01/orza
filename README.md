@@ -621,8 +621,10 @@ At 80 columns or wider, Tree is left of vertically stacked Details and Tunnels, 
 Below 80 columns, Tree, Details, and Tunnels are stacked above the legend. The complete layout target is
 **80x24**: Tree occupies 31x21, Details 48x11, and Tunnels 48x10, with a one-column gutter and three-row
 legend. At **40x12**, each panel has three rows including borders, leaving one content row, followed by
-the three-row legend. Additional narrow-screen rows go to the focused panel; wide layouts distribute
-extra space while favoring focus. A wide or stacked frame below 80x24 is reduced and prioritizes the
+the three-row legend. Larger stacked layouts share the panel height equally; wide layouts retain a
+40%/60% left/right split and share the right-column height between Details and Tunnels. Changing focus
+does not change panel positions or sizes; only resizing the terminal changes the browser geometry.
+A wide or stacked frame below 80x24 is reduced and prioritizes the
 active row or field, target identity, errors,
 recovery/cancel/back/quit controls, and the primary action before secondary content. At sizes from
 40x12, the regions remain usable with proportional scrollbars beside each overflowing container. Below **40x12**, the regions are replaced by an
