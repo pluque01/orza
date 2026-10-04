@@ -187,6 +187,11 @@ func (m *Model) tunnelLegend(width int) []string {
 	descriptors := m.currentActionDescriptors()
 	if m.tunnelForm != nil {
 		descriptors = []actionDescriptor{{key: "Ctrl+S", label: "Start"}, {key: "Esc", label: "Cancel"}, {key: "F1", label: "Help"}, {key: "Tab", label: "Next"}, {key: "Shift+Tab/F2", label: "Previous"}}
+		if m.tunnelForm.error == "" && m.tunnelForm.focus == 0 {
+			descriptors = append([]actionDescriptor{{key: "Left/Right", label: "Change mode"}}, descriptors...)
+		} else if m.tunnelForm.error == "" && m.tunnelForm.focus == m.tunnelForm.startField() {
+			descriptors = append([]actionDescriptor{{key: "Enter", label: "Start"}}, descriptors...)
+		}
 	}
 	lines := renderBrowserLegend(m.styles, descriptors, width)
 	if m.tunnelForm != nil {

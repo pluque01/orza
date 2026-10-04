@@ -49,9 +49,9 @@ Inspection exposes the same applicable stop/retry/dismiss controls and Esc Back.
 
 ## Creation Flow
 
-1. Select saved connection and press `p`; a Details draft shows the captured host and Local/Remote/Dynamic choices, with Local selected.
+1. Select saved connection and press `p`; a Details draft uses the same content badge, aligned colonless field labels, and semantic focus/error/primary markers as New connection. Show the captured Path and all Local/Remote/Dynamic choices with the current mode bracketed, with Local selected.
 2. Show `Listen address` default `127.0.0.1`, `Listen port`, and mode-appropriate `Destination host`/`Destination port`. Explain listening and destination-reaching machines in plain language. Dynamic hides fixed destination fields and explains proxy use.
-3. Tab/previous traversal, F1 Help, Esc Cancel, and `Ctrl-S Start` follow existing form patterns; Ctrl-S starts validation, not persistent saving. Field errors retain draft values. Left/Right selects mode when its selector owns focus.
+3. Tab/previous traversal, F1 Help, Esc Cancel, and `Ctrl-S Start` follow existing form patterns. Include a focusable primary `[ Start forwarding ]` control; Enter on that control or Ctrl-S starts validation and confirmation, not persistent saving or immediate network activity. Field errors retain draft values and use the same invalid-field/error-row presentation as New connection. At one-row Details sizes, retain the focused control and show its error in the legend. Left/Right selects mode when its selector owns focus.
 4. Non-loopback choice requires separate exposure consent, reset by mode/listener/target changes. Dynamic warning mentions unauthenticated proxy access.
 5. Show captured path/SSH endpoint/mode/listener/destination summary with cancel-default target confirmation, check current revision before network activity, then perform existing trust/secret decisions.
 6. Starting appears in Tunnels. Successful activation ends input-owning startup without canceling the runtime; browsing resumes with the new tunnel selected in Tunnels. Failure preserves settings for edit/retry and produces a safe stable error view.

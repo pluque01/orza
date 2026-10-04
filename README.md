@@ -706,8 +706,9 @@ terminal resize events are sent to its PTY, and local terminal state is restored
 Select a saved connection in Tree/Details and press `p`. The Details draft starts in Local mode with
 listen address `127.0.0.1`; provide a listen port and, for Local/Remote, destination host/port. Left/Right
 cycles Local/Remote/Dynamic while Mode owns focus. Tab and Shift-Tab/F2 traverse controls, F1 opens Help,
-Space toggles the separate external-access acknowledgement, and `Ctrl-S` validates before opening a
-cancel-default start confirmation. Mode or listener edits reset exposure consent. Dynamic hides fixed
+Space toggles the separate external-access acknowledgement, and `Ctrl-S` or Enter on `[ Start forwarding ]`
+validates before opening a cancel-default start confirmation. The form uses the same title, aligned
+colonless labels, selector choices, and focus/error/primary markers as New connection. Mode or listener edits reset exposure consent. Dynamic hides fixed
 destination fields and explains unauthenticated SOCKS5 proxy access. Validation/failure preserves settings;
 Esc from a changed draft offers Discard/Cancel. No forwarding profile is saved.
 

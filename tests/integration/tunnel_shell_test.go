@@ -149,7 +149,7 @@ func TestTunnelFormStartsAndStopsAllModesThroughTUI(t *testing.T) {
 				address, _ := startForwardingDestination(t)
 				destination := forwardingEndpoint(t, address)
 				listen := forwardingFreeEndpoint(t)
-				writer := newSignalingWriter("q Quit  |  ? Help", "Connection", "Mode: local", "Start forwarding?", "Tunnels (1 active)", "s Stop", "Stop this tunnel?", "Stopped")
+				writer := newSignalingWriter("q Quit  |  ? Help", "Connection", "[Local]", "Start forwarding?", "Tunnels (1 active)", "s Stop", "Stop this tunnel?", "Stopped")
 				modeKeys := ""
 				if mode == app.TunnelRemote {
 					modeKeys = "\x1b[C"
@@ -164,7 +164,7 @@ func TestTunnelFormStartsAndStopsAllModesThroughTUI(t *testing.T) {
 				trafficDone := make(chan struct{})
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
-				input := pipeInput(t, []readerStage{{wait: writer.signal("q Quit  |  ? Help"), data: "l"}, {wait: writer.signal("Connection"), data: "p"}, {wait: writer.signal("Mode: local"), data: fields}, {wait: writer.signal("Start forwarding?"), data: "y"}, {wait: trafficDone, data: "\r"}, {wait: writer.signal("s Stop"), data: "s"}, {wait: writer.signal("Stop this tunnel?"), data: "y"}, {wait: writer.signal("Stopped"), data: "q"}})
+				input := pipeInput(t, []readerStage{{wait: writer.signal("q Quit  |  ? Help"), data: "l"}, {wait: writer.signal("Connection"), data: "p"}, {wait: writer.signal("[Local]"), data: fields}, {wait: writer.signal("Start forwarding?"), data: "y"}, {wait: trafficDone, data: "\r"}, {wait: writer.signal("s Stop"), data: "s"}, {wait: writer.signal("Stop this tunnel?"), data: "y"}, {wait: writer.signal("Stopped"), data: "q"}})
 				local := terminal.NewFake(size)
 				type runResult struct {
 					result tui.Result

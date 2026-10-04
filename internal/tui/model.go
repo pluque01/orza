@@ -2229,8 +2229,13 @@ func (m *Model) browserShell(layout layoutState) string {
 	}
 	treePanel := renderRegionPanelWithScrollbar(m.styles.regionTitle("Tree", m.focusOwner == focusOwnerTree), tree, layout.tree, m.styles, treeProjection.scrollbar, 0)
 	detailTitle := m.styles.regionTitle("Details", m.focusOwner == focusOwnerDetail || m.focusOwner == focusOwnerConnectionForm)
+	formBadge := ""
 	if m.screen == screenConnectionForm && m.form != nil {
-		formBadge := m.styles.contentBadge(m.form.title())
+		formBadge = m.styles.contentBadge(m.form.title())
+	} else if m.tunnelForm != nil {
+		formBadge = m.styles.contentBadge(tunnelFormTitle)
+	}
+	if formBadge != "" {
 		if !strings.Contains(ansi.Strip(strings.Join(details, "\n")), ansi.Strip(formBadge)) {
 			detailTitle += " " + formBadge
 		}
