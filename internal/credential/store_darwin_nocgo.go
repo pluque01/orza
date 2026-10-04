@@ -12,6 +12,9 @@ type Store struct{}
 
 func NewStore() *Store { return &Store{} }
 
+// NewStoreWithOptions remains unavailable without Security.framework support.
+func NewStoreWithOptions(StoreOptions) CredentialStore { return NewStore() }
+
 func (s *Store) Set(ctx context.Context, _ Key, _ []byte) error { return darwinUnavailable(ctx) }
 
 func (s *Store) Get(ctx context.Context, _ Key) ([]byte, error) { return nil, darwinUnavailable(ctx) }

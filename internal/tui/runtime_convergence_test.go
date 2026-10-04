@@ -32,6 +32,12 @@ func (m *convergenceProgramModel) Init() tea.Cmd { return m.init }
 
 func (m *convergenceProgramModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	_, command := m.model.Update(msg)
+	if finished, ok := msg.(sessionFinishedMsg); ok && sessionWasActive(finished.result) && m.model.ctx.Err() == nil {
+		if command != nil || m.model.operation != nil || m.model.modal.isOpen() {
+			panic("shell did not restore browser")
+		}
+		command = tea.Quit
+	}
 	if m.observed != nil {
 		m.observed <- convergenceObservation{
 			helpModal:         m.model.modal.kind == modalKindHelp && m.model.focusOwner == focusOwnerModal,

@@ -387,8 +387,8 @@ func assertOperationCommitReconciled(t *testing.T, fixture operationConformanceF
 		}
 	case asyncOperationSSHStart:
 		assertOperationReleased(t, model, run)
-		if model.sessionResult.Session.StartedAt.IsZero() || command == nil {
-			t.Fatalf("run %d: active SSH commit was not retained before exit", run)
+		if !strings.HasPrefix(model.status, "Shell") || (command != nil) != wantQuit || model.sessionErr != nil {
+			t.Fatalf("run %d: active SSH did not restore browser", run)
 		}
 	}
 	assertOperationDuplicateInert(t, fixture, run)

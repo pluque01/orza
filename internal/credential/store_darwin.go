@@ -15,24 +15,32 @@ import (
 const darwinCredentialLabel = "Orza credential"
 
 // Store uses non-synchronizing generic-password entries in the login Keychain.
-type Store struct{}
+type Store struct {
+	nonInteractive bool
+	backend        darwinBackend
+}
 
-func NewStore() *Store { return &Store{} }
+func NewStore() *Store { return &Store{backend: nativeDarwinBackend{}} }
+
+// NewStoreWithOptions constructs a lazy native store with immutable UI policy.
+func NewStoreWithOptions(options StoreOptions) CredentialStore {
+	return &Store{nonInteractive: options.NonInteractive, backend: nativeDarwinBackend{}}
+}
 
 func (s *Store) Set(ctx context.Context, key Key, secret []byte) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	query := darwinQuery(key)
+	query := s.query(key)
 	update := keychain.NewItem()
 	update.SetData(secret)
-	err := keychain.UpdateItem(query, update)
+	err := s.backend.Update(query, update)
 	if err == keychain.ErrorItemNotFound {
-		item := darwinQuery(key)
+		item := s.query(key)
 		item.SetLabel(darwinCredentialLabel)
 		item.SetData(secret)
 		item.SetAccessible(keychain.AccessibleWhenUnlocked)
-		err = keychain.AddItem(item)
+		err = s.backend.Add(item)
 	}
 	if err != nil {
 		return darwinError(ctx, "write", err)
@@ -52,10 +60,10 @@ func (s *Store) Get(ctx context.Context, key Key) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	query := darwinQuery(key)
+	query := s.query(key)
 	query.SetMatchLimit(keychain.MatchLimitOne)
 	query.SetReturnData(true)
-	results, err := keychain.QueryItem(query)
+	results, err := s.backend.Query(query)
 	if err != nil {
 		return nil, darwinError(ctx, "read", err)
 	}
@@ -74,11 +82,12 @@ func (s *Store) Delete(ctx context.Context, key Key) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	err := keychain.DeleteItem(darwinQuery(key))
+	err := s.backend.Delete(s.query(key))
 	if err != nil && err != keychain.ErrorItemNotFound {
 		return darwinError(ctx, "delete", err)
 	}
-	_, err = s.Get(context.WithoutCancel(ctx), key)
+	remaining, err := s.Get(context.WithoutCancel(ctx), key)
+	wipe(remaining)
 	if !errors.Is(err, ErrNotFound) {
 		if err == nil {
 			err = errors.New("credential remains present")
@@ -87,6 +96,33 @@ func (s *Store) Delete(ctx context.Context, key Key) error {
 	}
 	return ctx.Err()
 }
+
+func (s *Store) query(key Key) keychain.Item {
+	item := darwinQuery(key)
+	if s.nonInteractive {
+		name, value := darwinAuthenticationUI()
+		item.SetString(name, value)
+	}
+	return item
+}
+
+type darwinBackend interface {
+	Query(keychain.Item) ([]keychain.QueryResult, error)
+	Update(keychain.Item, keychain.Item) error
+	Add(keychain.Item) error
+	Delete(keychain.Item) error
+}
+
+type nativeDarwinBackend struct{}
+
+func (nativeDarwinBackend) Query(item keychain.Item) ([]keychain.QueryResult, error) {
+	return keychain.QueryItem(item)
+}
+func (nativeDarwinBackend) Update(query, update keychain.Item) error {
+	return keychain.UpdateItem(query, update)
+}
+func (nativeDarwinBackend) Add(item keychain.Item) error    { return keychain.AddItem(item) }
+func (nativeDarwinBackend) Delete(item keychain.Item) error { return keychain.DeleteItem(item) }
 
 func darwinQuery(key Key) keychain.Item {
 	item := keychain.NewItem()

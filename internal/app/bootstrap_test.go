@@ -118,6 +118,48 @@ func TestDependenciesCloseIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestDependenciesCloseJoinsTunnelsBeforeCatalog(t *testing.T) {
+	deps, err := Bootstrap(context.Background(), BootstrapOptions{ResolveCatalogPath: func() (string, error) { return bootstrapCatalogPath(t), nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = deps.Close() })
+	entered := make(chan struct{})
+	canceled := make(chan struct{})
+	release := make(chan struct{})
+	s, repo, _, _, _ := tunnelTestService(t, func(ctx context.Context, r TunnelRunRequest) error {
+		close(entered)
+		<-ctx.Done()
+		close(canceled)
+		<-release
+		return deps.Catalog.CheckIntegrity(context.Background())
+	})
+	deps.Tunnels = s
+	if _, err := s.Start(context.Background(), tunnelTestRequest(repo)); err != nil {
+		t.Fatal(err)
+	}
+	<-entered
+	done := make(chan error, 1)
+	go func() { done <- deps.Close() }()
+	select {
+	case <-done:
+		close(release)
+		t.Fatal("dependencies closed without joining tunnel")
+	case <-canceled:
+	}
+	if err := deps.Catalog.CheckIntegrity(context.Background()); err != nil {
+		close(release)
+		t.Fatalf("catalog closed before tunnel: %v", err)
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if err := deps.Catalog.CheckIntegrity(context.Background()); err == nil {
+		t.Fatal("catalog still open")
+	}
+}
+
 func bootstrapCatalogPath(t *testing.T) string {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "orza")

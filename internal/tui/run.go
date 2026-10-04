@@ -10,8 +10,8 @@ import (
 	"github.com/pluque01/orza/internal/terminal"
 )
 
-// Result communicates an active SSH session outcome without coupling the TUI
-// adapter to CLI exit-code policy.
+// Result describes the browser session's exit. Completed shells never supply
+// its process status; these fields remain empty when browsing resumes.
 type Result struct {
 	Session          app.SSHSessionResult
 	RemoteExitStatus *int
@@ -21,12 +21,31 @@ type Result struct {
 // on every return path.
 func Run(ctx context.Context, config Config) (result Result, err error) {
 	if ctx == nil {
-		return result, errors.New("run TUI: nil context")
+		failure := errors.New("run TUI: nil context")
+		if config.Tunnels != nil {
+			failure = errors.Join(failure, config.Tunnels.Close())
+		}
+		return result, failure
+	}
+	if config.Tunnels != nil {
+		stopWatcher := make(chan struct{})
+		watcherDone := make(chan struct{})
+		go func() {
+			defer close(watcherDone)
+			select {
+			case <-ctx.Done():
+				_ = config.Tunnels.Close()
+			case <-stopWatcher:
+			}
+		}()
+		defer func() { close(stopWatcher); err = errors.Join(err, config.Tunnels.Close()); <-watcherDone }()
 	}
 	if config.Terminal == nil || !config.Terminal.Interactive() {
 		return result, app.ErrNonInteractive
 	}
-	config.Context = ctx
+	sessionCtx, cancelSession := context.WithCancel(ctx)
+	defer cancelSession()
+	config.Context = sessionCtx
 	state, err := config.Terminal.Capture(ctx)
 	if err != nil {
 		return result, err
@@ -61,6 +80,7 @@ func Run(ctx context.Context, config Config) (result Result, err error) {
 		output = io.Discard
 	}
 	model := New(config)
+	defer model.releaseTunnelInput()
 	program := tea.NewProgram(model,
 		tea.WithContext(ctx),
 		tea.WithInput(input),
@@ -68,17 +88,16 @@ func Run(ctx context.Context, config Config) (result Result, err error) {
 		tea.WithWindowSize(config.Width, config.Height),
 	)
 	final, runErr := program.Run()
+	cancelSession()
+	if config.Tunnels != nil {
+		runErr = errors.Join(runErr, config.Tunnels.Close())
+	}
 	if runErr != nil {
 		return result, runErr
 	}
-	root, ok := final.(*Model)
+	_, ok := final.(*Model)
 	if !ok {
 		return result, errors.New("run TUI: unexpected final model")
-	}
-	result.Session = root.sessionResult.Session
-	result.RemoteExitStatus = root.sessionResult.Session.RemoteExitStatus
-	if root.sessionErr != nil && sessionWasActive(root.sessionResult) {
-		return result, root.sessionErr
 	}
 	return result, nil
 }

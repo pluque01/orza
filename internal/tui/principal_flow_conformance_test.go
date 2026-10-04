@@ -117,7 +117,7 @@ func sc006US1Cells() []sc006FlowCell {
 			sc009Update(t, model, keyPress("tab"))
 			sc006ObserveModel(t, model, "Details enter", run, sc006Observation{
 				focus: []string{"[*] Details"}, selection: []string{"> "}, details: []string{"Connection"},
-				targetFields: []scStructuredFieldExpectation{{"Path", fixture.directConn.Path}}, actions: []string{"Down/j Scroll down", "Tab/Shift+Tab Tree"},
+				targetFields: []scStructuredFieldExpectation{{"Path", fixture.directConn.Path}}, actions: []string{"Down/j Scroll down", "Tab/Shift+Tab/F2 Focus"},
 			})
 			frames++
 			sc009Update(t, model, keyPress("G"))
@@ -126,7 +126,7 @@ func sc006US1Cells() []sc006FlowCell {
 				target: []string{"direct.example:22"}, actions: []string{"Home/g First row", "End/G Last row"},
 			})
 			frames++
-			sc009Update(t, model, keyPress("tab"))
+			sc009Update(t, model, keyPress("shift+tab"))
 			sc006ObserveModel(t, model, "Details leave", run, sc006Observation{
 				focus: []string{"[*] Tree"}, selection: []string{"> "}, details: []string{"Connection"},
 				targetFields: []scStructuredFieldExpectation{{"Path", fixture.directConn.Path}}, actions: []string{"c Connect", "r Reload"},

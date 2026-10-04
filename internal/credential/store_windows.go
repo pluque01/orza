@@ -15,9 +15,18 @@ import (
 const windowsCredentialUserName = "orza"
 
 // Store uses generic, current-user Windows Credential Manager entries.
-type Store struct{}
+type Store struct {
+	nonInteractive bool
+	backend        windowsBackend
+}
 
-func NewStore() *Store { return &Store{} }
+func NewStore() *Store { return &Store{backend: nativeWindowsBackend{}} }
+
+// NewStoreWithOptions constructs a lazy native store with immutable UI policy.
+// Generic Credential Manager APIs never use CredUI, in either mode.
+func NewStoreWithOptions(options StoreOptions) CredentialStore {
+	return &Store{nonInteractive: options.NonInteractive, backend: nativeWindowsBackend{}}
+}
 
 func (s *Store) Set(ctx context.Context, key Key, secret []byte) error {
 	if err := ctx.Err(); err != nil {
@@ -28,7 +37,7 @@ func (s *Store) Set(ctx context.Context, key Key, secret []byte) error {
 	entry.UserName = windowsCredentialUserName
 	entry.CredentialBlob = append([]byte(nil), secret...)
 	defer wipe(entry.CredentialBlob)
-	if err := entry.Write(); err != nil {
+	if err := s.backend.Write(entry); err != nil {
 		return fmt.Errorf("%w: write Windows credential: %v", ErrUnavailable, err)
 	}
 	actual, err := s.Get(context.WithoutCancel(ctx), key)
@@ -46,7 +55,7 @@ func (s *Store) Get(ctx context.Context, key Key) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	entry, err := wincred.GetGenericCredential(windowsTarget(key))
+	entry, err := s.backend.Read(windowsTarget(key))
 	if errors.Is(err, wincred.ErrElementNotFound) {
 		return nil, ErrNotFound
 	}
@@ -62,7 +71,7 @@ func (s *Store) Delete(ctx context.Context, key Key) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	entry, err := wincred.GetGenericCredential(windowsTarget(key))
+	entry, err := s.backend.Read(windowsTarget(key))
 	if errors.Is(err, wincred.ErrElementNotFound) {
 		return nil
 	}
@@ -70,10 +79,11 @@ func (s *Store) Delete(ctx context.Context, key Key) error {
 		return fmt.Errorf("%w: read Windows credential for delete: %v", ErrUnavailable, err)
 	}
 	defer wipe(entry.CredentialBlob)
-	if err := entry.Delete(); err != nil && !errors.Is(err, wincred.ErrElementNotFound) {
+	if err := s.backend.Delete(entry); err != nil && !errors.Is(err, wincred.ErrElementNotFound) {
 		return fmt.Errorf("%w: delete Windows credential: %v", ErrUnavailable, err)
 	}
-	_, err = s.Get(context.WithoutCancel(ctx), key)
+	remaining, err := s.Get(context.WithoutCancel(ctx), key)
+	wipe(remaining)
 	if !errors.Is(err, ErrNotFound) {
 		if err == nil {
 			err = errors.New("credential remains present")
@@ -82,6 +92,20 @@ func (s *Store) Delete(ctx context.Context, key Key) error {
 	}
 	return ctx.Err()
 }
+
+type windowsBackend interface {
+	Read(string) (*wincred.GenericCredential, error)
+	Write(*wincred.GenericCredential) error
+	Delete(*wincred.GenericCredential) error
+}
+
+type nativeWindowsBackend struct{}
+
+func (nativeWindowsBackend) Read(target string) (*wincred.GenericCredential, error) {
+	return wincred.GetGenericCredential(target)
+}
+func (nativeWindowsBackend) Write(entry *wincred.GenericCredential) error  { return entry.Write() }
+func (nativeWindowsBackend) Delete(entry *wincred.GenericCredential) error { return entry.Delete() }
 
 func windowsTarget(key Key) string {
 	return "orza/" + hex.EncodeToString([]byte(key.Scope)) + "/" + hex.EncodeToString([]byte(key.Reference))

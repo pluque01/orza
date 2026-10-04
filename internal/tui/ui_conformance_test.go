@@ -316,7 +316,11 @@ func TestSC002DisplayedNavigationAndFormAliasesTwentyRuns(t *testing.T) {
 					t.Fatalf("run %d: focus alias %q was not displayed", run, pressed.String())
 				}
 				sc009Update(t, fixture.model, pressed)
-				if fixture.model.focusOwner != focusOwnerDetail || fixture.model.browser.selectedID != fixture.directConn.ID {
+				want := focusOwnerDetail
+				if pressed.String() == "shift+tab" {
+					want = focusOwnerTunnels
+				}
+				if fixture.model.focusOwner != want || fixture.model.browser.selectedID != fixture.directConn.ID {
 					t.Fatalf("run %d: focus alias %q changed target or missed Details", run, pressed.String())
 				}
 			}
@@ -359,7 +363,11 @@ func TestSC002DisplayedNavigationAndFormAliasesTwentyRuns(t *testing.T) {
 				selectSCNode(fixture.model, fixture.directConn.ID)
 				sc009Update(t, fixture.model, keyPress("tab"))
 				sc009Update(t, fixture.model, pressed)
-				if fixture.model.focusOwner != focusOwnerTree || fixture.model.browser.selectedID != fixture.directConn.ID {
+				want := focusOwnerTree
+				if pressed.String() == "tab" {
+					want = focusOwnerTunnels
+				}
+				if fixture.model.focusOwner != want || fixture.model.browser.selectedID != fixture.directConn.ID {
 					t.Fatalf("run %d: Details focus alias %q changed target or missed Tree", run, pressed.String())
 				}
 			}
@@ -811,6 +819,9 @@ func TestSC004SC005ExactGeometryAndResizePreservationTwentyRuns(t *testing.T) {
 					updateModel(model, tea.WindowSizeMsg{Width: size.width, Height: size.height})
 					layout := model.layout()
 					want := calculateLayoutWithActions(size.width, size.height, model.focusedLayoutRegion())
+					if model.screen == screenBrowser {
+						want = calculateTunnelLayout(size.width, size.height, model.focusedLayoutRegion())
+					}
 					if layout != want {
 						t.Fatalf("run %d %s: layout = %#v, want %#v", run, size.name, layout, want)
 					}
@@ -832,7 +843,7 @@ func TestSC004SC005ExactGeometryAndResizePreservationTwentyRuns(t *testing.T) {
 								t.Fatalf("run %d %s omitted form priority %q", run, size.name, safety)
 							}
 						}
-					} else if !strings.Contains(view, "> ") || !scBrowserLegendContains(model, view, actionUp) || !scBrowserLegendContains(model, view, actionQuit) || strings.Contains(view, "Actions") {
+					} else if !strings.Contains(view, "> ") || !strings.Contains(view, "Tunnels") || !scBrowserLegendContains(model, view, actionQuit) || strings.Contains(view, "Actions") {
 						t.Fatalf("run %d %s omitted selected row or browser legend", run, size.name)
 					}
 					if got := scInteractionSnapshot(model); !reflect.DeepEqual(got, preserved) {
@@ -889,7 +900,7 @@ func TestSC006NoColorPrincipalBrowserAndConnectionFormFlowsTwentyRuns(t *testing
 		if !strings.Contains(view, "[*] Details") || !strings.Contains(view, "[ ] Tree") {
 			t.Fatalf("run %d: Details focus lacked textual ownership", run)
 		}
-		updateModel(model, keyPress("tab"))
+		updateModel(model, keyPress("shift+tab"))
 
 		updateModel(model, keyPress("n"))
 		view = model.View().Content
@@ -1147,7 +1158,7 @@ func assertSCNoANSI(t testing.TB, view string) {
 }
 
 func scDetailFrameContains(model *Model, view, exact string) bool {
-	layout := calculateLayout(model.width, model.height, model.focusedLayoutRegion())
+	layout := model.layout()
 	lines := strings.Split(view, "\n")
 	for row := layout.details.y + 1; row < layout.details.bottom()-1 && row < len(lines); row++ {
 		line := ansi.Cut(lines[row], layout.details.x, layout.details.right())
@@ -1161,7 +1172,7 @@ func scDetailFrameContains(model *Model, view, exact string) bool {
 }
 
 func scDetailFrameContainsStructuredField(model *Model, view, label, value string) bool {
-	layout := calculateLayout(model.width, model.height, model.focusedLayoutRegion())
+	layout := model.layout()
 	lines := strings.Split(view, "\n")
 	for row := layout.details.y + 1; row < layout.details.bottom()-1 && row < len(lines); row++ {
 		line := ansi.Cut(lines[row], layout.details.x, layout.details.right())

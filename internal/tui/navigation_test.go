@@ -74,7 +74,7 @@ func TestDetailsNavigationOnlyScrollsAndTargetChangeResetsOffset(t *testing.T) {
 	}
 
 	model.detailState = model.detailState.withOffset(3)
-	updateModel(model, keyPress("tab"))
+	updateModel(model, keyPress("shift+tab"))
 	updateModel(model, keyPress("l"))
 	if model.browser.selectedID != connections[0].ID || model.detailState.targetID != connections[0].ID {
 		t.Fatalf("target transition = selection %q detail %q", model.browser.selectedID, model.detailState.targetID)

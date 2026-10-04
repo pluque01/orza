@@ -123,7 +123,7 @@ func assertCompactBrowserLegend(t *testing.T, view string, connect bool) {
 	if strings.Contains(view, "Actions") {
 		t.Fatalf("browser retained Actions panel:\n%s", view)
 	}
-	want := []string{"Up/k Move up", "Down/j Move down", "n New connection", "f New folder", "q Quit"}
+	want := []string{"Up/k Move up", "Down/j Move down", "n New connection", "f New folder", "? Help", "q Quit", "Tunnels"}
 	if connect {
 		want = append(want, "c Connect")
 	}
@@ -132,7 +132,7 @@ func assertCompactBrowserLegend(t *testing.T, view string, connect bool) {
 			t.Fatalf("browser legend omitted %q:\n%s", action, view)
 		}
 	}
-	for _, hidden := range []string{"e Edit", "m Move", "d Delete", "r Reload", "? Help"} {
+	for _, hidden := range []string{"e Edit", "m Move", "d Delete", "r Reload"} {
 		if strings.Contains(view, hidden) {
 			t.Fatalf("browser legend exposed secondary action %q:\n%s", hidden, view)
 		}

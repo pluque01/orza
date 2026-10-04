@@ -9,8 +9,8 @@ import (
 
 func TestUS4ExactModalInventoryAndTypedPayloads(t *testing.T) {
 	registry := newModalRegistry()
-	if len(registry.payloadTypes) != 11 {
-		t.Fatalf("registered modal kinds = %d, want 11", len(registry.payloadTypes))
+	if len(registry.payloadTypes) != 12 {
+		t.Fatalf("registered modal kinds = %d, want 12", len(registry.payloadTypes))
 	}
 	connection := testConnection("connection", syntheticRootID, "/connection", 2)
 	folder := testFolder("folder", syntheticRootID, "/folder", 3)
@@ -22,6 +22,7 @@ func TestUS4ExactModalInventoryAndTypedPayloads(t *testing.T) {
 		kind    modalKind
 		payload any
 	}{
+		{modalKindTunnel, tunnelModalPayload{action: "discard"}},
 		{modalKindFolderCreate, folderCreatePayload{folderForm}},
 		{modalKindFolderEdit, folderEditPayload{editForm}},
 		{modalKindMovePicker, movePickerPayload{newMovePicker(connection.Node, []app.Folder{folder})}},

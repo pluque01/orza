@@ -842,7 +842,7 @@ func (m *Model) handleSession(msg sessionFinishedMsg) tea.Cmd {
 	m.status = "READY"
 	if canceledBeforeCommit {
 		if quit {
-			return tea.Quit
+			return m.requestTunnelQuit()
 		}
 		return nil
 	}
@@ -854,14 +854,14 @@ func (m *Model) handleSession(msg sessionFinishedMsg) tea.Cmd {
 		m.installSSHFailure(newSSHFailureModal(sessionAttempt(msg), *msg.result.Session.Failure))
 		m.status = "ERROR"
 		if quit {
-			return tea.Quit
+			return m.requestTunnelQuit()
 		}
 		return nil
 	}
 	if msg.err != nil && preActive {
 		if errors.Is(msg.err, context.Canceled) {
 			if quit {
-				return tea.Quit
+				return m.requestTunnelQuit()
 			}
 			return nil
 		}
@@ -934,8 +934,18 @@ func (m *Model) handleSession(msg sessionFinishedMsg) tea.Cmd {
 	if m.modal.kind == modalKindConnectConfirmation {
 		m.closeGenericModal()
 	}
-	m.sessionResult, m.sessionErr = msg.result, msg.err
-	return tea.Quit
+	m.sessionResult, m.sessionErr = app.ConnectResult{}, nil
+	m.reconcileTunnels()
+	m.status = "Shell closed."
+	if msg.result.Session.RemoteExitStatus != nil {
+		m.status = "Shell closed with status " + strconv.Itoa(*msg.result.Session.RemoteExitStatus) + "."
+	} else if msg.err != nil {
+		m.status = "Shell connection ended; browser restored."
+	}
+	if quit || m.ctx.Err() != nil {
+		return m.closeTunnelsAndQuit()
+	}
+	return nil
 }
 
 func (m *Model) installSSHFailure(failure *errorModal) {

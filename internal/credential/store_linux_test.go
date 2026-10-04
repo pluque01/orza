@@ -24,6 +24,178 @@ func TestLinuxCredentialBranding(t *testing.T) {
 	}
 }
 
+func TestLinuxNonInteractivePolicy(t *testing.T) {
+	key := Key{Scope: "scope", Reference: "key"}
+	for _, operation := range []string{"get", "set", "delete"} {
+		for _, fault := range []string{"none", "collection locked", "item locked", "lock unavailable", "approval required"} {
+			t.Run(operation+"/"+fault, func(t *testing.T) {
+				backend := newFakeLinuxBackend()
+				backend.add(linuxAttributes(key), []byte("secret"))
+				backend.collectionLocked = fault == "collection locked"
+				backend.itemLocked = fault == "item locked"
+				if fault == "lock unavailable" {
+					backend.lockErr = errors.New("cannot inspect lock")
+				}
+				if fault == "approval required" {
+					backend.readErr = secretservice.PromptDismissedError{}
+					backend.createErr = secretservice.PromptDismissedError{}
+					backend.deleteErr = secretservice.PromptDismissedError{}
+				}
+				store := newLinuxStoreWithOptions(backend, StoreOptions{NonInteractive: true})
+				var err error
+				switch operation {
+				case "get":
+					_, err = store.Get(context.Background(), key)
+				case "set":
+					err = store.Set(context.Background(), key, []byte("new"))
+				case "delete":
+					err = store.Delete(context.Background(), key)
+				}
+				if fault == "none" && err != nil {
+					t.Fatal(err)
+				}
+				if fault != "none" && (!errors.Is(err, ErrUnavailable) || errors.Is(err, ErrNotFound)) {
+					t.Fatalf("error = %v", err)
+				}
+				if backend.unlockCalls != 0 {
+					t.Fatal("non-interactive store called Unlock")
+				}
+			})
+		}
+	}
+}
+
+func TestLinuxNonInteractiveVerificationAndMissing(t *testing.T) {
+	key := Key{Scope: "scope", Reference: "key"}
+	for _, operation := range []string{"set", "delete"} {
+		t.Run(operation, func(t *testing.T) {
+			backend := newFakeLinuxBackend()
+			backend.add(linuxAttributes(key), []byte("secret"))
+			backend.lockAfterMutation = true
+			store := newLinuxStoreWithOptions(backend, StoreOptions{NonInteractive: true})
+			var err error
+			if operation == "set" {
+				err = store.Set(context.Background(), key, []byte("new"))
+			} else {
+				err = store.Delete(context.Background(), key)
+			}
+			if !errors.Is(err, ErrUnavailable) || backend.unlockCalls != 0 {
+				t.Fatalf("verification error = %v, unlocks = %d", err, backend.unlockCalls)
+			}
+		})
+	}
+	backend := newFakeLinuxBackend()
+	store := newLinuxStoreWithOptions(backend, StoreOptions{NonInteractive: true})
+	if _, err := store.Get(context.Background(), key); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing Get = %v", err)
+	}
+	if err := store.Delete(context.Background(), key); err != nil {
+		t.Fatal(err)
+	}
+	backend.collectionLocked = true
+	if err := store.Delete(context.Background(), key); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("locked missing Delete = %v", err)
+	}
+}
+
+func TestLinuxNonInteractiveNativeOption(t *testing.T) {
+	options := StoreOptions{NonInteractive: true}
+	store := NewStoreWithOptions(options).(*Store)
+	options.NonInteractive = false
+	if !store.nonInteractive || !store.backend.(*secretServiceBackend).noUI {
+		t.Fatal("native option not captured")
+	}
+	if NewStore().nonInteractive {
+		t.Fatal("interactive default changed")
+	}
+	backend := newFakeLinuxBackend()
+	interactive := newLinuxStore(backend)
+	_, _ = interactive.Get(WithoutInteraction(context.Background()), Key{})
+	if backend.unlockCalls != 1 {
+		t.Fatal("selection context changed an existing store's native policy")
+	}
+}
+
+func TestLinuxNonInteractiveRejectsPromptWithoutExecution(t *testing.T) {
+	object := &promptTestObject{}
+	backend := &secretServiceBackend{noUI: true, object: func(dbus.ObjectPath) dbus.BusObject { return object }}
+	if err := backend.promptAndWait(context.Background(), "/prompt"); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("prompt error = %v", err)
+	}
+	if len(object.methods) != 1 || object.methods[0] != "org.freedesktop.Secret.Prompt.Dismiss" {
+		t.Fatalf("calls = %v", object.methods)
+	}
+	if err := backend.promptAndWait(context.Background(), dbus.ObjectPath(secretservice.NullPrompt)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+type promptTestObject struct {
+	dbus.BusObject
+	methods []string
+	body    []interface{}
+	args    []interface{}
+}
+
+func (o *promptTestObject) Go(method string, _ dbus.Flags, _ chan *dbus.Call, _ ...interface{}) *dbus.Call {
+	o.methods = append(o.methods, method)
+	call := &dbus.Call{Done: make(chan *dbus.Call, 1)}
+	if method != "org.freedesktop.Secret.Prompt.Dismiss" {
+		call.Body = o.body
+	}
+	call.Done <- call
+	return call
+}
+
+func (o *promptTestObject) CallWithContext(_ context.Context, method string, _ dbus.Flags, args ...interface{}) *dbus.Call {
+	o.methods = append(o.methods, method)
+	o.args = args
+	return &dbus.Call{Body: o.body}
+}
+
+func TestLinuxNativeLockedProperty(t *testing.T) {
+	for _, iface := range []string{"org.freedesktop.Secret.Collection", "org.freedesktop.Secret.Item"} {
+		for _, value := range []interface{}{true, false, "invalid"} {
+			object := &promptTestObject{body: []interface{}{dbus.MakeVariant(value)}}
+			backend := &secretServiceBackend{object: func(dbus.ObjectPath) dbus.BusObject { return object }}
+			locked, err := backend.locked(context.Background(), "/object", iface)
+			if value == "invalid" {
+				if err == nil {
+					t.Fatal("invalid Locked property accepted")
+				}
+			} else if err != nil || locked != value.(bool) {
+				t.Fatalf("Locked = %v, %v", locked, err)
+			}
+			if len(object.methods) != 1 || object.methods[0] != "org.freedesktop.DBus.Properties.Get" || len(object.args) != 2 || object.args[0] != iface || object.args[1] != "Locked" {
+				t.Fatalf("not a read-only Locked property query: %v %v", object.methods, object.args)
+			}
+		}
+	}
+}
+
+func TestLinuxNativeMutationPromptsNeverExecute(t *testing.T) {
+	for _, operation := range []string{"create", "delete"} {
+		t.Run(operation, func(t *testing.T) {
+			object := &promptTestObject{body: []interface{}{dbus.ObjectPath("/prompt")}}
+			backend := &secretServiceBackend{noUI: true, object: func(dbus.ObjectPath) dbus.BusObject { return object }}
+			var err error
+			if operation == "create" {
+				object.body = []interface{}{dbus.ObjectPath("/item"), dbus.ObjectPath("/prompt")}
+				session := &linuxSession{session: &secretservice.Session{Mode: secretservice.AuthenticationDHAES, Path: "/session", AESKey: make([]byte, 16)}}
+				err = backend.Create(context.Background(), session, linuxAttributes(Key{}), []byte("secret"), true)
+			} else {
+				err = backend.Delete(context.Background(), "/item")
+			}
+			if !errors.Is(err, ErrUnavailable) {
+				t.Fatalf("mutation prompt error = %v", err)
+			}
+			if len(object.methods) != 2 || object.methods[1] != "org.freedesktop.Secret.Prompt.Dismiss" {
+				t.Fatalf("mutation calls = %v", object.methods)
+			}
+		})
+	}
+}
+
 func TestLinuxStoreCRUDReplacementAndExactKeys(t *testing.T) {
 	backend := newFakeLinuxBackend()
 	store := newLinuxStore(backend)
@@ -367,7 +539,12 @@ const (
 )
 
 type fakeLinuxBackend struct {
-	mu sync.Mutex
+	mu                sync.Mutex
+	collectionLocked  bool
+	itemLocked        bool
+	lockErr           error
+	unlockCalls       int
+	lockAfterMutation bool
 
 	items map[string]fakeLinuxItem
 	next  int
@@ -409,10 +586,25 @@ func (b *fakeLinuxBackend) OpenSession(ctx context.Context) (*linuxSession, erro
 func (b *fakeLinuxBackend) CloseSession(*linuxSession) {}
 
 func (b *fakeLinuxBackend) Unlock(ctx context.Context) error {
+	b.unlockCalls++
 	if err := b.wait(ctx, linuxBackendUnlock); err != nil {
 		return err
 	}
 	return b.unlockErr
+}
+
+func (b *fakeLinuxBackend) CollectionLocked(ctx context.Context) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	return b.collectionLocked, b.lockErr
+}
+
+func (b *fakeLinuxBackend) ItemLocked(ctx context.Context, _ string) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	return b.itemLocked, b.lockErr
 }
 
 func (b *fakeLinuxBackend) Search(ctx context.Context, attributes map[string]string) ([]string, error) {
@@ -477,6 +669,9 @@ func (b *fakeLinuxBackend) Create(ctx context.Context, _ *linuxSession, attribut
 		value = []byte("corrupt")
 	}
 	b.addLocked(attributes, value)
+	if b.lockAfterMutation {
+		b.collectionLocked = true
+	}
 	return nil
 }
 
@@ -511,6 +706,9 @@ func (b *fakeLinuxBackend) Delete(ctx context.Context, item string) error {
 	entry := b.items[item]
 	wipe(entry.secret)
 	delete(b.items, item)
+	if b.lockAfterMutation {
+		b.collectionLocked = true
+	}
 	return nil
 }
 

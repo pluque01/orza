@@ -158,7 +158,7 @@ func TestOperationMatchingCommitConflictAndStaleMatrix(t *testing.T) {
 	model.connectionEdit.conflict = nil
 	id, _, _ = model.beginOperationWith(asyncOperationSSHStart, model.capturedSelectedTarget(), operationOwnerModal)
 	_, command := model.Update(sessionFinishedMsg{id: id, attempt: app.SSHAttemptTarget{ID: connection.ID}, result: started, err: errors.New("network interruption")})
-	if command == nil || model.sessionResult.Session.StartedAt.IsZero() || model.operation != nil {
+	if command != nil || !strings.HasPrefix(model.status, "Shell") || model.operation != nil || model.sessionErr != nil {
 		t.Fatal("post-commit SSH result was suppressed or not cleaned up")
 	}
 }

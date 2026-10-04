@@ -10,7 +10,7 @@ Navigate remote systems from your terminal.
 
 Orza is a local, terminal-first SSH connection manager. It keeps connections in its own
 hierarchical catalog, exposes the same catalog through a CLI and a keyboard-driven TUI, and opens
-interactive SSH sessions with host-key verification.
+interactive SSH sessions and session-only TCP tunnels with host-key verification.
 
 **Status:** pre-1.0 development. Interfaces and catalog migrations are tested, but releases are not
 yet covered by a long-term compatibility promise. See [releases](https://github.com/pluque01/orza/releases),
@@ -202,12 +202,13 @@ git push origin v0.1.0
 
 ## CLI
 
-Run `orza --help`, `orza connection --help`, or `orza folder --help` for generated help.
+Run `orza --help`, `orza connection --help`, `orza folder --help`, or `orza tunnel --help`
+for generated help.
 Global options are:
 
 | Option | Behavior |
 |---|---|
-| `--json` | Emit one machine-readable response for a catalog command or a structured pre-active `connect` failure. Interactive `connect` success remains a terminal stream. It cannot be used with `exec`. |
+| `--json` | Emit one machine-readable response for a catalog command or a structured pre-active `connect` failure. Interactive `connect` success remains a terminal stream. It cannot be used with `exec` or `tunnel`. |
 | `--no-color` | Disable color. A non-empty `NO_COLOR` environment variable does the same. |
 | `--help` | Print help without starting the TUI. |
 | `--version` or `version` | Print the version. |
@@ -314,6 +315,130 @@ from 1 through 255 is returned unchanged. Local failures use the documented mana
 or key passphrases; approve trust through the interactive flow and use an SSH agent, unencrypted key,
 or remembered password for unattended use.
 
+### Foreground tunnels
+
+`tunnel` runs one session-only TCP tunnel on a saved connection in the foreground, without a shell,
+remote command, or PTY. It does not forward stdin. Use `orza tunnel MODE --help` for mode-specific help.
+
+```text
+orza tunnel local PATH_OR_ID --listen-port PORT --destination HOST:PORT
+  [--listen-address IP] [--non-interactive] [--acknowledge-exposure]
+orza tunnel remote PATH_OR_ID --listen-port PORT --destination HOST:PORT
+  [--listen-address IP] [--non-interactive] [--acknowledge-exposure]
+orza tunnel dynamic PATH_OR_ID --listen-port PORT
+  [--listen-address IP] [--non-interactive] [--acknowledge-exposure]
+```
+
+| Mode | Listening machine | Destination and DNS |
+|---|---|---|
+| `local` | This computer | The saved SSH host reaches the fixed destination and resolves its hostname. |
+| `remote` | Saved SSH host, subject to server policy | This computer reaches the fixed destination and resolves its hostname. |
+| `dynamic` | This computer | SOCKS5 clients choose destinations; domain names sent to the proxy are resolved by the saved SSH host, not locally. |
+
+`--listen-port` is required and accepts decimal ports from 1 through 65535; port zero is not supported.
+`--listen-address` defaults to `127.0.0.1` and accepts an IP literal or `localhost` (normalized to IPv4
+loopback). Use `::1` explicitly for IPv6 loopback. Local/Remote require a nonempty destination hostname
+or IP and numeric port; bracket IPv6 destinations, for example `'[::1]:8080'`. Dynamic rejects
+`--destination` and supports only SOCKS5 CONNECT with no-authentication, IPv4, domain, or IPv6 addresses.
+It does not configure proxy clients for you; clients must send domain names to the proxy to avoid
+client-side DNS resolution.
+
+These examples make real SSH connections. Replace `/work/host` with an existing saved connection and
+use destinations you are authorized to access:
+
+```sh
+orza tunnel local /work/host --listen-port 15432 --destination db.internal:5432
+orza tunnel remote /work/host --listen-port 18080 --destination 127.0.0.1:8080
+orza tunnel dynamic /work/host --listen-port 1080
+orza tunnel local /work/host --listen-address ::1 --listen-port 18080 \
+  --destination '[::1]:8080'
+orza tunnel local /work/host --listen-port 15432 --destination db.internal:5432 \
+  --non-interactive
+```
+
+Without `--non-interactive`, stdin and stdout must be terminals. Orza shows the captured catalog path,
+SSH endpoint, mode, listening machine/endpoint, and applicable destination/reaching machine, then asks
+for explicit confirmation with cancel as the default. Host trust is a separate reject/once/persist
+decision; passwords and key passphrases use the existing no-echo input flow.
+
+`--non-interactive` is mandatory without a terminal and may also be chosen explicitly in a terminal.
+It never prompts or approves unknown/changed host identities. Use an agent, unencrypted key, or existing
+remembered password; missing secrets and unavailable credentials fail. Revoked host identities always
+fail. This policy is selected before bootstrap credential recovery: Linux does not unlock or run native
+credential prompts, macOS uses fail-without-UI access, and Windows uses generic no-UI credential APIs.
+Recovery is not skipped or falsely completed; inaccessible pending work fails startup under the existing
+catalog policy. Suppressing native dialogs does not promise hard deadlines for synchronous OS calls.
+Invalid tunnel options, unsupported `--json`, and missing explicit no-terminal policy are rejected before
+bootstrap recovery can mutate state or acquire credentials.
+
+Loopback is the safe default. Non-loopback listeners require separate exposure acknowledgement in the
+interactive flow, or `--acknowledge-exposure` in unattended mode. The flag supplies exposure consent only:
+it neither approves host trust nor skips interactive target confirmation. Other machines may reach such
+listeners. Dynamic clients are **not authenticated**, even though the SSH transport is authenticated;
+exposing it grants unauthenticated proxy access through the saved host. For example, this deliberately
+exposes a proxy and should be used only on a controlled network with appropriate access controls:
+
+```sh
+orza tunnel dynamic /work/host --listen-address 0.0.0.0 --listen-port 1080 \
+  --non-interactive --acknowledge-exposure
+```
+
+Remote readiness reports a **Requested listener**, never a verified listening address, and warns:
+`Warning: Actual remote listening scope is unverified and depends on server configuration.` This applies
+even to loopback requests. Server forwarding policy controls acceptance and actual exposure; settings such
+as `AllowTcpForwarding`, `GatewayPorts`, `PermitListen`, and `PermitOpen` may restrict or alter forwarding.
+Orza does not inspect or change those settings, infer precise policy from a generic refusal, or fall back
+to another address/port. Readiness means the transport and listener request succeeded, not that the
+destination is healthy. Remote listener release after transport loss depends on server detection and is
+not verified by Orza.
+
+All controlled progress, readiness, warnings, and failures go to stderr; stdout remains empty during
+tunnel execution. `--json` is unsupported and there is no JSON event stream. Diagnostics are safe,
+coalesced/rate-limited summaries, not raw library errors, payloads, secrets, or dynamic destination history.
+The process remains foreground until interruption or tunnel-level failure; ordinary destination or
+proxy-client failures do not stop it. `Ctrl-C` stops the listener and clients without a quit confirmation.
+Handled termination joins cleanup before exit; `SIGKILL` cannot guarantee cleanup.
+
+Tunnel results use existing management statuses: 1 for internal failure, 2 for invalid usage/endpoints or
+missing exposure consent, 3 for a missing connection, 4 for a captured revision conflict, 5 for canceled
+confirmation/input or owner cancellation without a signal, 6 for trust/authentication/credential failure,
+7 for catalog or bootstrap recovery failure, and 10 for binding, forwarding refusal, or transport failure.
+Controlled non-signal owner shutdown succeeds with 0; SIGINT/SIGTERM retain 130/143 after cleanup. No remote
+command exit status is involved. Direct `orza connect` continues to propagate remote shell statuses
+unchanged; [TUI shells](#forwarding-and-shells) instead return to the browser.
+
+#### Limits and lifetime
+
+- A TUI session admits at most 16 live tunnels, including Starting and Stopping; a CLI invocation owns one.
+  Each tunnel uses a separate SSH transport, so stopping or failing one does not stop another.
+- Each tunnel admits 64 client-work slots, including negotiation, pending destination opens, established
+  copies, and unresolved teardown workers. Remote forwarding permits one additional serialized overflow
+  rejection/cleanup worker. At capacity, new work is rejected rather than evicting a live tunnel or client.
+- Destination establishment has a 10-second per-client deadline. SOCKS negotiation has a separate
+  10-second socket deadline, cleared for established traffic. Slots remain owned until workers actually
+  finish; late successful opens after cancellation are closed.
+- An expired open or client/protocol cleanup that cannot converge within a further 1 second fails and
+  force-closes that unhealthy tunnel transport. Ordinary destination refusal is not a tunnel failure.
+- Forwarding shutdown arms an independent watchdog before graceful protocol cleanup; it forces raw SSH
+  socket closure within 250 ms if cleanup has not converged. This is a forced-close fallback, not a
+  total shutdown deadline. Local resources and owned workers are joined before final state publication.
+- Healthy tunnels and established traffic have no idle timeout. Startup has no fixed deadline: a silent
+  handshake or remote-listener reply can remain Starting until explicit cancellation. There is no tunnel
+  lifetime/startup-timeout flag.
+- The session retains at most 32 Stopped/Failed snapshots and one latest safe diagnostic per tunnel,
+  bounded to 256 Unicode code points. Older terminal-state entries may be evicted; there is no client
+  event queue or destination history.
+
+Forwarding assumes a trusted SSH server. The SSH library accepts remote channels before application
+admission and may transiently buffer protocol work. These application limits are **not a strict hard cap
+on hostile-server library/multiplexer internals**. Traffic is streamed in both directions with bounded
+copy buffers; a clean half-close allows reverse traffic to finish where supported.
+
+Tunnels are not saved profiles or catalog records. There is no background/daemon mode, automatic reconnect,
+global or cross-process tunnel list, arbitrary SSH flags, proxy authentication/TLS, destination ACL,
+payload inspection, SOCKS BIND, or UDP ASSOCIATE. A separate TUI/CLI process cannot list or manage the
+tunnels owned by this process.
+
 ### Folder commands
 
 ```text
@@ -366,6 +491,8 @@ private-key contents, credential references, and session contents are never proj
 is one object on stderr and has `ok: false` plus `error.code`, `error.message`, and an optional
 `error.target`.
 
+`exec` and `tunnel` reject `--json`; the failure envelope above describes commands that support JSON.
+
 Each item has a stable ID and an item `revision`. The independent `catalogRevision` changes whenever a
 business transaction commits. For compare-and-swap automation, read the item revision and send it
 back with `--if-revision`:
@@ -391,8 +518,9 @@ updates the latest version within one transaction.
 | 7 | Catalog unavailable, incompatible, corrupt, or not writable. |
 | 10 | Local SSH transport or protocol failure without a remote status. |
 
-For an established SSH session, a remote non-zero status from 1 through 255 is propagated as the
-Orza process status, even when the number overlaps a management status.
+For direct `connect` or `exec`, a remote non-zero status from 1 through 255 is propagated as the
+Orza process status, even when the number overlaps a management status. TUI shells return to the browser
+with an outcome notice instead of determining the eventual TUI exit status.
 
 ### SSH startup diagnostics
 
@@ -466,12 +594,17 @@ The TUI is keyboard-only. Mouse navigation, activation, selection, and scrolling
 or required. Terminal-native text selection may still be provided by the emulator, but the application
 does not consume mouse events or read the operating-system clipboard.
 
-Every normal frame has three named regions:
+Every normal browser frame has three named panels and a borderless action legend:
 
 - **Tree** shows the catalog hierarchy and the one selected row.
 - **Details** shows the selected folder/connection or hosts an active connection form. Folder details
   list direct child connections only, not connections in descendant folders.
-- **Actions** shows the exact available keys for the current selection and focus owner.
+- **Tunnels** permanently shows session-owned tunnels, including an empty state and active count,
+  independently of catalog selection or filtering.
+
+The bottom legend shows available keys for the current selection and focus owner in at most three rows;
+there is no titled or bordered Actions panel. Connection create/edit screens use their own Tree/Details
+and control layout; forwarding drafts remain in the browser Details panel with Tunnels visible.
 
 Panel titles use plain text such as `Details`; the existing `[*]` and `[ ]` markers identify active
 and inactive regions. Content types use unbracketed labels such as `Connection` and `Folder`; Details
@@ -481,12 +614,16 @@ secondary emphasis while values remain primary.
 
 Read-only identity rows align values in one shared column when the local panel leaves at least eight
 display cells for values. Below that threshold, every label is followed by its indented value on the
-next line; fields are not hidden to preserve alignment. Interactive forms instead keep each label and
+next line; fields are not hidden to preserve alignment. Connection forms instead keep each label and
 bounded control on one compact row, leaving the next line available for a validation error at 40x12.
 
-At 80 columns or wider, Tree is left of Details and Actions spans the bottom. Below 80 columns, Tree is
-above Details and Actions remains at the bottom. The complete layout target is **80x24**. A wide or
-stacked frame below 80x24 is reduced and prioritizes the active row or field, target identity, errors,
+At 80 columns or wider, Tree is left of vertically stacked Details and Tunnels, with the legend below.
+Below 80 columns, Tree, Details, and Tunnels are stacked above the legend. The complete layout target is
+**80x24**: Tree occupies 31x21, Details 48x11, and Tunnels 48x10, with a one-column gutter and three-row
+legend. At **40x12**, each panel has three rows including borders, leaving one content row, followed by
+the three-row legend. Additional narrow-screen rows go to the focused panel; wide layouts distribute
+extra space while favoring focus. A wide or stacked frame below 80x24 is reduced and prioritizes the
+active row or field, target identity, errors,
 recovery/cancel/back/quit controls, and the primary action before secondary content. At sizes from
 40x12, the regions remain usable with proportional scrollbars beside each overflowing container. Below **40x12**, the regions are replaced by an
 undersized notice that permits only Help and safe Quit; selection, expansion, scroll, form values,
@@ -505,8 +642,8 @@ ANSI styling while retaining the same title, content-type label, values, and tex
 `[*]`/`[ ]` mark active/inactive regions, `>` marks selection or focus, `!` marks invalid input, `*`
 marks a primary control, and `[/]`, `[+]`, `[-]`, `[ssh]`, `Warning:`, `Error:`, the `│`/`█` track and
 thumb, and `…` preserve node, severity, overflow position, and truncation meaning. Scrollbars are
-informational and remain keyboard-only; when Actions omits lower-priority options it shows
-`Hidden actions — ? Help` instead of becoming scrollable.
+informational and remain keyboard-only; lower-priority legend actions remain discoverable in contextual
+Help rather than making the legend scrollable.
 
 | Keys | Action |
 |---|---|
@@ -517,15 +654,23 @@ informational and remain keyboard-only; when Actions omits lower-priority option
 | `Esc` | Close help, cancel, or go back. |
 | `?` | Toggle contextual help. |
 | `f` / `n` | Create in the selected folder, or as a sibling of the selected connection. |
-| `e` / `m` / `d` | Edit, move, or delete the selected item. |
-| `c` | Show path and endpoint confirmation for the selected connection. |
-| `r` | Reload the catalog; on an error it performs the offered retry/reload action. |
-| `Tab` / `Shift-Tab` | Switch Tree/Details focus, or move through form controls. |
+| `e` / `m` / `d` in catalog focus | Edit, move, or delete the selected item. |
+| `c` in catalog focus | Show path and endpoint confirmation for the selected connection. |
+| `p` in catalog focus | Open a forwarding draft for the selected connection; inert on folders/root. |
+| `t` in the browser | Focus Tunnels without changing catalog or tunnel selection. |
+| `r` in catalog focus | Reload the catalog; on an error it performs the offered retry/reload action. |
+| `Tab` / `Shift-Tab` or `F2` | Cycle Tree/Details/Tunnels focus, or move through form controls. |
+| Up/Down or `j`/`k` in Tunnels | Select tunnel entries without wrapping. |
+| `Enter` in Tunnels | Inspect complete endpoints, warnings, state, and latest safe diagnostic. |
+| `s` in Tunnels | Confirm stop for a selected Starting/Active tunnel. |
+| `r` in Tunnels | Review the current saved connection and retry a selected Stopped/Failed tunnel. |
+| `d` in Tunnels | Dismiss a selected Stopped/Failed entry; never stop a live tunnel. |
+| `Esc` in Tunnels | Return to Tree without stopping anything. |
 | `F2` | Move to the previous form control when Shift-Tab is unavailable. |
 | `F1` | Open Help while an editable field owns printable keys. |
 | Left / Right | Cycle the visible `Agent`, `Key`, and `Password` method selector while Method is focused. |
 | Space | Toggle password remembering while that control is focused. |
-| `Ctrl-S` | Save a form. |
+| `Ctrl-S` | Save a catalog form, or validate a forwarding draft and open start confirmation. |
 | `y` | Explicitly confirm a destructive or connection action. |
 | `s` / `d` / `Esc` in Unsaved Changes | Save, Discard, or Cancel. Save exits only after commit and cleanup; Discard exits without persisting; Cancel restores the form. |
 | `q` | Request Quit from a browser or other non-text owner where it is offered. |
@@ -553,6 +698,45 @@ captured revision again before network I/O so a concurrent edit cannot redirect 
 Bubble Tea then yields the terminal to SSH. A failure before the remote shell becomes
 active returns to a stable TUI error screen. Once active, the remote shell owns stdin/stdout/stderr;
 terminal resize events are sent to its PTY, and local terminal state is restored when it ends.
+
+### Forwarding And Shells
+
+Select a saved connection in Tree/Details and press `p`. The Details draft starts in Local mode with
+listen address `127.0.0.1`; provide a listen port and, for Local/Remote, destination host/port. Left/Right
+cycles Local/Remote/Dynamic while Mode owns focus. Tab and Shift-Tab/F2 traverse controls, F1 opens Help,
+Space toggles the separate external-access acknowledgement, and `Ctrl-S` validates before opening a
+cancel-default start confirmation. Mode or listener edits reset exposure consent. Dynamic hides fixed
+destination fields and explains unauthenticated SOCKS5 proxy access. Validation/failure preserves settings;
+Esc from a changed draft offers Discard/Cancel. No forwarding profile is saved.
+
+Confirmation identifies the captured path, SSH endpoint, mode, requested listener, and applicable
+destination, explains which machine listens/resolves/reaches, and retains the Remote scope warning even
+for loopback. The connection revision is checked before network I/O, followed by the existing trust and
+secret gates. Only one startup/security interaction owns input at a time; already active tunnels continue.
+Starting, Active, Stopping, Stopped, and Failed are textual states. Activation returns browsing focus to
+Tunnels with the new entry selected.
+
+Tunnels are listed in creation order across hosts in this TUI session. Their selection is independent of
+the catalog selection; overflow scrolls to keep the selected row visible. The empty panel says
+`No tunnels; select host, p Forward`. At narrow widths, use `Enter` inspection for full endpoints and
+warnings. Inspection provides the same applicable `s` Stop, `r` Retry, `d` Dismiss, and Esc Back controls.
+Retry resolves the same saved ID's current record and opens a fresh draft for review/consent; it never
+silently reconnects. Stopped/Failed entries remain inspectable until dismissal or bounded eviction.
+
+While Tunnels owns focus, catalog edit/move/delete/connect/create keys do not act on catalog items;
+`d` dismisses only a terminal-state tunnel. Editable fields, search, modals, and security input retain
+exclusive ownership of printable keys, including pasted text. Quit with live Starting/Active/Stopping
+tunnels lists their captured targets and asks for confirmation to close them all, with Cancel as default.
+Handled process termination bypasses confirmation but still restores the terminal and joins cleanup.
+Below 40x12, Help and safe Quit remain available while other input, trust approval, and secret submission
+wait for resize.
+
+Opening `c` from catalog focus keeps tunnels running on separate transports while Bubble Tea yields the
+terminal to the shell. Forwarding and cleanup continue even when UI events are delayed. Normal or nonzero
+shell completion, and shell-only transport failure, restore the browser, reconcile current tunnel state,
+and show a safe shell outcome notice. The shell's status does not become the eventual result of an
+unrelated TUI quit. This differs from direct `orza connect`, whose remote exit propagation is unchanged.
+Root termination/cancellation instead stops all owned resources and exits after restoration and cleanup.
 
 Host-trust, password, and private-key-passphrase input are specialized security owners, not generic
 modals. They temporarily preempt application input while preserving the previous Tree, Details, form,
@@ -639,7 +823,9 @@ The following are also outside v1:
 
 - FIDO/security-key and PKCS#11 providers, keyboard-interactive and GSSAPI authentication, agent
   forwarding, and automatic fallback across multiple authentication methods.
-- Dedicated file transfer, SCP/SFTP, local/remote/dynamic tunnels, and port forwarding.
+- Dedicated file transfer and SCP/SFTP. TCP local/remote/dynamic forwarding is supported as described
+  under [Foreground tunnels](#foreground-tunnels), but persistent forwarding profiles, automatic reconnect,
+  cross-process management, UDP forwarding, and SOCKS BIND/proxy authentication are not.
 - Inventory import/export, synchronization between machines, shared/team catalogs, and remote server
   administration.
 

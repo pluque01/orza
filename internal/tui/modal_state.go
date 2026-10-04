@@ -14,12 +14,13 @@ const (
 	focusOwnerNone focusOwner = iota
 	focusOwnerTree
 	focusOwnerDetail
+	focusOwnerTunnels
 	focusOwnerConnectionForm
 	focusOwnerModal
 )
 
 func (owner focusOwner) validModalOpener() bool {
-	return owner == focusOwnerTree || owner == focusOwnerDetail || owner == focusOwnerConnectionForm
+	return owner == focusOwnerTree || owner == focusOwnerDetail || owner == focusOwnerTunnels || owner == focusOwnerConnectionForm
 }
 
 type modalKind string
@@ -37,11 +38,12 @@ const (
 	modalKindHelp                modalKind = "help"
 	modalKindOperationError      modalKind = "operation_error"
 	modalKindSSHFailure          modalKind = "ssh_failure"
+	modalKindTunnel              modalKind = "tunnel"
 )
 
 func (kind modalKind) valid() bool {
 	switch kind {
-	case modalKindFolderCreate,
+	case modalKindTunnel, modalKindFolderCreate,
 		modalKindFolderEdit,
 		modalKindMovePicker,
 		modalKindDeleteConnection,
@@ -108,6 +110,7 @@ type modalRegistry struct {
 
 func newModalRegistry() modalRegistry {
 	registry := modalRegistry{}
+	registry, _ = registerModalPayload[tunnelModalPayload](registry, modalKindTunnel)
 	registry, _ = registerModalPayload[folderCreatePayload](registry, modalKindFolderCreate)
 	registry, _ = registerModalPayload[folderEditPayload](registry, modalKindFolderEdit)
 	registry, _ = registerModalPayload[movePickerPayload](registry, modalKindMovePicker)

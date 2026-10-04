@@ -72,7 +72,7 @@ func TestStackedOddRowGoesToFocusedBaseRegion(t *testing.T) {
 	}
 }
 
-func TestModelLayoutKeepsFixedLowerControlRegion(t *testing.T) {
+func TestModelLayoutPermanentTunnelsAndThreeRowLegend(t *testing.T) {
 	tests := []struct {
 		name          string
 		width, height int
@@ -80,8 +80,8 @@ func TestModelLayoutKeepsFixedLowerControlRegion(t *testing.T) {
 		tree, details layoutRect
 		actions       layoutRect
 	}{
-		{"wide", 80, 24, regionTree, layoutRect{0, 0, 31, 19}, layoutRect{32, 0, 48, 19}, layoutRect{0, 19, 80, 5}},
-		{"minimum", 40, 12, regionDetails, layoutRect{0, 0, 40, 3}, layoutRect{0, 3, 40, 4}, layoutRect{0, 7, 40, 5}},
+		{"wide", 80, 24, regionTree, layoutRect{0, 0, 31, 21}, layoutRect{32, 0, 48, 11}, layoutRect{0, 21, 80, 3}},
+		{"minimum", 40, 12, regionDetails, layoutRect{0, 0, 40, 3}, layoutRect{0, 3, 40, 3}, layoutRect{0, 9, 40, 3}},
 	}
 
 	for _, tt := range tests {
@@ -89,8 +89,15 @@ func TestModelLayoutKeepsFixedLowerControlRegion(t *testing.T) {
 			model := New(Config{Width: tt.width, Height: tt.height})
 			model.focusOwner = map[layoutRegion]focusOwner{regionTree: focusOwnerTree, regionDetails: focusOwnerDetail}[tt.focus]
 			layout := model.layout()
-			if layout.tree != tt.tree || layout.details != tt.details || layout.actions != tt.actions || layout.legend != (layoutRect{}) {
+			if layout.tree != tt.tree || layout.details != tt.details || layout.legend != tt.actions || layout.actions != (layoutRect{}) {
 				t.Fatalf("model layout = tree %#v details %#v legend %#v actions %#v", layout.tree, layout.details, layout.legend, layout.actions)
+			}
+			wantTunnel := layoutRect{32, 11, 48, 10}
+			if tt.width == 40 {
+				wantTunnel = layoutRect{0, 6, 40, 3}
+			}
+			if layout.tunnels != wantTunnel {
+				t.Fatalf("Tunnels rectangle=%#v want %#v", layout.tunnels, wantTunnel)
 			}
 		})
 	}
@@ -170,7 +177,7 @@ func BenchmarkLayout(b *testing.B) {
 
 func assertLayoutInvariants(t *testing.T, state layoutState) {
 	t.Helper()
-	for name, rect := range map[string]layoutRect{"Tree": state.tree, "Details": state.details, "Legend": state.legend} {
+	for name, rect := range map[string]layoutRect{"Tree": state.tree, "Details": state.details, "Tunnels": state.tunnels, "Legend": state.legend} {
 		assertRectBounded(t, rect, state.width, state.height)
 		if state.mode == layoutUndersized && rect != (layoutRect{}) {
 			t.Errorf("undersized %s rectangle = %#v, want absent", name, rect)
@@ -181,6 +188,9 @@ func assertLayoutInvariants(t *testing.T, state layoutState) {
 	}
 	if overlaps(state.tree, state.details) {
 		t.Fatalf("base rectangles overlap: Tree %#v Details %#v", state.tree, state.details)
+	}
+	if overlaps(state.tree, state.tunnels) || overlaps(state.details, state.tunnels) || overlaps(state.tunnels, state.legend) {
+		t.Fatal("Tunnels overlaps another region")
 	}
 }
 

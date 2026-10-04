@@ -57,8 +57,8 @@ func TestSessionOperationTimeoutNetworkAndActiveCommitMatrix(t *testing.T) {
 					t.Fatal("session result did not fully release operation owner")
 				}
 				if test.active {
-					if command == nil || model.sessionResult.Session.StartedAt.IsZero() {
-						t.Fatal("post-active result was not retained before quit")
+					if command != nil || model.sessionErr != nil || model.status != "Shell connection ended; browser restored." {
+						t.Fatal("post-active failure did not restore the browser with a safe notice")
 					}
 				} else if modal := model.activeSSHFailure(); modal == nil || modal.attempt != attempt {
 					t.Fatal("pre-active failure did not preserve captured target")

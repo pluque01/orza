@@ -1,4 +1,4 @@
-// Package sshclient implements interactive SSH transport and session ownership.
+// Package sshclient owns SSH transports, sessions, commands, and forwarding.
 package sshclient
 
 import (
@@ -82,20 +82,21 @@ type handshakeFunc func(context.Context, net.Conn, string, *ssh.ClientConfig) (s
 // Options exposes I/O and protocol seams used by deterministic lifecycle tests.
 // Zero values select production implementations.
 type Options struct {
-	Authenticate AuthenticationFunc
-	DialContext  dialContextFunc
-	Handshake    handshakeFunc
-	Stdin        io.Reader
-	Stdout       io.Writer
-	Stderr       io.Writer
-	Now          func() time.Time
-	resize       *resizeLifecycleObserver
+	Authenticate     AuthenticationFunc
+	DialContext      dialContextFunc
+	Handshake        handshakeFunc
+	Stdin            io.Reader
+	Stdout           io.Writer
+	Stderr           io.Writer
+	Now              func() time.Time
+	resize           *resizeLifecycleObserver
+	forwardAfterFunc forwardingAfterFunc
 }
 
-// Client owns all resources for one Run invocation.
+// Client owns each invocation's resources independently.
 type Client struct{ options Options }
 
-// New returns an SSH session runner. Authentication is deliberately injected
+// New returns an SSH runner. Authentication is deliberately injected
 // by the authentication adapter so host verification can remain protocol-ordered.
 func New(options Options) *Client {
 	if options.Authenticate == nil {
@@ -161,33 +162,14 @@ func (c *Client) Run(ctx context.Context, request app.SSHSessionRequest) (result
 	if err != nil {
 		return result, normalizePreActiveFailure(StageTerminal, err)
 	}
-	address := net.JoinHostPort(request.Connection.Host, strconv.Itoa(int(request.Connection.Port)))
-	raw, err := c.options.DialContext(ctx, "tcp", address)
+	transport, err := c.openTransport(ctx, request, resources)
 	if err != nil {
-		return canceledOrFailed(ctx, result, StageDial, err)
-	}
-	if raw == nil {
-		return result, normalizePreActiveFailure(StageDial, errors.New("dial returned no connection"))
-	}
-	resources.raw = newCloseOnce(raw)
-
-	config, authState := c.clientConfig(ctx, request)
-	transport, err := c.options.Handshake(ctx, raw, address, config)
-	resources.auth = newCloseOnce(authState.closer())
-	if err != nil {
-		if authErr := authState.err(); authErr != nil {
-			return canceledOrFailed(ctx, result, StageAuthentication, authErr)
-		}
-		var hostErr *hostVerificationError
-		if errors.As(err, &hostErr) {
-			return canceledOrFailed(ctx, result, StageHostVerify, hostErr.err)
+		var staged *Error
+		if errors.As(err, &staged) {
+			return canceledOrFailed(ctx, result, staged.Stage, err)
 		}
 		return canceledOrFailed(ctx, result, StageHandshake, err)
 	}
-	if transport == nil {
-		return result, normalizePreActiveFailure(StageHandshake, errors.New("handshake returned no client"))
-	}
-	resources.transport = newCloseOnce(transport)
 
 	remote, err := transport.NewSession()
 	if err != nil {
@@ -224,33 +206,15 @@ func (c *Client) RunCommand(ctx context.Context, request app.SSHCommandRequest) 
 			result.State, result.Outcome = app.SessionFailed, app.SessionOutcomeTransportFailure
 		}
 	}()
-	address := net.JoinHostPort(request.Connection.Host, strconv.Itoa(int(request.Connection.Port)))
-	raw, err := c.options.DialContext(ctx, "tcp", address)
-	if err != nil {
-		return canceledOrFailed(ctx, result, StageDial, err)
-	}
-	if raw == nil {
-		return result, normalizePreActiveFailure(StageDial, errors.New("dial returned no connection"))
-	}
-	resources.raw = newCloseOnce(raw)
 	base := app.SSHSessionRequest{Connection: request.Connection, VerifyHost: request.VerifyHost, Secret: request.Secret}
-	config, authState := c.clientConfig(ctx, base)
-	transport, err := c.options.Handshake(ctx, raw, address, config)
-	resources.auth = newCloseOnce(authState.closer())
+	transport, err := c.openTransport(ctx, base, resources)
 	if err != nil {
-		if authErr := authState.err(); authErr != nil {
-			return canceledOrFailed(ctx, result, StageAuthentication, authErr)
-		}
-		var hostErr *hostVerificationError
-		if errors.As(err, &hostErr) {
-			return canceledOrFailed(ctx, result, StageHostVerify, hostErr.err)
+		var staged *Error
+		if errors.As(err, &staged) {
+			return canceledOrFailed(ctx, result, staged.Stage, err)
 		}
 		return canceledOrFailed(ctx, result, StageHandshake, err)
 	}
-	if transport == nil {
-		return result, normalizePreActiveFailure(StageHandshake, errors.New("handshake returned no client"))
-	}
-	resources.transport = newCloseOnce(transport)
 	remote, err := transport.NewSession()
 	if err != nil {
 		return canceledOrFailed(ctx, result, StageSession, err)
@@ -264,6 +228,72 @@ func (c *Client) RunCommand(ctx context.Context, request app.SSHCommandRequest) 
 		return canceledOrFailed(ctx, result, StageShell, err)
 	}
 	return runCommand(ctx, remote, resources.session, c.options.Now)
+}
+
+type ownedRawConn struct {
+	net.Conn
+	closer *closeOnce
+}
+
+func (c *ownedRawConn) Close() error { return c.closer.Close() }
+
+// openTransport is terminal-free and preserves protocol-ordered trust/auth seams.
+func (c *Client) openTransport(ctx context.Context, request app.SSHSessionRequest, resources *resourceSet) (sshTransport, error) {
+	address := net.JoinHostPort(request.Connection.Host, strconv.Itoa(int(request.Connection.Port)))
+	raw, err := c.options.DialContext(ctx, "tcp", address)
+	if raw != nil {
+		resources.raw = newCloseOnce(raw)
+	}
+	if ctx.Err() != nil {
+		if resources.raw != nil {
+			_ = resources.raw.Close()
+		}
+		return nil, normalizePreActiveFailure(StageDial, ctx.Err())
+	}
+	if err != nil {
+		return nil, normalizePreActiveFailure(StageDial, err)
+	}
+	if raw == nil {
+		return nil, normalizePreActiveFailure(StageDial, errors.New("dial returned no connection"))
+	}
+	// The SSH implementation closes its socket too. Share ownership with it so
+	// protocol failure, cancellation and final cleanup close the raw socket once.
+	raw = &ownedRawConn{Conn: raw, closer: resources.raw}
+	done, joined := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(joined)
+		select {
+		case <-ctx.Done():
+			_ = resources.raw.Close()
+		case <-done:
+		}
+	}()
+	config, state := c.clientConfig(ctx, request)
+	transport, err := c.options.Handshake(ctx, raw, address, config)
+	close(done)
+	<-joined
+	resources.auth = newCloseOnce(state.closer())
+	if transport != nil {
+		resources.transport = newCloseOnce(transport)
+	}
+	if ctx.Err() != nil {
+		_ = resources.raw.Close()
+		return nil, normalizePreActiveFailure(StageHandshake, ctx.Err())
+	}
+	if err != nil {
+		if authErr := state.err(); authErr != nil {
+			return nil, normalizePreActiveFailure(StageAuthentication, authErr)
+		}
+		var hostErr *hostVerificationError
+		if errors.As(err, &hostErr) {
+			return nil, normalizePreActiveFailure(StageHostVerify, hostErr.err)
+		}
+		return nil, normalizePreActiveFailure(StageHandshake, err)
+	}
+	if transport == nil {
+		return nil, normalizePreActiveFailure(StageHandshake, errors.New("handshake returned no client"))
+	}
+	return transport, nil
 }
 
 type authState struct {

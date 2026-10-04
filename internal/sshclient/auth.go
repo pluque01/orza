@@ -60,6 +60,21 @@ type AuthResult struct {
 	failure *authFailureRecorder
 }
 
+// Cancellation ownership is installed before List/Sign can block in agent RPC.
+type ownedAgent struct {
+	client *AgentClient
+	done   chan struct{}
+	joined chan struct{}
+	once   sync.Once
+}
+
+func (a *ownedAgent) Close() error {
+	a.once.Do(func() { close(a.done) })
+	err := a.client.Close()
+	<-a.joined
+	return err
+}
+
 type authFailureRecorder struct {
 	mu  sync.Mutex
 	err error
@@ -166,13 +181,25 @@ func buildAuthMethod(ctx context.Context, connection app.Connection, prompt Secr
 			}
 			return nil, credentialFailure("agent", ErrAgentUnavailable)
 		}
+		owner := &ownedAgent{client: client, done: make(chan struct{}), joined: make(chan struct{})}
+		go func() {
+			defer close(owner.joined)
+			select {
+			case <-ctx.Done():
+				_ = client.Close()
+			case <-owner.done:
+			}
+		}()
 		signers, err := client.Signers()
 		if err != nil {
-			_ = client.Close()
+			_ = owner.Close()
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
 			return nil, credentialFailure("agent", fmt.Errorf("list SSH agent signers: %w", err))
 		}
 		if len(signers) == 0 {
-			_ = client.Close()
+			_ = owner.Close()
 			return nil, credentialFailure("agent", ErrAgentUnavailable)
 		}
 		failure := &authFailureRecorder{}
@@ -182,7 +209,7 @@ func buildAuthMethod(ctx context.Context, connection app.Connection, prompt Secr
 		}
 		return &AuthResult{
 			Method:  ssh.PublicKeys(recorded...),
-			closer:  client,
+			closer:  owner,
 			failure: failure,
 		}, nil
 

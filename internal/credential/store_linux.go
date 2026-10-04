@@ -28,16 +28,26 @@ const (
 
 // Store uses the default Secret Service collection and encrypted sessions.
 type Store struct {
-	backend   linuxBackend
-	operation chan struct{}
+	backend        linuxBackend
+	operation      chan struct{}
+	nonInteractive bool
 }
 
 func NewStore() *Store { return newLinuxStore(&secretServiceBackend{}) }
 
+// NewStoreWithOptions constructs a lazy native store with immutable UI policy.
+func NewStoreWithOptions(options StoreOptions) CredentialStore {
+	return newLinuxStoreWithOptions(&secretServiceBackend{noUI: options.NonInteractive}, options)
+}
+
 func newLinuxStore(backend linuxBackend) *Store {
+	return newLinuxStoreWithOptions(backend, StoreOptions{})
+}
+
+func newLinuxStoreWithOptions(backend linuxBackend, options StoreOptions) *Store {
 	operation := make(chan struct{}, 1)
 	operation <- struct{}{}
-	return &Store{backend: backend, operation: operation}
+	return &Store{backend: backend, operation: operation, nonInteractive: options.NonInteractive}
 }
 
 func (s *Store) Set(ctx context.Context, key Key, secret []byte) error {
@@ -57,7 +67,7 @@ func (s *Store) Set(ctx context.Context, key Key, secret []byte) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := s.backend.Unlock(ctx); err != nil {
+	if err := s.prepare(ctx); err != nil {
 		return linuxError(ctx, "unlock default collection", err)
 	}
 	if err := ctx.Err(); err != nil {
@@ -65,6 +75,11 @@ func (s *Store) Set(ctx context.Context, key Key, secret []byte) error {
 	}
 
 	attributes := linuxAttributes(key)
+	if s.nonInteractive {
+		if _, err := s.find(ctx, attributes); err != nil && !errors.Is(err, ErrNotFound) {
+			return linuxError(ctx, "check credential before write", err)
+		}
+	}
 	if err := s.backend.Create(ctx, session, attributes, value, true); err != nil {
 		return linuxError(ctx, "write credential", err)
 	}
@@ -94,7 +109,7 @@ func (s *Store) Get(ctx context.Context, key Key) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if err := s.backend.Unlock(ctx); err != nil {
+	if err := s.prepare(ctx); err != nil {
 		return nil, linuxError(ctx, "unlock default collection", err)
 	}
 	if err := ctx.Err(); err != nil {
@@ -126,7 +141,7 @@ func (s *Store) Delete(ctx context.Context, key Key) error {
 	}
 	defer s.end()
 
-	if err := s.backend.Unlock(ctx); err != nil {
+	if err := s.prepare(ctx); err != nil {
 		return linuxError(ctx, "unlock default collection", err)
 	}
 	if err := ctx.Err(); err != nil {
@@ -170,6 +185,11 @@ func (s *Store) read(ctx context.Context, session *linuxSession, attributes map[
 }
 
 func (s *Store) find(ctx context.Context, attributes map[string]string) (string, error) {
+	if s.nonInteractive {
+		if err := s.prepare(ctx); err != nil {
+			return "", err
+		}
+	}
 	items, err := s.backend.Search(ctx, attributes)
 	if err != nil {
 		return "", err
@@ -179,6 +199,15 @@ func (s *Store) find(ctx context.Context, attributes map[string]string) (string,
 	}
 	if len(items) != 1 {
 		return "", errors.New("secret service returned multiple matching credentials")
+	}
+	if s.nonInteractive {
+		locked, err := s.backend.ItemLocked(ctx, items[0])
+		if err != nil {
+			return "", err
+		}
+		if locked {
+			return "", fmt.Errorf("%w: Secret Service item locked", ErrUnavailable)
+		}
 	}
 	actual, err := s.backend.Attributes(ctx, items[0])
 	if err != nil {
@@ -190,6 +219,20 @@ func (s *Store) find(ctx context.Context, attributes map[string]string) (string,
 		}
 	}
 	return items[0], nil
+}
+
+func (s *Store) prepare(ctx context.Context) error {
+	if !s.nonInteractive {
+		return s.backend.Unlock(ctx)
+	}
+	locked, err := s.backend.CollectionLocked(ctx)
+	if err != nil {
+		return err
+	}
+	if locked {
+		return fmt.Errorf("%w: Secret Service collection locked", ErrUnavailable)
+	}
+	return nil
 }
 
 func (s *Store) begin(ctx context.Context) error {
@@ -234,6 +277,8 @@ type linuxBackend interface {
 	OpenSession(context.Context) (*linuxSession, error)
 	CloseSession(*linuxSession)
 	Unlock(context.Context) error
+	CollectionLocked(context.Context) (bool, error)
+	ItemLocked(context.Context, string) (bool, error)
 	Search(context.Context, map[string]string) ([]string, error)
 	Attributes(context.Context, string) (map[string]string, error)
 	Create(context.Context, *linuxSession, map[string]string, []byte, bool) error
@@ -243,6 +288,44 @@ type linuxBackend interface {
 
 type secretServiceBackend struct {
 	service *secretservice.SecretService
+	noUI    bool
+	object  func(dbus.ObjectPath) dbus.BusObject
+}
+
+func (b *secretServiceBackend) obj(path dbus.ObjectPath) dbus.BusObject {
+	if b.object != nil {
+		return b.object(path)
+	}
+	return b.service.Obj(path)
+}
+
+func (b *secretServiceBackend) CollectionLocked(ctx context.Context) (bool, error) {
+	service, err := b.getService()
+	if err != nil {
+		return false, err
+	}
+	collection, exists, err := defaultCollection(ctx, service)
+	if err != nil || !exists {
+		return false, err
+	}
+	return b.locked(ctx, collection, "org.freedesktop.Secret.Collection")
+}
+
+func (b *secretServiceBackend) ItemLocked(ctx context.Context, item string) (bool, error) {
+	return b.locked(ctx, dbus.ObjectPath(item), "org.freedesktop.Secret.Item")
+}
+
+func (b *secretServiceBackend) locked(ctx context.Context, path dbus.ObjectPath, iface string) (bool, error) {
+	var value dbus.Variant
+	err := b.obj(path).CallWithContext(ctx, "org.freedesktop.DBus.Properties.Get", secretservice.NilFlags, iface, "Locked").Store(&value)
+	if err != nil {
+		return false, err
+	}
+	locked, ok := value.Value().(bool)
+	if !ok {
+		return false, errors.New("secret service returned invalid Locked property")
+	}
+	return locked, nil
 }
 
 func (b *secretServiceBackend) getService() (*secretservice.SecretService, error) {
@@ -441,7 +524,7 @@ func (b *secretServiceBackend) Create(ctx context.Context, session *linuxSession
 	var prompt dbus.ObjectPath
 	call, ctxErr := joinedDBusCall(
 		ctx,
-		b.service.Obj(secretservice.DefaultCollection),
+		b.obj(secretservice.DefaultCollection),
 		"org.freedesktop.Secret.Collection.CreateItem",
 		secretservice.NewSecretProperties(linuxCredentialLabel, attributes),
 		secret,
@@ -489,7 +572,7 @@ func (b *secretServiceBackend) Delete(ctx context.Context, item string) error {
 	var prompt dbus.ObjectPath
 	call, ctxErr := joinedDBusCall(
 		ctx,
-		b.service.Obj(dbus.ObjectPath(item)),
+		b.obj(dbus.ObjectPath(item)),
 		"org.freedesktop.Secret.Item.Delete",
 	)
 	if call == nil {
@@ -514,6 +597,9 @@ func (b *secretServiceBackend) promptAndWait(ctx context.Context, prompt dbus.Ob
 	if err := ctx.Err(); err != nil {
 		return b.dismissPrompt(prompt, err)
 	}
+	if b.noUI {
+		return b.dismissPrompt(prompt, fmt.Errorf("%w: Secret Service approval required", ErrUnavailable))
+	}
 	done := make(chan error, 1)
 	go func() {
 		_, err := b.service.PromptAndWait(prompt)
@@ -537,7 +623,7 @@ func (b *secretServiceBackend) dismissPrompt(prompt dbus.ObjectPath, ctxErr erro
 	}
 	_, _ = joinedDBusCall(
 		context.Background(),
-		b.service.Obj(prompt),
+		b.obj(prompt),
 		"org.freedesktop.Secret.Prompt.Dismiss",
 	)
 	return ctxErr

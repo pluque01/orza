@@ -102,6 +102,7 @@ type Config struct {
 	Folders     FolderService
 	Connect     ConnectService
 	HostTrust   HostTrustService
+	Tunnels     TunnelService
 	Terminal    app.Terminal
 	Stdin       io.Reader
 	Stdout      io.Writer
@@ -150,6 +151,12 @@ type Model struct {
 	credentialInput      *credentialMutationReadyMsg
 	pendingSelection     app.NodeID
 	search               *treeSearchState
+	tunnels              TunnelService
+	tunnelSnapshots      []app.TunnelSnapshot
+	selectedTunnel       uint64
+	tunnelViewport       viewportState
+	tunnelForm           *tunnelForm
+	tunnelStartup        *tunnelStartup
 }
 
 func New(config Config) *Model {
@@ -171,16 +178,46 @@ func New(config Config) *Model {
 		focusOwner: defaultFocusOwner(), status: "READY",
 	}
 	model.modalRegistry = newModalRegistry()
+	model.tunnels = config.Tunnels
+	model.reconcileTunnels()
 	model.browser.setSnapshot(newCatalogSnapshot(rootFolder(), 0), "")
 	model.ownedSelectionID = model.browser.selectedID
 	model.syncDetail()
 	return model
 }
 
-func (m *Model) Init() tea.Cmd { return m.reloadCommand() }
+func (m *Model) Init() tea.Cmd { return tea.Batch(m.reloadCommand(), m.pollTunnels()) }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tunnelQuitReadyMsg:
+		m.releaseTunnelInput()
+		return m, tea.Quit
+	case tunnelPollMsg:
+		m.reconcileTunnels()
+		return m, tea.Batch(m.finishTunnelStartup(), m.pollTunnels())
+	case tunnelStartedMsg:
+		return m, m.handleTunnelStarted(msg)
+	case tunnelActionMsg:
+		m.reconcileTunnels()
+		if msg.err != nil {
+			m.status = "Tunnel action failed; inspect or retry."
+		}
+		return m, m.finishTunnelStartup()
+	case tunnelRetryResolvedMsg:
+		if !m.acceptsOperationResult(msg.token, asyncOperationReload) {
+			return m, nil
+		}
+		quit := m.completeOperation(msg.token, nil)
+		if quit {
+			return m, m.requestTunnelQuit()
+		}
+		if msg.err != nil {
+			m.status = "Tunnel host is unavailable; reload the catalog."
+			return m, nil
+		}
+		m.openTunnelForm(msg.connection, msg.snapshot.Config, msg.snapshot.ID)
+		return m, nil
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		return m, m.handleSecurityResize()
@@ -217,6 +254,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handlePaste(msg tea.PasteMsg) tea.Cmd {
+	if m.tunnelForm != nil && !m.modal.isOpen() && m.operation == nil {
+		return m.tunnelForm.update(msg)
+	}
 	if m.search != nil {
 		command := m.search.input.Update(msg)
 		m.updateTreeSearch()
@@ -247,6 +287,25 @@ func (m *Model) handlePaste(msg tea.PasteMsg) tea.Cmd {
 }
 
 func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if p, ok := m.modal.payload.(tunnelModalPayload); ok && p.action == "quit" {
+		if m.layout().mode == layoutUndersized {
+			if key.Matches(msg, m.keys.Help) {
+				m.toggleModalHelp()
+			} else if msg.String() == "esc" || msg.String() == "enter" {
+				return m.handleTunnelModalKey(msg, p)
+			}
+			return m, nil
+		}
+		return m.handleTunnelModalKey(msg, p)
+	}
+	if m.securityInput != nil && (msg.String() == "q" || msg.String() == "ctrl+c") && m.tunnels != nil {
+		m.reconcileTunnels()
+		for _, s := range m.tunnelSnapshots {
+			if s.Live() {
+				return m, m.requestTunnelQuit()
+			}
+		}
+	}
 	if m.securityInput != nil && m.securityInput.preemptsApplicationInput() {
 		return m, m.handleSecurityInputKey(msg)
 	}
@@ -260,7 +319,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				return m.handleOperationKey(msg)
 			}
 			if m.screen == screenBrowser && !m.modal.isOpen() {
-				return m, tea.Quit
+				return m, m.requestTunnelQuit()
 			}
 			if msg.String() == "q" {
 				msg = tea.KeyPressMsg(tea.Key{Code: 'c', Mod: tea.ModCtrl})
@@ -286,6 +345,9 @@ func (m *Model) handleActiveKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.modal.isOpen() {
 		return m.handleModalKey(msg)
 	}
+	if m.tunnelForm != nil {
+		return m.handleTunnelFormKey(msg)
+	}
 	if m.screen == screenConnectionForm && m.connectionEdit != nil && m.connectionEdit.conflict != nil {
 		return m.handleFormConflictKey(msg)
 	}
@@ -296,6 +358,14 @@ func (m *Model) handleActiveKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handleOperationKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if m.tunnels != nil && (msg.String() == "q" || msg.String() == "ctrl+c") {
+		m.reconcileTunnels()
+		for _, s := range m.tunnelSnapshots {
+			if s.Live() {
+				return m, m.requestTunnelQuit()
+			}
+		}
+	}
 	if m.modal.helpVisible {
 		if key.Matches(msg, m.keys.Help, m.keys.Back) {
 			m.toggleModalHelp()
@@ -349,6 +419,34 @@ func (m *Model) formActionDescriptors() []actionDescriptor {
 func (m *Model) handleBrowserKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.search != nil {
 		return m.handleTreeSearchKey(msg)
+	}
+	if msg.String() == "tab" || msg.String() == "shift+tab" || msg.String() == "f2" {
+		owners := []focusOwner{focusOwnerTree, focusOwnerDetail, focusOwnerTunnels}
+		index := 0
+		for i, owner := range owners {
+			if owner == m.focusOwner {
+				index = i
+			}
+		}
+		delta := 1
+		if msg.String() != "tab" {
+			delta = 2
+		}
+		m.focusOwner = owners[(index+delta)%3]
+		return m, nil
+	}
+	if msg.String() == "t" {
+		m.focusOwner = focusOwnerTunnels
+		return m, nil
+	}
+	if m.focusOwner == focusOwnerTunnels {
+		return m.handleTunnelsKey(msg)
+	}
+	if msg.String() == "p" {
+		if connection := m.browser.selection(); connection != nil {
+			m.openTunnelForm(*connection, app.TunnelConfig{Mode: app.TunnelLocal, Listen: app.TunnelEndpoint{Host: "127.0.0.1"}}, 0)
+		}
+		return m, nil
 	}
 	if m.focusOwner == focusOwnerTree && key.Matches(msg, m.keys.Search) {
 		return m, m.openTreeSearch()
@@ -461,7 +559,7 @@ func (m *Model) handleBrowserKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case actionReload:
 		return m, m.reloadCommand()
 	case actionQuit:
-		return m, tea.Quit
+		return m, m.requestTunnelQuit()
 	}
 	return m, nil
 }
@@ -593,6 +691,9 @@ func (m *Model) syncDetail() {
 }
 
 func (m *Model) focusedLayoutRegion() layoutRegion {
+	if m.focusOwner == focusOwnerTunnels {
+		return regionTunnels
+	}
 	if m.focusOwner == focusOwnerDetail || m.focusOwner == focusOwnerConnectionForm {
 		return regionDetails
 	}
@@ -795,6 +896,9 @@ func (m *Model) modalControl() any {
 }
 
 func (m *Model) handleModalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if payload, ok := m.modal.payload.(tunnelModalPayload); ok && !m.modal.helpVisible {
+		return m.handleTunnelModalKey(msg, payload)
+	}
 	if m.modal.helpVisible {
 		if key.Matches(msg, m.keys.Help, m.keys.Back) {
 			m.toggleModalHelp()
@@ -824,7 +928,7 @@ func (m *Model) handleModalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			target := m.modal.conflict.target.clone()
 			return m, m.catalogReloadCommand(asyncOperationReload, &target, operationOwnerModal)
 		case "q", "ctrl+c":
-			return m, tea.Quit
+			return m, m.requestTunnelQuit()
 		}
 		return m, nil
 	}
@@ -898,7 +1002,7 @@ func (m *Model) handleModalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (m *Model) handleFolderModalKey(msg tea.KeyPressMsg, form *folderForm) (tea.Model, tea.Cmd) {
 	switch {
 	case msg.String() == "ctrl+c":
-		return m, tea.Quit
+		return m, m.requestTunnelQuit()
 	case key.Matches(msg, m.keys.Back):
 		m.closeModal()
 	case key.Matches(msg, m.keys.Save), key.Matches(msg, m.keys.Open):
@@ -957,7 +1061,7 @@ func (m *Model) handleOperationErrorModalKey(msg tea.KeyPressMsg, payload operat
 			return m, m.retryOperation(intent)
 		}
 	case key.Matches(msg, m.keys.Quit):
-		return m, tea.Quit
+		return m, m.requestTunnelQuit()
 	default:
 		m.scrollModal(msg)
 	}
@@ -1010,7 +1114,7 @@ func (m *Model) handleSSHFailureModalKey(msg tea.KeyPressMsg, payload sshFailure
 			return m, m.reloadCommand()
 		}
 	case key.Matches(msg, m.keys.Quit):
-		return m, tea.Quit
+		return m, m.requestTunnelQuit()
 	default:
 		m.scrollModal(msg)
 	}
@@ -1074,7 +1178,7 @@ func (m *Model) handleUnsavedChangesKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd
 		quit := payload.intent == unsavedIntentQuit
 		m.closeConnectionForm(!quit)
 		if quit {
-			return m, tea.Quit
+			return m, m.requestTunnelQuit()
 		}
 	case "esc":
 		m.closeUnsavedChanges()
@@ -1120,7 +1224,7 @@ func (m *Model) handleFormConflictKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		if m.form.dirty() {
 			m.openUnsavedChanges(unsavedIntentQuit)
 		} else {
-			return m, tea.Quit
+			return m, m.requestTunnelQuit()
 		}
 	}
 	return m, nil
@@ -1143,7 +1247,7 @@ func (m *Model) handleFormKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.openUnsavedChanges(unsavedIntentQuit)
 			return m, nil
 		}
-		return m, tea.Quit
+		return m, m.requestTunnelQuit()
 	case key.Matches(msg, m.keys.Save), key.Matches(msg, m.keys.Open):
 		return m, m.saveForm()
 	case msg.String() == "ctrl+r" || m.form.focusedField() == fieldSave && msg.String() == "r":
@@ -1185,7 +1289,7 @@ func (m *Model) handleRecoveryResolved(msg recoveryResolvedMsg) tea.Cmd {
 	quit := m.completeOperation(msg.id, nil)
 	m.status = "ERROR"
 	if quit {
-		return tea.Quit
+		return m.requestTunnelQuit()
 	}
 	if msg.err != nil {
 		switch app.ErrorKindOf(msg.err) {
@@ -1759,7 +1863,7 @@ func (m *Model) handleOperation(msg operationResultMsg) tea.Cmd {
 			}
 			m.status = "READY"
 			if quit {
-				return tea.Quit
+				return m.requestTunnelQuit()
 			}
 			return nil
 		}
@@ -1926,7 +2030,7 @@ func (m *Model) handleOperation(msg operationResultMsg) tea.Cmd {
 		m.modal.payload = payload
 	}
 	if quit {
-		return tea.Quit
+		return m.requestTunnelQuit()
 	}
 	return nil
 }
@@ -2035,10 +2139,11 @@ func (m *Model) View() tea.View {
 	if m.modal.isOpen() {
 		background := m.browserShell(layout)
 		modal := m.modal
-		if m.securityInput != nil && m.securityInput.trust != nil && modal.kind == modalKindConnectConfirmation {
+		tunnelPayload, isTunnel := modal.payload.(tunnelModalPayload)
+		if m.securityInput != nil && m.securityInput.trust != nil && (modal.kind == modalKindConnectConfirmation || isTunnel && tunnelPayload.action == "start") {
 			// Keep the verification decision in the Connect flow that initiated it.
 			modal.trust = m.securityInput.trust
-		} else if m.operation != nil {
+		} else if m.operation != nil && !(isTunnel && tunnelPayload.action == "quit") {
 			modal.operationStatus = m.operation.loadingStatus()
 		}
 		if modal.helpVisible {
@@ -2075,6 +2180,9 @@ func (m *Model) browserShell(layout layoutState) string {
 		details = strings.Split(m.securityInput.trust.view(m.styles), "\n")
 	} else if m.securityInput != nil && m.securityInput.secret != nil {
 		details = strings.Split(m.securityInput.secret.view(m.styles), "\n")
+	} else if m.tunnelForm != nil {
+		projection := m.tunnelForm.project(m.styles, layout.details.contentWidth(), layout.details.contentHeight())
+		details, detailScrollbar = projection.lines, projection.scrollbar
 	} else if m.screen == screenConnectionForm && m.form != nil {
 		conflict := m.formConflictLines(layout.details.contentWidth())
 		formHeight := max(1, layout.details.contentHeight()-len(conflict))
@@ -2128,6 +2236,21 @@ func (m *Model) browserShell(layout layoutState) string {
 		}
 	}
 	detailPanel := renderRegionPanelWithScrollbar(detailTitle, details, layout.details, m.styles, detailScrollbar, detailTrackStart)
+	if layout.tunnels.height != 0 {
+		tunnelPanel := m.renderTunnels(layout.tunnels)
+		actions = m.tunnelLegend(layout.legend.width)
+		actions = bottomAlignActions(actions, layout.legend.height)
+		if layout.mode == layoutWide {
+			left := strings.Split(treePanel, "\n")
+			right := strings.Split(detailPanel+"\n"+tunnelPanel, "\n")
+			base := make([]string, len(left))
+			for i := range base {
+				base[i] = left[i] + strings.Repeat(" ", wideGutterWidth) + right[i]
+			}
+			return strings.Join(append(base, actions...), "\n")
+		}
+		return treePanel + "\n" + detailPanel + "\n" + tunnelPanel + "\n" + strings.Join(actions, "\n")
+	}
 	actions = bottomAlignActions(actions, layout.actions.height)
 	if layout.mode == layoutWide {
 		left, right := strings.Split(treePanel, "\n"), strings.Split(detailPanel, "\n")
@@ -2147,6 +2270,9 @@ func (m *Model) searchInputWidth(width int) {
 }
 
 func (m *Model) layout() layoutState {
+	if m.screen == screenBrowser {
+		return calculateTunnelLayout(m.width, m.height, m.focusedLayoutRegion())
+	}
 	return calculateLayoutWithActions(m.width, m.height, m.focusedLayoutRegion())
 }
 
@@ -2177,6 +2303,13 @@ func bottomAlignActions(actions []string, height int) []string {
 
 func (m *Model) actionContext() actionContext {
 	context := actionContext{state: actionStateNormal}
+	if m.focusOwner == focusOwnerTunnels {
+		context.focus = actionFocusTunnels
+		if s, ok := m.selectedTunnelSnapshot(); ok {
+			context.tunnelState = s.State
+		}
+		return context
+	}
 	if m.focusOwner == focusOwnerDetail {
 		context.focus = actionFocusDetails
 	} else {
@@ -2279,6 +2412,9 @@ func (m *Model) undersizedView() string {
 		"Terminal too small",
 		"Required minimum: 40x12",
 		"? Help  q Quit",
+	}
+	if p, ok := m.modal.payload.(tunnelModalPayload); ok && p.action == "quit" {
+		lines = []string{"Terminal too small", "Required minimum: 40x12", fmt.Sprintf("%d live tunnels; resize to review.", len(p.live)), "Esc/Enter Cancel  ? Help"}
 	}
 	if m.helpVisible() {
 		lines = []string{

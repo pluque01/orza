@@ -7,6 +7,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/pluque01/orza/internal/app"
 )
 
 type actionID string
@@ -42,6 +43,11 @@ const (
 	actionNextField     actionID = "next_field"
 	actionPreviousField actionID = "previous_field"
 	actionSearch        actionID = "search"
+	actionForward       actionID = "forward"
+	actionTunnels       actionID = "tunnels"
+	actionInspectTunnel actionID = "inspect_tunnel"
+	actionStopTunnel    actionID = "stop_tunnel"
+	actionDismissTunnel actionID = "dismiss_tunnel"
 )
 
 type actionCategory uint8
@@ -85,6 +91,7 @@ const (
 	actionFocusNone actionFocus = iota
 	actionFocusTree
 	actionFocusDetails
+	actionFocusTunnels
 )
 
 type actionTarget uint8
@@ -97,10 +104,11 @@ const (
 )
 
 type actionContext struct {
-	selection actionSelection
-	state     actionState
-	focus     actionFocus
-	canToggle bool
+	selection   actionSelection
+	state       actionState
+	focus       actionFocus
+	canToggle   bool
+	tunnelState app.TunnelState
 }
 
 type actionDescriptor struct {
@@ -207,7 +215,7 @@ var treeNavigationDescriptors = []actionDescriptor{
 	{id: actionLeft, key: "Left/h", label: "Collapse/parent", category: actionCategoryNavigation, priority: actionPriorityNavigation, applicable: focusedOn(actionFocusTree)},
 	{id: actionRight, key: "Right/l", label: "Expand/child", category: actionCategoryNavigation, priority: actionPriorityNavigation, applicable: focusedOn(actionFocusTree)},
 	{id: actionToggle, key: "Enter/Space", label: "Toggle", category: actionCategoryNavigation, priority: actionPriorityNavigation, applicable: toggleApplies},
-	{id: actionShowDetails, key: "Tab/Shift+Tab", label: "Details", category: actionCategoryNavigation, priority: actionPriorityNavigation, applicable: focusedOn(actionFocusTree)},
+	{id: actionShowDetails, key: "Tab/Shift+Tab/F2", label: "Focus", category: actionCategoryNavigation, priority: actionPriorityNavigation, applicable: focusedOn(actionFocusTree)},
 	{id: actionSearch, key: "/", label: "Filter", category: actionCategoryNavigation, priority: actionPriorityNavigation, applicable: focusedOn(actionFocusTree)},
 }
 
@@ -223,7 +231,7 @@ var detailsNavigationDescriptors = []actionDescriptor{
 	{id: actionDown, key: "Down/j", label: "Scroll down", category: actionCategoryNavigation, priority: actionPriorityNavigation, applicable: focusedOn(actionFocusDetails)},
 	{id: actionHome, key: "Home/g", label: "First row", category: actionCategoryNavigation, priority: actionPriorityNavigation, applicable: focusedOn(actionFocusDetails)},
 	{id: actionEnd, key: "End/G", label: "Last row", category: actionCategoryNavigation, priority: actionPriorityNavigation, applicable: focusedOn(actionFocusDetails)},
-	{id: actionShowTree, key: "Tab/Shift+Tab", label: "Tree", category: actionCategoryNavigation, priority: actionPriorityNavigation, applicable: focusedOn(actionFocusDetails)},
+	{id: actionShowTree, key: "Tab/Shift+Tab/F2", label: "Focus", category: actionCategoryNavigation, priority: actionPriorityNavigation, applicable: focusedOn(actionFocusDetails)},
 }
 
 func objectActions(context actionContext) []actionDescriptor {
@@ -255,6 +263,9 @@ func focusedNavigationActions(context actionContext) []actionDescriptor {
 }
 
 func actionsFor(context actionContext) []actionDescriptor {
+	if context.state == actionStateNormal && context.focus == actionFocusTunnels {
+		return tunnelActionDescriptors(context.tunnelState)
+	}
 	switch context.state {
 	case actionStateOperation:
 		return applicableDescriptors(operationActionDescriptors, context)
@@ -262,7 +273,12 @@ func actionsFor(context actionContext) []actionDescriptor {
 		return applicableDescriptors(conflictActionDescriptors, context)
 	case actionStateNormal:
 		actions := objectActions(context)
-		return append(actions, focusedNavigationActions(context)...)
+		actions = append(actions, focusedNavigationActions(context)...)
+		actions = append(actions, actionDescriptor{id: actionTunnels, key: "t", label: "Tunnels", category: actionCategoryNavigation, priority: actionPriorityNavigation})
+		if context.selection == actionSelectionConnection {
+			actions = append(actions, actionDescriptor{id: actionForward, key: "p", label: "Forward", category: actionCategoryDomain, priority: actionPriorityPrimary})
+		}
+		return actions
 	default:
 		return nil
 	}
@@ -480,6 +496,16 @@ func actionForKey(msg tea.KeyPressMsg, descriptors []actionDescriptor, keys keyM
 	for _, descriptor := range descriptors {
 		var binding key.Binding
 		switch descriptor.id {
+		case actionForward:
+			binding = key.NewBinding(key.WithKeys("p"))
+		case actionTunnels:
+			binding = key.NewBinding(key.WithKeys("t"))
+		case actionInspectTunnel:
+			binding = keys.Open
+		case actionStopTunnel:
+			binding = key.NewBinding(key.WithKeys("s"))
+		case actionDismissTunnel:
+			binding = keys.Delete
 		case actionConnect:
 			binding = keys.Connect
 		case actionForgetHostKey:
@@ -542,7 +568,7 @@ func actionHelpLines(descriptors []actionDescriptor) []string {
 }
 
 func browserLegendDescriptors(descriptors []actionDescriptor) []actionDescriptor {
-	wanted := []actionID{actionUp, actionDown, actionSearch, actionConnect, actionNewConnection, actionNewFolder, actionQuit}
+	wanted := []actionID{actionQuit, actionHelp, actionShowDetails, actionShowTree, actionTunnels, actionForward, actionInspectTunnel, actionStopTunnel, actionRetry, actionDismissTunnel, actionUp, actionDown, actionSearch, actionConnect, actionNewConnection, actionNewFolder}
 	legend := make([]actionDescriptor, 0, len(wanted))
 	for _, id := range wanted {
 		for _, descriptor := range descriptors {
@@ -556,7 +582,11 @@ func browserLegendDescriptors(descriptors []actionDescriptor) []actionDescriptor
 }
 
 func renderBrowserLegend(style styles, descriptors []actionDescriptor, width int) []string {
-	return renderActionLegend(style, browserLegendDescriptors(descriptors), width)
+	lines := renderActionLegend(style, browserLegendDescriptors(descriptors), width)
+	if len(lines) > 3 {
+		lines = append(lines[:2], viewportEllipsis(actionsOverflowMarker, width))
+	}
+	return lines
 }
 
 func renderActionLegend(style styles, descriptors []actionDescriptor, width int) []string {
@@ -577,13 +607,13 @@ func renderActionLegend(style styles, descriptors []actionDescriptor, width int)
 func browserLegendRows(width int) int {
 	// Reserve for the widest browser context so changing focus or selection
 	// never overlays panel content while the legend updates.
-	return len(renderBrowserLegend(newStyles(true), []actionDescriptor{
+	return len(renderActionLegend(newStyles(true), []actionDescriptor{
 		{id: actionUp, key: "Up/k", label: "Scroll up"},
 		{id: actionDown, key: "Down/j", label: "Scroll down"},
+		{id: actionSearch, key: "/", label: "Filter"},
 		{id: actionConnect, key: "c", label: "Connect"},
 		{id: actionNewConnection, key: "n", label: "New connection"},
 		{id: actionNewFolder, key: "f", label: "New folder"},
-		{id: actionSearch, key: "/", label: "Filter"},
 		{id: actionQuit, key: "q", label: "Quit"},
 	}, width))
 }
@@ -593,8 +623,8 @@ func browserHelpLines(style styles, descriptors []actionDescriptor, width int) [
 		name string
 		ids  []actionID
 	}{
-		{"Navigation", []actionID{actionUp, actionDown, actionHome, actionEnd, actionLeft, actionRight, actionToggle, actionShowDetails, actionShowTree, actionSearch}},
-		{"Connection", []actionID{actionConnect, actionForgetHostKey}},
+		{"Navigation", []actionID{actionUp, actionDown, actionHome, actionEnd, actionLeft, actionRight, actionToggle, actionShowDetails, actionShowTree, actionSearch, actionTunnels, actionInspectTunnel}},
+		{"Connection", []actionID{actionConnect, actionForgetHostKey, actionForward, actionStopTunnel, actionDismissTunnel}},
 		{"Management", []actionID{actionNewConnection, actionNewFolder, actionEdit, actionMove, actionDelete, actionReload, actionRetry, actionSave, actionConfirm, actionDiscard, actionMoveHere}},
 		{"Application", []actionID{actionCancel, actionCancelWarning, actionBack, actionHelp, actionQuit}},
 	}

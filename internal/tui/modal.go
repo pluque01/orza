@@ -282,6 +282,8 @@ func modalPayloadContent(state modalState, style styles, width int) ([]string, i
 		return []string{"Error: invalid modal payload", modalControlLine("Esc Close")}, noActiveLine
 	}
 	switch payload := state.payload.(type) {
+	case tunnelModalPayload:
+		return payload.lines(style, width), noActiveLine
 	case folderCreatePayload:
 		lines, active := payload.form.modalLines(width, style)
 		lines[len(lines)-1] = modalControlLine(lines[len(lines)-1])
@@ -330,6 +332,10 @@ func safeHelpLines(lines []string) []string {
 }
 
 func validModalPayloadForKind(kind modalKind, value any) bool {
+	if kind == modalKindTunnel {
+		p, ok := value.(tunnelModalPayload)
+		return ok && p.validModalPayload()
+	}
 	switch kind {
 	case modalKindFolderCreate:
 		payload, ok := value.(folderCreatePayload)
@@ -660,6 +666,9 @@ func renderModalControlPairs(style styles, line string) string {
 }
 
 func modalTitle(kind modalKind) string {
+	if kind == modalKindTunnel {
+		return "Tunnel"
+	}
 	switch kind {
 	case modalKindFolderCreate:
 		return "Create Folder"

@@ -1,7 +1,24 @@
-Orza  [READY]
-Catalog  /
+┌[*] Tree─────────────────────┐ ┌[ ] Details───────────────────────────────────┐
+│ > [/] /                     │ │ Root                                         │
+│                             │ │ Name               /                         │
+│                             │ │ Path               /                         │
+│                             │ │ Direct connections 0                         │
+│                             │ │ No direct connections.                       │
+│                             │ │                                              │
+│                             │ │                                              │
+│                             │ │                                              │
+│                             │ │                                              │
+│                             │ └──────────────────────────────────────────────┘
+│                             │ ┌[ ] Tunnels (0 active)────────────────────────┐
+│                             │ │ No tunnels; select host, p Forward           │
+│                             │ │                                              │
+│                             │ │                                              │
+│                             │ │                                              │
+│                             │ │                                              │
+│                             │ │                                              │
+│                             │ │                                              │
+│                             │ │                                              │
+└─────────────────────────────┘ └──────────────────────────────────────────────┘
 
-This folder is empty.
-Press f to create a folder or n to create a connection.
-
-f new folder  n new connection  r reload  ? help  q quit
+q Quit  |  ? Help  |  Tab/Shift+Tab/F2 Focus  |  t Tunnels  |  Up/k Move up
+Down/j Move down  |  / Filter  |  n New connection  |  f New folder

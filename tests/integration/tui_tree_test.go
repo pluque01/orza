@@ -379,6 +379,10 @@ func TestTUIScrollbarKeyboardOnlyOverflow(t *testing.T) {
 	updateTUI(t, model, tuiKey("G"))
 	assertKeyboardOnlyOverflowView(t, model, "Details end", "Details", "Method   agent")
 	updateTUI(t, model, tuiKey("tab"))
+	if view := model.View().Content; !strings.Contains(view, "[*] Tunnels") {
+		t.Fatalf("focus cycle did not include permanent Tunnels panel:\n%s", view)
+	}
+	updateTUI(t, model, tuiKey("tab"))
 
 	updateTUI(t, model, tuiKey("n"))
 	assertKeyboardOnlyOverflowView(t, model, "connection form", "Details", "New connection", ">   Name")

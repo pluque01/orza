@@ -47,6 +47,18 @@ var controlledTerms = map[string]string{
 }
 
 var sourceTechnicalLiterals = map[string]string{
+	"tunnel":                     "modal identifier",
+	"start":                      "tunnel action identifier",
+	"stop":                       "tunnel action identifier",
+	"inspect":                    "tunnel action identifier",
+	"forward":                    "action identifier",
+	"tunnels":                    "action identifier",
+	"inspect_tunnel":             "action identifier",
+	"stop_tunnel":                "action identifier",
+	"dismiss_tunnel":             "action identifier",
+	"localhost":                  "endpoint alias",
+	"Shell":                      "outcome notice prefix",
+	"t":                          "key token",
 	"%w for %s: invalid payload": "internal error formatting",
 	"%w for %s: want %v, got %T": "internal error formatting",
 	"%w: %q":                     "internal error formatting",

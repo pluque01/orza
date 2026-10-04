@@ -55,6 +55,7 @@ func TestModalControlInventoryAndPriorityRemainFixed(t *testing.T) {
 		modalKindHelp:                {modalControlLine("?/Esc Close")},
 		modalKindOperationError:      {modalControlLine("r Reload"), modalControlLine("b/Esc Back"), modalControlLine("q Quit")},
 		modalKindSSHFailure:          {modalControlLine("d Detail"), modalControlLine("r Retry"), modalControlLine("e Edit"), modalControlLine("b/Esc Back"), modalControlLine("q Quit")},
+		modalKindTunnel:              {modalControlLine("d Discard"), modalControlLine("Esc/Enter Cancel")},
 	}
 	for _, test := range feature008ModalCases() {
 		t.Run(string(test.kind), func(t *testing.T) {

@@ -22,6 +22,7 @@ type layoutRegion uint8
 const (
 	regionTree layoutRegion = iota
 	regionDetails
+	regionTunnels
 )
 
 type layoutRect struct {
@@ -49,8 +50,48 @@ type layoutState struct {
 	reduced bool
 	tree    layoutRect
 	details layoutRect
+	tunnels layoutRect
 	legend  layoutRect
 	actions layoutRect
+}
+
+func calculateTunnelLayout(width, height int, focus layoutRegion) layoutState {
+	s := calculateLayout(width, height, focus)
+	if s.mode == layoutUndersized {
+		return s
+	}
+	base := height - 3
+	s.legend = layoutRect{0, base, width, 3}
+	if s.mode == layoutWide {
+		s.tree.height = base
+		if focus == regionTree && width > wideLayoutWidth {
+			extra := (width - wideLayoutWidth) / 10
+			s.tree.width += extra
+			s.details.x += extra
+			s.details.width -= extra
+		}
+		detailHeight := (base + 1) / 2
+		if focus == regionTunnels && base > 21 {
+			detailHeight = max(3, detailHeight-1)
+		} else if focus == regionDetails && base > 21 {
+			detailHeight = min(base-3, detailHeight+1)
+		}
+		s.details.height = detailHeight
+		s.tunnels = layoutRect{s.details.x, detailHeight, s.details.width, base - detailHeight}
+	} else {
+		heights := [3]int{3, 3, 3}
+		focused := 0
+		if focus == regionDetails {
+			focused = 1
+		} else if focus == regionTunnels {
+			focused = 2
+		}
+		heights[focused] += base - 9
+		s.tree = layoutRect{0, 0, width, heights[0]}
+		s.details = layoutRect{0, heights[0], width, heights[1]}
+		s.tunnels = layoutRect{0, heights[0] + heights[1], width, heights[2]}
+	}
+	return s
 }
 
 func (s layoutState) modalOverlay() layoutRect {

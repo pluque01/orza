@@ -122,7 +122,7 @@ func TestSessionFailureRoutingAndCompletionToModelUpdate(t *testing.T) {
 	_, _, _ = model.beginOperationWith(asyncOperationSSHStart, nil, operationOwnerModal)
 	postActiveErr := errors.New("post-active")
 	updateModel(model, sessionFinishedMsg{id: 2, result: started, err: postActiveErr})
-	if model.modal.isOpen() || !errors.Is(model.sessionErr, postActiveErr) {
+	if model.modal.isOpen() || model.sessionErr != nil || model.status != "Shell connection ended; browser restored." {
 		t.Fatalf("post-active failure was converted to a startup modal: modal=%#v err=%v", model.modal, model.sessionErr)
 	}
 }

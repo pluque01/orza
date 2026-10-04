@@ -185,3 +185,20 @@ func TestTUIRunErrorPreservesRequiredVTRecovery(t *testing.T) {
 		t.Fatalf("VT startup error = %q, want actionable recovery", err)
 	}
 }
+
+func TestProductionRootInjectsTunnelServiceIntoNoCommandLauncher(t *testing.T) {
+	service := new(app.TunnelService)
+	local := terminal.NewFake(terminal.Size{Columns: 80, Rows: 24})
+	called := false
+	root := NewRoot(RootConfig{Dependencies: &app.Dependencies{Tunnels: service, Terminal: local}, Stdout: &bytes.Buffer{}, Stderr: &bytes.Buffer{}, RunTUI: func(_ context.Context, config tui.Config) (tui.Result, error) {
+		called = true
+		if config.Tunnels != service {
+			t.Fatal("production root omitted tunnel service")
+		}
+		return tui.Result{}, nil
+	}})
+	root.SetArgs(nil)
+	if err := root.ExecuteContext(context.Background()); err != nil || !called {
+		t.Fatalf("err=%v called=%v", err, called)
+	}
+}
