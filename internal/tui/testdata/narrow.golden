@@ -5,7 +5,7 @@
 │ Root                                █│
 └──────────────────────────────────────┘
 ┌[ ] Tunnels (0 active)────────────────┐
-│ No tunnels; select host, p Forward   │
+│ No tunnels                           │
 └──────────────────────────────────────┘
 q Quit  |  ? Help
 Tab/Shift+Tab/F2 Focus  |  t Tunnels

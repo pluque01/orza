@@ -168,7 +168,7 @@ func (m *Model) renderTunnels(rect layoutRect) string {
 		lines = append(lines, line)
 	}
 	if len(lines) == 0 {
-		lines = []string{"No tunnels; select host, p Forward"}
+		lines = []string{"No tunnels"}
 	}
 	projection := m.tunnelViewport.project(lines, rect.contentHeight(), rect.contentWidth(), selected)
 	return renderRegionPanelWithScrollbar(m.styles.regionTitle(fmt.Sprintf("Tunnels (%d active)", active), m.focusOwner == focusOwnerTunnels), projection.lines, rect, m.styles, projection.scrollbar, 0)

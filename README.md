@@ -721,7 +721,7 @@ Tunnels with the new entry selected.
 
 Tunnels are listed in creation order across hosts in this TUI session. Their selection is independent of
 the catalog selection; overflow scrolls to keep the selected row visible. The empty panel says
-`No tunnels; select host, p Forward`. At narrow widths, use `Enter` inspection for full endpoints and
+`No tunnels`. At narrow widths, use `Enter` inspection for full endpoints and
 warnings. Inspection provides the same applicable `s` Stop, `r` Retry, `d` Dismiss, and Esc Back controls.
 Retry resolves the same saved ID's current record and opens a fresh draft for review/consent; it never
 silently reconnects. Stopped/Failed entries remain inspectable until dismissal or bounded eviction.
