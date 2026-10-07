@@ -312,7 +312,7 @@ func (h *modelFuzzHarness) assertState(stage string) {
 	if m.form != nil && !m.modal.isOpen() && m.focusOwner != focusOwnerConnectionForm {
 		t.Fatalf("step %d %s: unmodalized form does not own focus: %v", h.step, stage, m.focusOwner)
 	}
-	if m.form == nil && !m.modal.isOpen() && m.focusOwner != focusOwnerTree && m.focusOwner != focusOwnerDetail {
+	if m.form == nil && !m.modal.isOpen() && m.focusOwner != focusOwnerTree && m.focusOwner != focusOwnerDetail && m.focusOwner != focusOwnerTunnels {
 		t.Fatalf("step %d %s: browser has invalid focus owner %v", h.step, stage, m.focusOwner)
 	}
 	if m.connectionEdit != nil {

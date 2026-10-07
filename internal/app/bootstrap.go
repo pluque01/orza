@@ -25,6 +25,7 @@ type Dependencies struct {
 	Folders     *FolderService
 	Connect     *ConnectService
 	Command     *CommandService
+	Tunnels     *TunnelService
 	HostTrust   *HostTrustService
 	Credentials CredentialLifecycle
 	Terminal    Terminal
@@ -93,8 +94,11 @@ func (d *Dependencies) Close() error {
 		return nil
 	}
 	d.closeOnce.Do(func() {
+		if d.Tunnels != nil {
+			d.closeErr = d.Tunnels.Close()
+		}
 		if d.Catalog != nil {
-			d.closeErr = d.Catalog.Close()
+			d.closeErr = errors.Join(d.closeErr, d.Catalog.Close())
 		}
 	})
 	return d.closeErr

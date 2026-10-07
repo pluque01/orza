@@ -454,10 +454,10 @@ func TestUS5CurrentTreeDetailsFormActionsAndHelpUseOverflowContract(t *testing.T
 	t.Run("browser legend", func(t *testing.T) {
 		descriptors := actionsFor(actionContext{state: actionStateNormal, selection: actionSelectionConnection, focus: actionFocusTree, canToggle: true})
 		lines := renderBrowserLegend(newStyles(true), descriptors, 24)
-		if strings.Contains(strings.Join(lines, "\n"), actionsOverflowMarker) {
-			t.Fatalf("browser legend retained overflow marker: %#v", lines)
+		if len(lines) > 3 || !strings.Contains(strings.Join(lines, "\n"), actionsOverflowMarker) {
+			t.Fatalf("browser legend did not bound rows and expose hidden actions: %#v", lines)
 		}
-		for _, safety := range []string{"Up/k Move up", "Down/j Move down", "q Quit"} {
+		for _, safety := range []string{"q Quit", "? Help"} {
 			if !strings.Contains(strings.Join(lines, "\n"), safety) {
 				t.Fatalf("Actions marker displaced safety control %q: %#v", safety, lines)
 			}

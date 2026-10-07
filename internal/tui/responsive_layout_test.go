@@ -161,12 +161,12 @@ func TestUS5Reduced40x12KeepsIdentityAndSafetyBeforeOverflow(t *testing.T) {
 			t.Fatalf("40x12 reduced frame omitted priority content %q:\n%s", required, view)
 		}
 	}
-	for _, control := range []string{"Up/k Move up", "Down/j Move down", "n New connection", "f New folder", "q Quit"} {
+	for _, control := range []string{"Tunnels (0 active)", "No tunnels", "q Quit", "? Help", "Tab/Shift+Tab"} {
 		if !strings.Contains(view, control) {
 			t.Fatalf("40x12 Actions omitted safety control %q:\n%s", control, view)
 		}
 	}
-	if strings.Contains(view, "Actions") || strings.Contains(view, actionsOverflowMarker) {
+	if strings.Contains(view, "Actions") || !strings.Contains(view, actionsOverflowMarker) {
 		t.Fatalf("40x12 reduced frame retained Actions panel content:\n%s", view)
 	}
 	lines := strings.Split(view, "\n")

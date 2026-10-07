@@ -31,6 +31,7 @@ func feature008ModalCases() []feature008ModalCase {
 	failure := app.NewSSHStartError(app.SSHFailureTimeout, app.SSHFailureStageNetworkConnection, "operation timed out", nil).Presentation()
 
 	return []feature008ModalCase{
+		{modalKindTunnel, "Tunnel", tunnelModalPayload{action: "discard"}},
 		{modalKindFolderCreate, "Create Folder", folderCreatePayload{form: createForm}},
 		{modalKindFolderEdit, "Edit Folder", folderEditPayload{form: editForm}},
 		{modalKindMovePicker, "Move", movePickerPayload{picker: newMovePicker(connection.Node, []app.Folder{folder})}},

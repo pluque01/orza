@@ -32,3 +32,24 @@ type CredentialStore interface {
 	Get(context.Context, Key) ([]byte, error)
 	Delete(context.Context, Key) error
 }
+
+// StoreOptions selects native behavior once, before any recovery or secret access.
+// The zero value preserves interactive native-store behavior.
+// UI suppression does not impose hard deadlines on synchronous native calls.
+type StoreOptions struct {
+	NonInteractive bool
+}
+
+type interactionKey struct{}
+
+// WithoutInteraction carries store selection to bootstrap without changing its
+// signature. It does not change an already constructed store's native policy.
+func WithoutInteraction(ctx context.Context) context.Context {
+	return context.WithValue(ctx, interactionKey{}, true)
+}
+
+// IsNonInteractive reports whether bootstrap should select a no-UI store.
+func IsNonInteractive(ctx context.Context) bool {
+	selected, _ := ctx.Value(interactionKey{}).(bool)
+	return selected
+}

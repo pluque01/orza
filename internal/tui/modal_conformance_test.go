@@ -23,6 +23,12 @@ func (m *sc009ProgramModel) Init() tea.Cmd { return m.init }
 
 func (m *sc009ProgramModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	_, command := m.model.Update(msg)
+	if finished, ok := msg.(sessionFinishedMsg); ok && sessionWasActive(finished.result) && m.model.ctx.Err() == nil {
+		if command != nil || m.model.operation != nil || m.model.modal.isOpen() || !strings.HasPrefix(m.model.status, "Shell") {
+			panic("shell did not restore stable browser")
+		}
+		return m, tea.Quit
+	}
 	return m, command
 }
 
@@ -74,6 +80,8 @@ func assertSC009NoColorOwner(t *testing.T, model *Model) {
 	switch model.focusOwner {
 	case focusOwnerDetail, focusOwnerConnectionForm:
 		want = "[*] Details"
+	case focusOwnerTunnels:
+		want = "[*] Tunnels"
 	case focusOwnerModal:
 		want = "[*] " + modalTitle(model.modal.kind)
 	}
@@ -248,6 +256,7 @@ func TestSC009ClosedModalInvariantMatrix(t *testing.T) {
 		{"operation error", modalKindOperationError, func() any {
 			return operationErrorPayload{modal: newErrorModal("move catalog item", connection.Path, app.ErrInvalidRequest)}
 		}, keyPress("?"), []string{"Operation move catalog item", "Target    /folder/connection", "Cause", "b/Esc Back", "q Quit"}},
+		{"tunnel", modalKindTunnel, func() any { return tunnelModalPayload{action: "discard"} }, keyPress("j"), []string{"Tunnel", "Discard forwarding draft?", "d Discard", "Esc/Enter Cancel"}},
 		{"SSH failure", modalKindSSHFailure, func() any {
 			attempt := app.SSHAttemptTarget{ID: connection.ID, Revision: connection.Revision, Path: connection.Path, Host: connection.Host, Port: connection.Port}
 			return sshFailurePayload{modal: newSSHFailureModal(attempt, failure)}
@@ -265,8 +274,8 @@ func TestSC009ClosedModalInvariantMatrix(t *testing.T) {
 		modalKindOperationError:      "Recoverable operation error",
 	}
 
-	if len(tests) != 11 || len(newModalRegistry().payloadTypes) != len(tests) {
-		t.Fatalf("closed inventory = %d cases/%d registrations, want 11/11", len(tests), len(newModalRegistry().payloadTypes))
+	if len(tests) != 12 || len(newModalRegistry().payloadTypes) != len(tests) {
+		t.Fatalf("closed inventory = %d cases/%d registrations, want 12/12", len(tests), len(newModalRegistry().payloadTypes))
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -626,7 +635,7 @@ func TestSC009DeleteAndConnectEffects(t *testing.T) {
 				t.Fatalf("run %d: confirmation did not defer one SSH operation", run)
 			}
 			sc009RunExec(t, model, command)
-			if connectCalls != 1 || model.operation != nil || model.sessionResult.Connection.ID != connection.ID {
+			if connectCalls != 1 || model.operation != nil || !strings.HasPrefix(model.status, "Shell") || model.sessionErr != nil {
 				t.Fatalf("run %d: connect result calls=%d operation=%#v", run, connectCalls, model.operation)
 			}
 

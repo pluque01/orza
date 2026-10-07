@@ -256,8 +256,8 @@ func checkedResizeConformanceCases(t *testing.T) []resizeConformanceCase {
 	t.Helper()
 	modalCases := resizeModalConformanceCases()
 	cases := resizeConformanceCases()
-	if len(us5ContractSizes) != 12 || len(modalCases) != 11 || len(newModalRegistry().payloadTypes) != len(modalCases) || len(cases) != 18 {
-		t.Fatalf("resize matrix inventory = %d sizes, %d modal cases/%d registered kinds, %d total states; want 12, 11/11, 18", len(us5ContractSizes), len(modalCases), len(newModalRegistry().payloadTypes), len(cases))
+	if len(us5ContractSizes) != 12 || len(modalCases) != 12 || len(newModalRegistry().payloadTypes) != len(modalCases) || len(cases) != 19 {
+		t.Fatalf("resize matrix inventory = %d sizes, %d modal cases/%d registered kinds, %d total states; want 12, 12/12, 19", len(us5ContractSizes), len(modalCases), len(newModalRegistry().payloadTypes), len(cases))
 	}
 	return cases
 }
@@ -398,6 +398,11 @@ func resizeModalConformanceCases() []resizeConformanceCase {
 			diagnostic.detailVisible = true
 			diagnostic.recovery = recoveryConflict
 			openResizeModal(t, model, modalKindSSHFailure, capturedTargetFromConnection(connection), sshFailurePayload{modal: diagnostic})
+			return model
+		}},
+		{name: "modal_tunnel", setup: func(t *testing.T) *Model {
+			model, _, _, connection := newResizeConformanceBase(t)
+			openResizeModal(t, model, modalKindTunnel, capturedTargetFromConnection(connection), tunnelModalPayload{action: "start", connection: connection, config: app.TunnelConfig{Mode: app.TunnelRemote, Listen: app.TunnelEndpoint{Host: "::1", Port: 8080}, Destination: app.TunnelEndpoint{Host: "local.test", Port: 80}}})
 			return model
 		}},
 	}

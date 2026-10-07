@@ -1,6 +1,63 @@
 package tui
 
-import "testing"
+import (
+	"fmt"
+	"strings"
+	"testing"
+
+	tea "charm.land/bubbletea/v2"
+)
+
+func TestPanelFocusChangesPreserveGeometry(t *testing.T) {
+	for _, size := range [][2]int{{40, 12}, {40, 13}, {40, 14}, {40, 24}, {60, 16}, {79, 24}, {80, 24}, {80, 30}, {100, 24}, {100, 30}, {160, 40}} {
+		for _, noColor := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%dx%d/noColor=%t", size[0], size[1], noColor), func(t *testing.T) {
+				model := New(Config{Width: size[0], Height: size[1], NoColor: noColor})
+				want := model.layout()
+				for _, step := range []struct {
+					key   tea.Key
+					owner focusOwner
+				}{
+					{tea.Key{Code: tea.KeyTab}, focusOwnerDetail},
+					{tea.Key{Code: tea.KeyTab}, focusOwnerTunnels},
+					{tea.Key{Code: tea.KeyTab}, focusOwnerTree},
+					{tea.Key{Code: tea.KeyTab, Mod: tea.ModShift}, focusOwnerTunnels},
+					{tea.Key{Code: tea.KeyF2}, focusOwnerDetail},
+					{tea.Key{Code: 't', Text: "t"}, focusOwnerTunnels},
+					{tea.Key{Code: tea.KeyEscape}, focusOwnerTree},
+				} {
+					model.Update(tea.KeyPressMsg(step.key))
+					if model.focusOwner != step.owner {
+						t.Fatalf("focus = %v, want %v", model.focusOwner, step.owner)
+					}
+					if got := model.layout(); got != want {
+						t.Fatalf("focus %v changed geometry:\ngot  %+v\nwant %+v", step.owner, got, want)
+					}
+					assertUS5FrameBounded(t, model.View().Content, size[0], size[1])
+				}
+			})
+		}
+	}
+}
+
+func TestStackedTunnelLayoutSharesSpaceBetweenPanels(t *testing.T) {
+	for _, test := range []struct {
+		height int
+		rows   [3]int
+	}{
+		{12, [3]int{3, 3, 3}},
+		{13, [3]int{4, 3, 3}},
+		{14, [3]int{4, 4, 3}},
+		{24, [3]int{7, 7, 7}},
+	} {
+		layout := calculateTunnelLayout(40, test.height, regionTree)
+		got := [3]int{layout.tree.height, layout.details.height, layout.tunnels.height}
+		if got != test.rows {
+			t.Errorf("40x%d panel heights = %v, want %v", test.height, got, test.rows)
+		}
+		assertLayoutInvariants(t, layout)
+	}
+}
 
 func TestLayoutMatrix(t *testing.T) {
 	tests := []struct {
@@ -72,7 +129,7 @@ func TestStackedOddRowGoesToFocusedBaseRegion(t *testing.T) {
 	}
 }
 
-func TestModelLayoutKeepsFixedLowerControlRegion(t *testing.T) {
+func TestModelLayoutPermanentTunnelsAndThreeRowLegend(t *testing.T) {
 	tests := []struct {
 		name          string
 		width, height int
@@ -80,8 +137,8 @@ func TestModelLayoutKeepsFixedLowerControlRegion(t *testing.T) {
 		tree, details layoutRect
 		actions       layoutRect
 	}{
-		{"wide", 80, 24, regionTree, layoutRect{0, 0, 31, 19}, layoutRect{32, 0, 48, 19}, layoutRect{0, 19, 80, 5}},
-		{"minimum", 40, 12, regionDetails, layoutRect{0, 0, 40, 3}, layoutRect{0, 3, 40, 4}, layoutRect{0, 7, 40, 5}},
+		{"wide", 80, 24, regionTree, layoutRect{0, 0, 31, 21}, layoutRect{32, 0, 48, 11}, layoutRect{0, 21, 80, 3}},
+		{"minimum", 40, 12, regionDetails, layoutRect{0, 0, 40, 3}, layoutRect{0, 3, 40, 3}, layoutRect{0, 9, 40, 3}},
 	}
 
 	for _, tt := range tests {
@@ -89,9 +146,35 @@ func TestModelLayoutKeepsFixedLowerControlRegion(t *testing.T) {
 			model := New(Config{Width: tt.width, Height: tt.height})
 			model.focusOwner = map[layoutRegion]focusOwner{regionTree: focusOwnerTree, regionDetails: focusOwnerDetail}[tt.focus]
 			layout := model.layout()
-			if layout.tree != tt.tree || layout.details != tt.details || layout.actions != tt.actions || layout.legend != (layoutRect{}) {
+			if layout.tree != tt.tree || layout.details != tt.details || layout.legend != tt.actions || layout.actions != (layoutRect{}) {
 				t.Fatalf("model layout = tree %#v details %#v legend %#v actions %#v", layout.tree, layout.details, layout.legend, layout.actions)
 			}
+			wantTunnel := layoutRect{32, 11, 48, 10}
+			if tt.width == 40 {
+				wantTunnel = layoutRect{0, 6, 40, 3}
+			}
+			if layout.tunnels != wantTunnel {
+				t.Fatalf("Tunnels rectangle=%#v want %#v", layout.tunnels, wantTunnel)
+			}
+		})
+	}
+}
+
+func TestConnectionFormKeepsTunnelsPanel(t *testing.T) {
+	for _, size := range [][2]int{{40, 12}, {80, 24}} {
+		t.Run(fmt.Sprintf("%dx%d", size[0], size[1]), func(t *testing.T) {
+			model := New(Config{Width: size[0], Height: size[1], NoColor: true})
+			model.openConnectionForm(newConnectionForm(nil), capturedTarget{})
+			if layout := model.layout(); layout.tunnels.height == 0 {
+				t.Fatal("New connection hid the permanent Tunnels panel")
+			}
+			view := model.View().Content
+			for _, want := range []string{"Tunnels (0 active)", "No tunnels", "Ctrl+S Save"} {
+				if !strings.Contains(view, want) {
+					t.Fatalf("New connection omitted %q:\n%s", want, view)
+				}
+			}
+			assertUS5FrameBounded(t, view, size[0], size[1])
 		})
 	}
 }
@@ -170,7 +253,7 @@ func BenchmarkLayout(b *testing.B) {
 
 func assertLayoutInvariants(t *testing.T, state layoutState) {
 	t.Helper()
-	for name, rect := range map[string]layoutRect{"Tree": state.tree, "Details": state.details, "Legend": state.legend} {
+	for name, rect := range map[string]layoutRect{"Tree": state.tree, "Details": state.details, "Tunnels": state.tunnels, "Legend": state.legend} {
 		assertRectBounded(t, rect, state.width, state.height)
 		if state.mode == layoutUndersized && rect != (layoutRect{}) {
 			t.Errorf("undersized %s rectangle = %#v, want absent", name, rect)
@@ -181,6 +264,9 @@ func assertLayoutInvariants(t *testing.T, state layoutState) {
 	}
 	if overlaps(state.tree, state.details) {
 		t.Fatalf("base rectangles overlap: Tree %#v Details %#v", state.tree, state.details)
+	}
+	if overlaps(state.tree, state.tunnels) || overlaps(state.details, state.tunnels) || overlaps(state.tunnels, state.legend) {
+		t.Fatal("Tunnels overlaps another region")
 	}
 }
 

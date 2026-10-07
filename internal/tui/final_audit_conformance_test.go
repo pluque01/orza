@@ -83,7 +83,7 @@ func TestSC009OperationErrorRetryFolderDeleteScopeAndSSHStart20Runs(t *testing.T
 					assertAuditRetryPanel(t, model, operationRetrySSHStart, captured.ID, 2, calls, run)
 				} else {
 					auditCompleteSSHService(t, model, captured)
-					if calls != 2 || model.operation != nil || model.sessionResult.Connection.ID != captured.ID {
+					if calls != 2 || model.operation != nil || !strings.HasPrefix(model.status, "Shell") || model.sessionResult.Session.RemoteExitStatus != nil {
 						t.Fatalf("run %d: SSH retry success calls=%d operation=%#v result=%#v", run, calls, model.operation, model.sessionResult)
 					}
 				}
@@ -467,7 +467,7 @@ func auditMatchingOwnerAfterEsc(t *testing.T, kind asyncOperationKind, conflict 
 	if kind == asyncOperationSave && reconcileCalls != 1 {
 		t.Fatalf("run %d: matching Save success reconciliation calls=%d", run, reconcileCalls)
 	}
-	if kind == asyncOperationSSHStart && model.sessionResult.Session.StartedAt.IsZero() {
+	if kind == asyncOperationSSHStart && !strings.HasPrefix(model.status, "Shell") {
 		t.Fatalf("run %d: matching SSH success was not committed", run)
 	}
 }

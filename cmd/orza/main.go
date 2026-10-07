@@ -32,7 +32,7 @@ var bootstrap = func(ctx context.Context) (*app.Dependencies, error) {
 	return app.Bootstrap(ctx, app.BootstrapOptions{
 		Configure: func(ctx context.Context, dependencies *app.Dependencies) error {
 			repository := catalogrepo.NewRepository(dependencies.Catalog)
-			credentialStore := credential.NewStore()
+			credentialStore := credential.NewStoreWithOptions(credential.StoreOptions{NonInteractive: credential.IsNonInteractive(ctx)})
 			catalogID, err := dependencies.Catalog.CatalogID(ctx)
 			if err != nil {
 				return err
@@ -77,10 +77,19 @@ var bootstrap = func(ctx context.Context) (*app.Dependencies, error) {
 			if err != nil {
 				return err
 			}
+			tunnelService, err := app.NewTunnelService(app.TunnelOptions{
+				Connections: repository, Credentials: saga, HostTrust: hostTrust,
+				TrustedHosts: trustedHosts, Store: credentialStore, Scope: scope,
+				Runner: runner, Terminal: localTerminal,
+			})
+			if err != nil {
+				return err
+			}
 			dependencies.Connections = connections
 			dependencies.Folders = folders
 			dependencies.Connect = connectService
 			dependencies.Command = commandService
+			dependencies.Tunnels = tunnelService
 			dependencies.HostTrust = hostTrustService
 			dependencies.Credentials = saga
 			dependencies.Terminal = localTerminal
@@ -100,6 +109,20 @@ func realMain(args []string, stdin io.Reader, stdout, stderr io.Writer) (exitCod
 			exitCode = signalCode
 		}
 	}()
+	interactive := false
+	if input, ok := stdin.(*os.File); ok {
+		if output, ok := stdout.(*os.File); ok {
+			interactive = terminal.New(input, output).Interactive()
+		}
+	}
+	policy, preflightErr := cli.PreflightTunnel(args, interactive)
+	if preflightErr != nil {
+		_ = cli.WriteError(stderr, false, preflightErr)
+		return cli.ExitCode(preflightErr)
+	}
+	if policy.NonInteractive() {
+		ctx = credential.WithoutInteraction(ctx)
+	}
 	jsonOutput := requestsJSON(args)
 	if bootstrapFreeInvocation(args) {
 		options := &cli.Options{}
@@ -126,6 +149,9 @@ func realMain(args []string, stdin io.Reader, stdout, stderr io.Writer) (exitCod
 			return signalCode
 		}
 		err = bootstrapError(err)
+		if policy.IsTunnel() {
+			err = cli.NewError(cli.CodeCatalog, "catalog or credential recovery is unavailable; verify catalog access and unlock the credential service before retrying", "", err)
+		}
 		_ = cli.WriteError(stderr, jsonOutput, err)
 		return cli.ExitCode(err)
 	}

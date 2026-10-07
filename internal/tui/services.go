@@ -35,6 +35,18 @@ type ConnectService interface {
 	Connect(context.Context, app.ConnectRequest) (app.ConnectResult, error)
 }
 
+type TunnelService interface {
+	Start(context.Context, app.TunnelRequest) (app.TunnelSnapshot, error)
+	Retry(context.Context, uint64, app.TunnelRequest) (app.TunnelSnapshot, error)
+	Stop(context.Context, uint64) error
+	StopAttempt(context.Context, uint64, uint64) error
+	Snapshots() []app.TunnelSnapshot
+	Get(uint64) (app.TunnelSnapshot, bool)
+	Dismiss(uint64) error
+	Close() error
+	Wait(context.Context, uint64) error
+}
+
 // HostTrustService owns the endpoint-scoped app trust workflow. It is kept
 // separate from ConnectionService because trust may be shared by connections.
 type HostTrustService interface {

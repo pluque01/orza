@@ -27,6 +27,7 @@ type RootConfig struct {
 	Folders      *app.FolderService
 	Connect      *app.ConnectService
 	Command      *app.CommandService
+	Tunnels      *app.TunnelService
 	HostTrust    *app.HostTrustService
 	Terminal     app.Terminal
 	Stdin        io.Reader
@@ -50,6 +51,7 @@ func NewRoot(config RootConfig) *cobra.Command {
 	folders := config.Folders
 	connectService := config.Connect
 	commandService := config.Command
+	tunnelService := config.Tunnels
 	hostTrustService := config.HostTrust
 	localTerminal := config.Terminal
 	if config.Dependencies != nil {
@@ -64,6 +66,9 @@ func NewRoot(config RootConfig) *cobra.Command {
 		}
 		if commandService == nil {
 			commandService = config.Dependencies.Command
+		}
+		if tunnelService == nil {
+			tunnelService = config.Dependencies.Tunnels
 		}
 		if hostTrustService == nil {
 			hostTrustService = config.Dependencies.HostTrust
@@ -97,7 +102,7 @@ func NewRoot(config RootConfig) *cobra.Command {
 				run = tui.Run
 			}
 			result, err := run(cmd.Context(), tui.Config{
-				Connections: connections, Folders: folders, Connect: connectService, HostTrust: hostTrustService, Terminal: localTerminal,
+				Connections: connections, Folders: folders, Connect: connectService, Tunnels: tunnelService, HostTrust: hostTrustService, Terminal: localTerminal,
 				Stdin: cmd.InOrStdin(), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(),
 				NoColor: options.NoColor,
 			})
@@ -143,6 +148,15 @@ func NewRoot(config RootConfig) *cobra.Command {
 	folder.AddCommand(newFolderMoveCommand(folders, options))
 	folder.AddCommand(newFolderDeleteCommand(folders, localTerminal, options))
 	root.AddCommand(folder)
+	tunnelTerminal := localTerminal
+	if config.Terminal == nil {
+		if input, ok := config.Stdin.(*os.File); ok {
+			if output, ok := config.Stderr.(*os.File); ok {
+				tunnelTerminal = terminal.New(input, output)
+			}
+		}
+	}
+	root.AddCommand(newTunnelCommand(connections, tunnelService, tunnelTerminal, options))
 
 	if config.Stdin != nil {
 		root.SetIn(config.Stdin)

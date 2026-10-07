@@ -279,7 +279,7 @@ func TestSC007ScaleDetailsFormActionsAndHelpOverflowAcrossTwelveSizes(t *testing
 			lines := renderBrowserLegend(actionModel.styles, actionsFor(actionModel.actionContext()), layout.width)
 			view := actionModel.View().Content
 			assertUS5FrameBounded(t, view, size.width, size.height)
-			if strings.Contains(view, "Actions") || strings.Contains(view, actionsOverflowMarker) {
+			if strings.Contains(view, "Actions") || !strings.Contains(view, "Tunnels") || len(lines) > 3 {
 				t.Fatalf("run %d %s browser retained Actions panel", run+1, size.name)
 			}
 			for _, line := range lines {

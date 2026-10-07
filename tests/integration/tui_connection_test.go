@@ -196,15 +196,16 @@ func TestTUISessionFailureRecoveryHandoffAndTerminalRestoration(t *testing.T) {
 		return app.ListConnectionsResult{Connections: []app.Connection{connection}, CatalogRevision: 1}, nil
 	}
 
-	t.Run("active session hands off and returns status", func(t *testing.T) {
+	t.Run("active session hands off and restores browser before explicit quit", func(t *testing.T) {
 		local := terminal.NewFake(terminal.Size{Columns: 80, Rows: 24})
-		writer := newSignalingWriter("[ssh] prod", "Endpoint prod.test:22", "Connect to SSH target?")
+		writer := newSignalingWriter("[ssh] prod", "Endpoint prod.test:22", "Connect to SSH target?", "Shell closed with status 23.")
 		services := tui.ConnectionFuncs{ListFunc: list}
 		status := 23
 		input := pipeInput(t, []readerStage{
 			{wait: writer.signal("[ssh] prod"), data: "j"},
 			{wait: writer.signal("Endpoint prod.test:22"), data: "c"},
 			{wait: writer.signal("Connect to SSH target?"), data: "y"},
+			{wait: writer.signal("Shell closed with status 23."), data: "q"},
 		})
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -215,8 +216,11 @@ func TestTUISessionFailureRecoveryHandoffAndTerminalRestoration(t *testing.T) {
 			}),
 			Terminal: local, Stdin: input, Stdout: writer, NoColor: true,
 		})
-		if err != nil || result.RemoteExitStatus == nil || *result.RemoteExitStatus != status {
+		if err != nil || result.RemoteExitStatus != nil {
 			t.Fatalf("Run() = %+v, %v; output = %q", result, err, writer.String())
+		}
+		if !strings.Contains(writer.String(), "Shell closed with status 23.") {
+			t.Fatalf("shell outcome did not return to browser: %q", writer.String())
 		}
 		assertConnectConfirmationOutput(t, writer.String(), connection)
 		assertTerminalRestored(t, local)
