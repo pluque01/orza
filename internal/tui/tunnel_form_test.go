@@ -196,3 +196,43 @@ func TestTunnelFormMinimumFailureKeepsRecoveryKeys(t *testing.T) {
 		}
 	}
 }
+
+func TestTunnelFormHelpContainsOnlyKeyboardActions(t *testing.T) {
+	m := New(Config{Width: 80, Height: 24, NoColor: true})
+	m.openTunnelForm(testConnection("host", syntheticRootID, "/host", 1), app.TunnelConfig{Mode: app.TunnelLocal}, 0)
+	m.Update(keyPress("f1"))
+	lines, _ := modalContent(m.modal, m.styles, 74, nil)
+	got := strings.Join(lines, "\n")
+	want := strings.Join(append(browserHelpLines(m.styles, tunnelFormActionDescriptors, 74), modalControlLine("?/Esc Close")), "\n")
+	if got != want {
+		t.Fatalf("Help does not use the standard action layout:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+	for _, unwanted := range []string{"127.0.0.1", "Destination host", "SOCKS5", "PostgreSQL"} {
+		if strings.Contains(got, unwanted) {
+			t.Fatalf("Help includes forwarding documentation %q:\n%s", unwanted, got)
+		}
+	}
+}
+
+func TestTunnelFormHelpUsesActionDescriptors(t *testing.T) {
+	m := New(Config{Width: 80, Height: 24, NoColor: true})
+	m.openTunnelForm(testConnection("host", syntheticRootID, "/host", 1), app.TunnelConfig{}, 0)
+	m.Update(keyPress("f1"))
+	payload, ok := m.modal.payload.(helpPayload)
+	if !ok || len(payload.lines) != 0 {
+		t.Fatalf("tunnel Help does not use a descriptor payload: %#v", m.modal.payload)
+	}
+	if strings.Join(actionHelpLines(payload.descriptors), "\n") != strings.Join(actionHelpLines(tunnelFormActionDescriptors), "\n") {
+		t.Fatalf("tunnel Help descriptors differ from its form actions: %#v", payload.descriptors)
+	}
+}
+
+func TestTunnelStartConfirmationContainsNoDirectionDescription(t *testing.T) {
+	p := tunnelModalPayload{action: "start", connection: testConnection("host", syntheticRootID, "/host", 1), config: app.TunnelConfig{Mode: app.TunnelLocal, Listen: app.TunnelEndpoint{Host: "127.0.0.1", Port: 8080}, Destination: app.TunnelEndpoint{Host: "db.internal", Port: 5432}}}
+	got := strings.Join(p.lines(newStyles(true), 74), "\n")
+	for _, unwanted := range []string{"SSH host is the selected", "Local port ->", "Destination 127.0.0.1", "PostgreSQL example"} {
+		if strings.Contains(got, unwanted) {
+			t.Fatalf("confirmation includes forwarding documentation %q:\n%s", unwanted, got)
+		}
+	}
+}

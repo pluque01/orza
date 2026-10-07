@@ -709,13 +709,13 @@ cycles Local/Remote/Dynamic while Mode owns focus. Tab and Shift-Tab/F2 traverse
 Space toggles the separate external-access acknowledgement, and `Ctrl-S` or Enter on `[ Start forwarding ]`
 validates before opening a cancel-default start confirmation. The form uses the same title, aligned
 colonless labels, selector choices, and focus/error/primary markers as New connection. Mode or listener edits reset exposure consent. Dynamic hides fixed
-destination fields and explains unauthenticated SOCKS5 proxy access. Validation/failure preserves settings;
+destination fields. Validation/failure preserves settings;
 Esc from a changed draft offers Discard/Cancel. No forwarding profile is saved.
 
 Confirmation identifies the captured path, SSH endpoint, mode, requested listener, and applicable
-destination, explains which machine listens/resolves/reaches, and retains the Remote scope warning even
-for loopback. The connection revision is checked before network I/O, followed by the existing trust and
-secret gates. Only one startup/security interaction owns input at a time; already active tunnels continue.
+destination, and retains the Remote scope warning even for loopback. The connection revision is checked
+before network I/O, followed by the existing trust and secret gates. Only one startup/security interaction
+owns input at a time; already active tunnels continue.
 Starting, Active, Stopping, Stopped, and Failed are textual states. Activation returns browsing focus to
 Tunnels with the new entry selected.
 

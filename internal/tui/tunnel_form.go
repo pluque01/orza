@@ -247,9 +247,6 @@ func (f *tunnelForm) project(style styles, width, height int) viewportProjection
 		active = len(lines)
 	}
 	lines = append(lines, style.item("[ Start forwarding ]", itemSemantics{focused: f.focus == f.startField(), primary: true}))
-	for _, line := range tunnelDirection(f.mode) {
-		lines = append(lines, style.descriptiveLabel(line))
-	}
 	if activeStart >= 0 {
 		if height == 1 {
 			// The legend carries the error when only its focused control fits.
@@ -262,17 +259,6 @@ func (f *tunnelForm) project(style styles, width, height int) viewportProjection
 		return projectActiveBlock(lines, activeStart, active, height, width)
 	}
 	return f.viewport.project(lines, height, width, active)
-}
-
-func tunnelDirection(mode app.TunnelMode) []string {
-	switch mode {
-	case app.TunnelRemote:
-		return []string{"Saved host listens; your computer reaches", "the destination and resolves its name.", "Remote scope is unverified and depends on", "server configuration, even for loopback.", "Server release after transport loss is not verified."}
-	case app.TunnelDynamic:
-		return []string{"SOCKS5 proxy: your computer listens.", "Configure clients to use this endpoint.", "Saved host reaches and resolves destinations.", "Proxy clients are not authenticated."}
-	default:
-		return []string{"Your computer listens; the saved host", "reaches the destination and resolves its name.", "Example: listen 15432; db.internal:5432"}
-	}
 }
 
 func (m *Model) openTunnelForm(connection app.Connection, config app.TunnelConfig, retry uint64) {
@@ -292,11 +278,7 @@ func (m *Model) closeTunnelForm() {
 func (m *Model) handleTunnelFormKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "f1":
-		lines := append(tunnelDirection(m.tunnelForm.mode), "Tab Next; Shift+Tab/F2 Previous; Left/Right Mode", "Space Acknowledge exposure; Ctrl+S Start; Esc Cancel")
-		if m.tunnelForm.error != "" {
-			lines = append([]string{m.tunnelForm.error}, lines...)
-		}
-		m.openGenericModal(modalKindHelp, nil, helpPayload{lines: lines})
+		m.openGenericModal(modalKindHelp, nil, helpPayload{descriptors: tunnelFormActionDescriptors})
 	case "esc", "ctrl+c":
 		if m.tunnelForm.dirty() {
 			m.openGenericModal(modalKindTunnel, nil, tunnelModalPayload{action: "discard", quit: msg.String() == "ctrl+c"})

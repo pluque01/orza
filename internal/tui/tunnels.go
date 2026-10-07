@@ -83,9 +83,6 @@ func (p tunnelModalPayload) lines(style styles, width int) []string {
 		s := app.TunnelSnapshot{Connection: app.SSHAttemptTarget{ID: p.connection.ID, Revision: p.connection.Revision, Path: p.connection.Path, Host: p.connection.Host, Port: p.connection.Port}, Config: p.config, State: app.TunnelStarting}
 		lines = append(lines, "Start forwarding?", "Cancel is the default.")
 		lines = append(lines, renderWrappedModalFields(style, width, tunnelFields(s))...)
-		for _, line := range tunnelDirection(p.config.Mode) {
-			lines = appendWrappedModalLine(lines, "", line, width)
-		}
 	case "stop":
 		lines = append(lines, "Stop this tunnel?")
 		lines = append(lines, renderWrappedModalFields(style, width, tunnelFields(p.snapshot))...)

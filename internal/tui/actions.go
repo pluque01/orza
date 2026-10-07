@@ -207,6 +207,17 @@ var connectionFormActionDescriptors = []actionDescriptor{
 	{id: actionPreviousField, key: "Shift+Tab/F2", label: "Previous", category: actionCategoryNavigation, priority: actionPriorityNavigation},
 }
 
+var tunnelFormActionDescriptors = []actionDescriptor{
+	{id: actionCancel, key: "Esc", label: "Cancel", category: actionCategoryRecovery, priority: actionPriorityRecovery},
+	{id: actionQuit, key: "Ctrl+C", label: "Quit", category: actionCategoryRecovery, priority: actionPriorityRecovery},
+	{id: actionHelp, key: "F1", label: "Help", category: actionCategoryRecovery, priority: actionPriorityRecovery},
+	{id: actionSave, key: "Ctrl+S/Enter", label: "Start", category: actionCategoryDomain, priority: actionPriorityPrimary},
+	{id: actionNextField, key: "Tab", label: "Next", category: actionCategoryNavigation, priority: actionPriorityNavigation},
+	{id: actionPreviousField, key: "Shift+Tab/F2", label: "Previous", category: actionCategoryNavigation, priority: actionPriorityNavigation},
+	{id: actionLeft, key: "Left/Right", label: "Change mode", category: actionCategoryNavigation, priority: actionPriorityNavigation},
+	{id: actionToggle, key: "Space", label: "Acknowledge external access", category: actionCategoryDomain, priority: actionPrioritySecondary},
+}
+
 var treeNavigationDescriptors = []actionDescriptor{
 	{id: actionUp, key: "Up/k", label: "Move up", category: actionCategoryNavigation, priority: actionPriorityNavigation, applicable: focusedOn(actionFocusTree)},
 	{id: actionDown, key: "Down/j", label: "Move down", category: actionCategoryNavigation, priority: actionPriorityNavigation, applicable: focusedOn(actionFocusTree)},
