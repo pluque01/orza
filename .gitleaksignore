@@ -5,7 +5,8 @@ tests/integration/security_test.go:generic-api-key:81
 
 # Reviewed Shift+Tab/F2 keyboard-label literals after adding forwarding actions.
 internal/tui/actions.go:generic-api-key:207
-internal/tui/tunnels.go:generic-api-key:189
+internal/tui/actions.go:generic-api-key:216
+internal/tui/tunnels.go:generic-api-key:186
 
 # Generated modernc SQLite Windows API names and public constants.
 vendor/modernc.org/sqlite/lib/sqlite_g_0000000000060000.go:generic-api-key:1203
