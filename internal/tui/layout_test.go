@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -155,6 +156,25 @@ func TestModelLayoutPermanentTunnelsAndThreeRowLegend(t *testing.T) {
 			if layout.tunnels != wantTunnel {
 				t.Fatalf("Tunnels rectangle=%#v want %#v", layout.tunnels, wantTunnel)
 			}
+		})
+	}
+}
+
+func TestConnectionFormKeepsTunnelsPanel(t *testing.T) {
+	for _, size := range [][2]int{{40, 12}, {80, 24}} {
+		t.Run(fmt.Sprintf("%dx%d", size[0], size[1]), func(t *testing.T) {
+			model := New(Config{Width: size[0], Height: size[1], NoColor: true})
+			model.openConnectionForm(newConnectionForm(nil), capturedTarget{})
+			if layout := model.layout(); layout.tunnels.height == 0 {
+				t.Fatal("New connection hid the permanent Tunnels panel")
+			}
+			view := model.View().Content
+			for _, want := range []string{"Tunnels (0 active)", "No tunnels", "Ctrl+S Save"} {
+				if !strings.Contains(view, want) {
+					t.Fatalf("New connection omitted %q:\n%s", want, view)
+				}
+			}
+			assertUS5FrameBounded(t, view, size[0], size[1])
 		})
 	}
 }

@@ -2243,7 +2243,18 @@ func (m *Model) browserShell(layout layoutState) string {
 	detailPanel := renderRegionPanelWithScrollbar(detailTitle, details, layout.details, m.styles, detailScrollbar, detailTrackStart)
 	if layout.tunnels.height != 0 {
 		tunnelPanel := m.renderTunnels(layout.tunnels)
-		actions = m.tunnelLegend(layout.legend.width)
+		if m.screen == screenConnectionForm {
+			formActions := m.formActionDescriptors()
+			for index, descriptor := range formActions {
+				if descriptor.id == actionSave {
+					formActions[0], formActions[index] = formActions[index], formActions[0]
+					break
+				}
+			}
+			actions = renderActionLegend(m.styles, formActions, layout.legend.width)
+		} else {
+			actions = m.tunnelLegend(layout.legend.width)
+		}
 		actions = bottomAlignActions(actions, layout.legend.height)
 		if layout.mode == layoutWide {
 			left := strings.Split(treePanel, "\n")
@@ -2275,7 +2286,7 @@ func (m *Model) searchInputWidth(width int) {
 }
 
 func (m *Model) layout() layoutState {
-	if m.screen == screenBrowser {
+	if m.screen == screenBrowser || m.screen == screenConnectionForm && m.operation == nil && (m.connectionEdit == nil || m.connectionEdit.conflict == nil) {
 		return calculateTunnelLayout(m.width, m.height, m.focusedLayoutRegion())
 	}
 	return calculateLayoutWithActions(m.width, m.height, m.focusedLayoutRegion())

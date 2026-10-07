@@ -819,7 +819,7 @@ func TestSC004SC005ExactGeometryAndResizePreservationTwentyRuns(t *testing.T) {
 					updateModel(model, tea.WindowSizeMsg{Width: size.width, Height: size.height})
 					layout := model.layout()
 					want := calculateLayoutWithActions(size.width, size.height, model.focusedLayoutRegion())
-					if model.screen == screenBrowser {
+					if model.screen == screenBrowser || model.screen == screenConnectionForm && model.operation == nil && (model.connectionEdit == nil || model.connectionEdit.conflict == nil) {
 						want = calculateTunnelLayout(size.width, size.height, model.focusedLayoutRegion())
 					}
 					if layout != want {
@@ -837,6 +837,9 @@ func TestSC004SC005ExactGeometryAndResizePreservationTwentyRuns(t *testing.T) {
 						t.Fatalf("run %d %s retained an Actions panel:\n%s", run, size.name, view)
 					}
 					if model.screen == screenConnectionForm {
+						if !strings.Contains(view, "Tunnels") {
+							t.Fatalf("run %d %s omitted permanent Tunnels panel", run, size.name)
+						}
 						assertSCFocusedFormField(t, model, model.form.focusedField())
 						for _, safety := range []string{"Esc Cancel", "Ctrl+C Quit", "F1 Help", "Ctrl+S Save"} {
 							if !strings.Contains(view, safety) {
