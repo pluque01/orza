@@ -51,6 +51,7 @@ type styles struct {
 	muted, status, warning, failure            lipgloss.Style
 	helpSection                                lipgloss.Style
 	scrollbarTrack, scrollbarThumb             lipgloss.Style
+	activePanelBorder                          lipgloss.Style
 	badge                                      lipgloss.Style
 	accented                                   bool
 }
@@ -76,23 +77,24 @@ func newStyles(noColor bool) styles {
 	failure := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("9"))
 	helpSection := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15"))
 	return styles{
-		title:          title,
-		activeTitle:    title,
-		inactiveTitle:  muted,
-		selected:       selected,
-		focused:        selected,
-		invalid:        failure,
-		primary:        status,
-		match:          lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("11")),
-		muted:          muted,
-		status:         status,
-		warning:        warning,
-		failure:        failure,
-		helpSection:    helpSection,
-		scrollbarTrack: muted,
-		scrollbarThumb: selected,
-		badge:          badge,
-		accented:       true,
+		title:             title,
+		activeTitle:       title,
+		inactiveTitle:     muted,
+		selected:          selected,
+		focused:           selected,
+		invalid:           failure,
+		primary:           status,
+		match:             lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("11")),
+		muted:             muted,
+		status:            status,
+		warning:           warning,
+		failure:           failure,
+		helpSection:       helpSection,
+		scrollbarTrack:    muted,
+		scrollbarThumb:    selected,
+		activePanelBorder: lipgloss.NewStyle().Foreground(lipgloss.Color("12")),
+		badge:             badge,
+		accented:          true,
 	}
 }
 

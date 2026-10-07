@@ -10,6 +10,7 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/pluque01/orza/internal/app"
 )
@@ -2227,8 +2228,10 @@ func (m *Model) browserShell(layout layoutState) string {
 	} else {
 		actions = packActions(status, m.visibleActionDescriptors(actionsFor(context)), layout.actions.width, layout.actions.height)
 	}
-	treePanel := renderRegionPanelWithScrollbar(m.styles.regionTitle("Tree", m.focusOwner == focusOwnerTree), tree, layout.tree, m.styles, treeProjection.scrollbar, 0)
-	detailTitle := m.styles.regionTitle("Details", m.focusOwner == focusOwnerDetail || m.focusOwner == focusOwnerConnectionForm)
+	treeActive := m.focusOwner == focusOwnerTree
+	treePanel := renderFocusedRegionPanelWithScrollbar(m.styles.regionTitle("Tree", treeActive), tree, layout.tree, m.styles, treeProjection.scrollbar, 0, treeActive)
+	detailActive := m.focusOwner == focusOwnerDetail || m.focusOwner == focusOwnerConnectionForm
+	detailTitle := m.styles.regionTitle("Details", detailActive)
 	formBadge := ""
 	if m.screen == screenConnectionForm && m.form != nil {
 		formBadge = m.styles.contentBadge(m.form.title())
@@ -2240,7 +2243,7 @@ func (m *Model) browserShell(layout layoutState) string {
 			detailTitle += " " + formBadge
 		}
 	}
-	detailPanel := renderRegionPanelWithScrollbar(detailTitle, details, layout.details, m.styles, detailScrollbar, detailTrackStart)
+	detailPanel := renderFocusedRegionPanelWithScrollbar(detailTitle, details, layout.details, m.styles, detailScrollbar, detailTrackStart, detailActive)
 	if layout.tunnels.height != 0 {
 		tunnelPanel := m.renderTunnels(layout.tunnels)
 		if m.screen == screenConnectionForm {
@@ -2392,6 +2395,10 @@ func renderRegionPanel(title string, content []string, rect layoutRect) string {
 }
 
 func renderRegionPanelWithScrollbar(title string, content []string, rect layoutRect, style styles, scrollbar scrollbarGeometry, trackStart int) string {
+	return renderFocusedRegionPanelWithScrollbar(title, content, rect, style, scrollbar, trackStart, false)
+}
+
+func renderFocusedRegionPanelWithScrollbar(title string, content []string, rect layoutRect, style styles, scrollbar scrollbarGeometry, trackStart int, active bool) string {
 	if rect.width <= 0 || rect.height <= 0 {
 		return ""
 	}
@@ -2400,8 +2407,12 @@ func renderRegionPanelWithScrollbar(title string, content []string, rect layoutR
 	}
 
 	title = viewportEllipsis(title, max(0, rect.width-2))
-	top := "┌" + title + strings.Repeat("─", max(0, rect.width-2-ansi.StringWidth(title))) + "┐"
-	bottom := "└" + strings.Repeat("─", max(0, rect.width-2)) + "┘"
+	border := lipgloss.NewStyle()
+	if active {
+		border = style.activePanelBorder
+	}
+	top := border.Render("┌") + title + border.Render(strings.Repeat("─", max(0, rect.width-2-ansi.StringWidth(title)))) + border.Render("┐")
+	bottom := border.Render("└") + border.Render(strings.Repeat("─", max(0, rect.width-2))+"┘")
 	lines := make([]string, rect.height)
 	lines[0] = top
 	if rect.height > 1 {
@@ -2418,7 +2429,7 @@ func renderRegionPanelWithScrollbar(title string, content []string, rect layoutR
 		if scrollbar.visible && trackRow >= 0 && trackRow < scrollbar.trackHeight {
 			rightCell = style.scrollbarCell(scrollbar.thumbAt(trackRow))
 		}
-		lines[row] = "│ " + line + strings.Repeat(" ", max(0, contentWidth-ansi.StringWidth(line))) + rightCell + "│"
+		lines[row] = border.Render("│") + " " + line + strings.Repeat(" ", max(0, contentWidth-ansi.StringWidth(line))) + rightCell + border.Render("│")
 	}
 	return strings.Join(lines, "\n")
 }

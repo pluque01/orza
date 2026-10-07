@@ -522,7 +522,7 @@ func renderModalOverlay(background string, state modalState, layout layoutState,
 	contentWidth, contentHeight := rect.contentWidth(), rect.contentHeight()
 	lines, active := modalContent(state, style, contentWidth, help)
 	projection := projectModalViewport(state, lines, contentHeight, contentWidth, active, style)
-	panel := renderRegionPanelWithScrollbar(style.regionTitle(modalTitle(state.kind), true), projection.lines, rect, style, projection.scrollbar, projection.scrollbarStart)
+	panel := renderFocusedRegionPanelWithScrollbar(style.regionTitle(modalTitle(state.kind), true), projection.lines, rect, style, projection.scrollbar, projection.scrollbarStart, true)
 	return placeOverlay(background, panel, rect, layout.width, layout.height)
 }
 
