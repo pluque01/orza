@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/pluque01/orza/internal/app"
 )
 
@@ -132,6 +133,36 @@ func TestStructuralRegionTitlesArePlainTextWithoutBackground(t *testing.T) {
 				t.Fatalf("colored structural title has a background: %q", coloredTitle)
 			}
 		})
+	}
+}
+
+func TestActivePanelBorderIsBlueAndNoColorPreservesLayout(t *testing.T) {
+	const width, height = 16, 4
+	content := []string{"content"}
+	color := newStyles(false)
+	active := renderFocusedRegionPanelWithScrollbar("Panel", content, layoutRect{width: width, height: height}, color, scrollbarGeometry{}, 0, true)
+	inactive := renderFocusedRegionPanelWithScrollbar("Panel", content, layoutRect{width: width, height: height}, color, scrollbarGeometry{}, 0, false)
+	if ansi.Strip(active) != ansi.Strip(inactive) {
+		t.Fatalf("active border changed layout:\n%s\n%s", active, inactive)
+	}
+
+	rows := strings.Split(active, "\n")
+	if !strings.HasPrefix(rows[0], color.activePanelBorder.Render("┌")) || !strings.HasSuffix(rows[0], color.activePanelBorder.Render("┐")) {
+		t.Fatalf("active top border is not blue: %q", rows[0])
+	}
+	if !strings.HasPrefix(rows[1], color.activePanelBorder.Render("│")) || !strings.HasSuffix(rows[1], color.activePanelBorder.Render("│")) {
+		t.Fatalf("active side border is not blue: %q", rows[1])
+	}
+	wantBottom := color.activePanelBorder.Render("└") + color.activePanelBorder.Render(strings.Repeat("─", width-2)+"┘")
+	if rows[len(rows)-1] != wantBottom {
+		t.Fatalf("active bottom border is not blue: %q", rows[len(rows)-1])
+	}
+
+	plain := newStyles(true)
+	plainActive := renderFocusedRegionPanelWithScrollbar("Panel", content, layoutRect{width: width, height: height}, plain, scrollbarGeometry{}, 0, true)
+	plainInactive := renderFocusedRegionPanelWithScrollbar("Panel", content, layoutRect{width: width, height: height}, plain, scrollbarGeometry{}, 0, false)
+	if plainActive != plainInactive || strings.Contains(plainActive, "\x1b[") {
+		t.Fatalf("no-color panel borders = %q/%q", plainActive, plainInactive)
 	}
 }
 

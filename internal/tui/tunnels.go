@@ -171,7 +171,8 @@ func (m *Model) renderTunnels(rect layoutRect) string {
 		lines = []string{"No tunnels"}
 	}
 	projection := m.tunnelViewport.project(lines, rect.contentHeight(), rect.contentWidth(), selected)
-	return renderRegionPanelWithScrollbar(m.styles.regionTitle(fmt.Sprintf("Tunnels (%d active)", active), m.focusOwner == focusOwnerTunnels), projection.lines, rect, m.styles, projection.scrollbar, 0)
+	focused := m.focusOwner == focusOwnerTunnels
+	return renderFocusedRegionPanelWithScrollbar(m.styles.regionTitle(fmt.Sprintf("Tunnels (%d active)", active), focused), projection.lines, rect, m.styles, projection.scrollbar, 0, focused)
 }
 
 func (m *Model) tunnelLegend(width int) []string {

@@ -7,6 +7,7 @@ tests/integration/security_test.go:generic-api-key:81
 internal/tui/actions.go:generic-api-key:207
 internal/tui/actions.go:generic-api-key:216
 internal/tui/tunnels.go:generic-api-key:186
+internal/tui/tunnels.go:generic-api-key:187
 d41ec4b35f6b7655e1e08a27e943b2cdc22d44aa:internal/tui/tunnels.go:generic-api-key:189
 
 # Generated modernc SQLite Windows API names and public constants.
