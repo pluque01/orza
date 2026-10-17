@@ -59,7 +59,7 @@
     {
       "description": "Keep vulnerability database updates independent",
       "matchManagers": ["custom.regex"],
-      "matchPackageNames": ["golang/vulndb"],
+      "matchPackageNames": ["https://github.com/golang/vulndb"],
       "groupName": null,
       "postUpgradeTasks": {
         "commands": ["nix flake lock --update-input vulndb"],

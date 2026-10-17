@@ -43,8 +43,10 @@ jq -e '[.packageRules[] | select(has("rangeStrategy") and has("matchUpdateTypes"
 
 jq -e '.packageRules[] | select(.matchManagers == ["nix"] and (.matchPackageNames | index("nixpkgs")) and .groupName == null)' "$config" >/dev/null ||
   fail 'nixpkgs must be handled separately'
-jq -e '.packageRules[] | select(.matchManagers == ["custom.regex"] and (.matchPackageNames | index("golang/vulndb")) and .groupName == null and .postUpgradeTasks.commands == ["nix flake lock --update-input vulndb"] and (.postUpgradeTasks.fileFilters | index("flake.lock")))' "$config" >/dev/null ||
-  fail 'vulndb must be separate and refresh flake.lock'
+vulndb_package=$(jq -er '.customManagers[] | select(.depNameTemplate == "golang/vulndb") | .packageNameTemplate' "$config") ||
+  fail 'vulndb must have a package name'
+jq -e --arg package "$vulndb_package" '.packageRules[] | select(.matchManagers == ["custom.regex"] and (.matchPackageNames | index($package)) and .groupName == null and .postUpgradeTasks.commands == ["nix flake lock --update-input vulndb"] and (.postUpgradeTasks.fileFilters | index("flake.lock")))' "$config" >/dev/null ||
+  fail 'vulndb must match its extracted package name and refresh flake.lock'
 jq -e '.packageRules[] | select(.matchManagers == ["nix"] and (.matchPackageNames | index("vulndb")) and .enabled == false)' "$config" >/dev/null ||
   fail 'native Nix vulndb discovery must not duplicate the narrow fallback'
 jq -e '.customManagers | length == 1 and .[0].managerFilePatterns == ["/^flake\\.nix$/"] and .[0].depNameTemplate == "golang/vulndb" and .[0].packageNameTemplate == "https://github.com/golang/vulndb" and .[0].datasourceTemplate == "git-refs" and .[0].currentValueTemplate == "master"' "$config" >/dev/null ||
