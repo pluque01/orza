@@ -27,12 +27,13 @@ assert_contains "$ci_text" 'contents: read'
 assert_not_contains "$ci_text" 'contents: write'
 assert_contains "$ci_text" "cancel-in-progress: \${{ github.event_name == 'pull_request' }}"
 
-for job in quality vendor release-builds secrets required; do
+for job in quality dependencies release-builds secrets required; do
   assert_contains "$ci_text" "  $job:"
 done
 assert_contains "$ci_text" "if: \${{ always() }}"
 assert_contains "$ci_text" 'nix flake check --no-update-lock-file --keep-going -L'
-assert_contains "$ci_text" 'scripts/check-vendor.sh'
+assert_contains "$ci_text" '.#checks.x86_64-linux.dependencies'
+assert_contains "$ci_text" 'git ls-files vendor'
 assert_contains "$ci_text" '--untracked-files=all'
 assert_contains "$ci_text" 'linux-amd64'
 assert_contains "$ci_text" 'linux-arm64'
@@ -45,7 +46,7 @@ combined=$(printf '%s\n%s\n' "$ci_text" "$monitor_text")
 assert_not_contains "$combined" 'self-hosted'
 assert_not_contains "$combined" ': write'
 assert_contains "$ci_text" $'  required:\n    name: required'
-assert_contains "$ci_text" 'needs: [quality, vendor, release-builds, secrets]'
+assert_contains "$ci_text" 'needs: [quality, dependencies, release-builds, secrets]'
 while IFS= read -r line; do
   case $line in
     *'uses: '*)

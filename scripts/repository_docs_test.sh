@@ -35,18 +35,10 @@ assert_contains "$contributing" 'third-party license and notice files'
 codeowners=$(<"$root/.github/CODEOWNERS")
 assert_contains "$codeowners" '/.github/ @pluque01'
 assert_contains "$codeowners" '/scripts/ @pluque01'
-assert_contains "$codeowners" '/vendor/ @pluque01'
+assert_not_contains "$codeowners" '/vendor/ @pluque01'
+assert_contains "$codeowners" '/release.nix @pluque01'
 assert_contains "$codeowners" '/SECURITY.md @pluque01'
 
-while IFS= read -r ignore_rule; do
-  [ "$ignore_rule" != 'vendor/' ] || fail 'vendor is ignored, so third-party notices would not be published'
-done <"$root/.gitignore"
-
-notice_count=0
-while IFS= read -r notice; do
-  [ -s "$notice" ] || fail "empty third-party notice: $notice"
-  notice_count=$((notice_count + 1))
-done < <(find "$root/vendor" -type f \( -name 'LICENSE' -o -name 'LICENSE.*' -o -name 'NOTICE' -o -name 'NOTICE.*' -o -name 'COPYING' -o -name 'COPYING.*' \) -print)
-[ "$notice_count" -gt 0 ] || fail 'no vendored third-party notices found'
-
-printf 'PASS: repository publication documents (%s vendored notices preserved)\n' "$notice_count"
+assert_contains "$(<"$root/.gitignore")" 'vendor/'
+assert_contains "$contributing" 'vendorHash'
+printf 'PASS: repository publication documents and dependency ownership\n'

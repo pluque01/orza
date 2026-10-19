@@ -26,7 +26,7 @@ Read-only investigations covered SSH/application security and CLI/TUI integratio
 
 **Decision**: Use vendored `ssh.Client` forwarding operations. Local and Dynamic destinations are passed as names to direct TCP channel opens; Remote destinations are locally dialed. Every accepted remote tunnel has scope `unverified` and a requested endpoint label.
 
-**Rationale**: `vendor/golang.org/x/crypto/ssh/tcpip.go` implements `Dial`, `DialContext`, `Listen`, `tcpip-forward`, `forwarded-tcpip`, and cancellation. `Listen` acceptance has no observable actual bind scope; `Listener.Addr()` is a placeholder. It cannot prove GatewayPorts behavior or loopback-only isolation. Local/Dynamic channel denial may first occur when a client requests a destination, not at listener startup.
+**Rationale**: `golang.org/x/crypto/ssh/tcpip.go` in the pinned module sources implements `Dial`, `DialContext`, `Listen`, `tcpip-forward`, `forwarded-tcpip`, and cancellation. `Listen` acceptance has no observable actual bind scope; `Listener.Addr()` is a placeholder. It cannot prove GatewayPorts behavior or loopback-only isolation. Local/Dynamic channel denial may first occur when a client requests a destination, not at listener startup.
 
 **Alternatives considered**: A remote `ss`/`netstat` command is not portable proof of exposure and would require a shell. A custom verification extension is unsupported. Refusing all unverified remote tunnels contradicts the accepted clarification. Reporting the placeholder address as verified is unsafe.
 

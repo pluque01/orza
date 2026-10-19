@@ -29,7 +29,10 @@ jobs:
       - name: Acquire UTC week marker and run Renovate
         env:
           LOG_LEVEL: debug
-          RENOVATE_ALLOWED_COMMANDS: '["^nix flake lock --update-input vulndb$"]'
+          RENOVATE_ALLOWED_COMMANDS: '["^nix flake lock --update-input vulndb$", "^bash scripts/update-go-dependencies\\.sh$"]'
+          RENOVATE_BINARY_SOURCE: global
+          RENOVATE_CUSTOM_ENV_VARIABLES: '{"GOTOOLCHAIN":"local"}'
+          GOTOOLCHAIN: local
           RENOVATE_REPOSITORY: ${{ github.repository }}
           RENOVATE_REVISION: ${{ github.sha }}
           RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}

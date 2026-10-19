@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Go 1.26.0 with the configured `go1.26.6` toolchain.
-- Repository dependencies available in `vendor/`.
+- Repository dependencies obtained by Nix with the verified `vendorHash` in `flake.nix`.
 - An interactive ANSI/VT terminal for manual validation.
 
 ## Automated Validation

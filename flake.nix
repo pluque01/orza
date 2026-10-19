@@ -20,6 +20,12 @@
     }:
     let
       version = "unstable-${self.shortRev or self.dirtyShortRev or "unknown"}";
+      # Updated by scripts/update-go-dependencies.sh; hashes the local module proxy.
+      orzaVendorHash = "sha256-j/XFDaxgaKNsbqF+5OFeqKLIS7WXuA90DbCFCfSxChY=";
+      source = nixpkgs.lib.cleanSourceWith {
+        src = ./.;
+        filter = path: type: baseNameOf path != "vendor" && nixpkgs.lib.cleanSourceFilter path type;
+      };
       systems = [
         "x86_64-linux"
         "aarch64-linux"
@@ -53,7 +59,6 @@
         let
           pkgs = nixpkgs.legacyPackages.${system};
           go = goNixpkgs.legacyPackages.${system}.go_1_26;
-          source = nixpkgs.lib.cleanSource ./.;
           mkRelease =
             {
               goos,
@@ -81,7 +86,22 @@
               pname = "orza-${goos}-${goarch}";
               inherit version;
               src = source;
-              vendorHash = null;
+              vendorHash = orzaVendorHash;
+              proxyVendor = true;
+              # Include dependency test sources needed by tidy, not just application imports.
+              modBuildPhase = ''
+                go mod download
+                go mod tidy
+                cmp go.mod ${source}/go.mod
+                cmp go.sum ${source}/go.sum
+                go mod download all
+              '';
+              postConfigure = ''
+                # Populate only from the hash-verified file proxy, then disable it.
+                go mod download
+                export GOPROXY=off
+                export GOFLAGS="-mod=readonly -trimpath"
+              '';
               subPackages = [ "cmd/orza" ];
               doCheck = false;
               ldflags = [
@@ -110,6 +130,7 @@
         in
         {
           default = nativeRelease;
+          go-module-cache = nativeRelease.goModules;
           linux-amd64 = pureRelease "linux" "amd64";
           linux-arm64 = pureRelease "linux" "arm64";
           windows-amd64 = pureRelease "windows" "amd64";
@@ -128,7 +149,29 @@
         let
           pkgs = nixpkgs.legacyPackages.${system};
           go = goNixpkgs.legacyPackages.${system}.go_1_26;
-          source = nixpkgs.lib.cleanSource ./.;
+          modules = self.packages.${system}.default.goModules;
+          preparedModules = pkgs.runCommand "orza-prepared-modules" { nativeBuildInputs = [ go ]; } ''
+            cp -R ${source} source
+            chmod -R u+w source
+            cd source
+            export HOME=$TMPDIR GOTOOLCHAIN=local GOSUMDB=off
+            export GOPATH=$TMPDIR/go GOPROXY=file://${modules}
+            go mod download all
+            export GOPROXY=off
+            go mod tidy
+            cmp go.mod ${source}/go.mod
+            cmp go.sum ${source}/go.sum
+            go mod verify
+            # Preserve the old notice-presence/nonempty check on the fetched sources.
+            notice_count=0
+            while IFS= read -r -d "" notice; do
+              test -s "$notice"
+              notice_count=$((notice_count + 1))
+            done < <(find "$GOPATH/pkg/mod" -type f \( -name LICENSE -o -name 'LICENSE.*' \
+              -o -name NOTICE -o -name 'NOTICE.*' -o -name COPYING -o -name 'COPYING.*' \) -print0)
+            test "$notice_count" -gt 0
+            cp -R "$GOPATH/pkg/mod" "$out"
+          '';
           vulnerabilityDatabase = mkVulnerabilityDatabase pkgs;
           mkGoCheck =
             name: nativeBuildInputs: command:
@@ -143,7 +186,12 @@
                 export HOME=$TMPDIR
                 export GOCACHE=$TMPDIR/go-cache
                 export GOTOOLCHAIN=local
-                export GOFLAGS="-mod=vendor -trimpath"
+                export GOPATH=$TMPDIR/go
+                mkdir -p "$GOPATH/pkg"
+                cp -R ${preparedModules} "$GOPATH/pkg/mod"
+                chmod -R u+w "$GOPATH/pkg/mod"
+                export GOPROXY=off GOSUMDB=off
+                export GOFLAGS="-mod=readonly -trimpath"
                 ${command}
                 touch $out
               '';
@@ -151,10 +199,13 @@
         in
         {
           build = self.packages.${system}.default;
+          dependencies = mkGoCheck "dependencies" [ ] ''
+            bash scripts/check-go-dependencies.sh
+          '';
           formatting = mkGoCheck "formatting" [ pkgs.nixfmt ] ''
             files=$(gofmt -l cmd internal tests)
             test -z "$files"
-            nixfmt --check flake.nix
+            nixfmt --check flake.nix release.nix
           '';
           go-test = mkGoCheck "go-test" [ ] ''
             CGO_ENABLED=${nativeCgo} go test ./...
@@ -183,6 +234,7 @@
                   pkgs.gnutar
                   pkgs.gzip
                   pkgs.jq
+                  pkgs.python3
                   pkgs.shellcheck
                   pkgs.unzip
                   pkgs.zip
@@ -227,6 +279,7 @@
               pkgs.actionlint
               pkgs.shellcheck
               pkgs.renovate
+              pkgs.python3
               pkgs.libarchive
               pkgs.coreutils
               pkgs.gnutar

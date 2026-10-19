@@ -18,13 +18,18 @@
   "separateMajorMinor": true,
   "separateMultipleMajor": true,
   "prBodyNotes": [
-    "Old and new versions are listed in the update table above. Every affected manifest, lock, workflow, and generated vendor file is listed on the pull request Files changed tab. This proposal uses ordinary CI and requires explicit maintainer approval."
+    "Old and new versions are listed in the update table above. Every affected manifest, lock, workflow, and Nix dependency hash is listed on the pull request Files changed tab. This proposal uses ordinary CI and requires explicit maintainer approval."
   ],
   "packageRules": [
     {
-      "description": "Regenerate the complete Go module and vendor graph",
+      "description": "Tidy Go manifests and verify the Nix dependency hash",
       "matchManagers": ["gomod"],
-      "postUpdateOptions": ["gomodTidy"]
+      "postUpdateOptions": ["gomodTidy"],
+      "postUpgradeTasks": {
+        "commands": ["bash scripts/update-go-dependencies.sh"],
+        "fileFilters": ["go.mod", "go.sum", "flake.nix"],
+        "executionMode": "branch"
+      }
     },
     {
       "description": "Group compatible Go updates only with Go updates",

@@ -24,7 +24,9 @@ for manager in gomod github-actions nix; do
     fail "missing manager: $manager"
 done
 jq -e '.packageRules[] | select(.matchManagers == ["gomod"] and (.postUpdateOptions | index("gomodTidy")))' "$config" >/dev/null ||
-  fail 'Go updates must tidy and regenerate committed vendor source'
+  fail 'Go updates must tidy their manifests'
+jq -e '.packageRules[] | select(.matchManagers == ["gomod"] and .postUpgradeTasks.commands == ["bash scripts/update-go-dependencies.sh"] and .postUpgradeTasks.executionMode == "branch" and .postUpgradeTasks.fileFilters == ["go.mod", "go.sum", "flake.nix"])' "$config" >/dev/null ||
+  fail 'Go updates must refresh and retain the Nix dependency hash after updating the branch'
 jq -e '(has("gomodSkipVendor") == false) and ([.packageRules[] | select(has("gomodSkipVendor"))] | length == 0)' "$config" >/dev/null ||
   fail 'obsolete gomodSkipVendor configuration must not be used'
 
