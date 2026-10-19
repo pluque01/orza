@@ -119,25 +119,39 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - name: Install the pinned Go toolchain
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
-        with:
-          go-version: ${{ needs.eligibility.outputs.go-version }}
-          cache: false
-      - name: Build vendored versioned executable
+      - name: Install Nix
+        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+      - name: Build versioned executable with Nix
         env:
           CGO_ENABLED: ${{ matrix.cgo }}
           GOARCH: ${{ matrix.goarch }}
           GOOS: ${{ matrix.goos }}
           GOTOOLCHAIN: local
           RELEASE_VERSION: ${{ needs.eligibility.outputs.version }}
+          RELEASE_REVISION: ${{ github.sha }}
+          EXPECTED_GO_VERSION: ${{ needs.eligibility.outputs.go-version }}
+          TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
           mkdir -p build
           executable=build/orza
           if [ "$GOOS" = windows ]; then executable=build/orza.exe; fi
-          go build -mod=vendor -trimpath -buildvcs=true \
-            -ldflags "-X main.version=$RELEASE_VERSION" -o "$executable" ./cmd/orza
+          nix build --file release.nix --argstr version "$RELEASE_VERSION" \
+            --argstr revision "$RELEASE_REVISION" --argstr target "$TARGET" \
+            --no-update-lock-file --option sandbox true -L
+          cp "result/bin/${executable#build/}" "$executable"
+          # shellcheck disable=SC2016
+          nix develop --command bash -c '
+            set -euo pipefail
+            test "$(go env GOVERSION)" = "go$EXPECTED_GO_VERSION"
+            metadata=$(go version -m "$1")
+            test "$(go version "$1")" = "$1: go$EXPECTED_GO_VERSION"
+            grep -F "vcs.revision=$RELEASE_REVISION" <<<"$metadata"
+            grep -F "vcs.modified=false" <<<"$metadata"
+            grep -F "GOOS=$GOOS" <<<"$metadata"
+            grep -F "GOARCH=$GOARCH" <<<"$metadata"
+            grep -F "CGO_ENABLED=$CGO_ENABLED" <<<"$metadata"
+          ' -- "$executable"
       - name: Retain compiled target for one day
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

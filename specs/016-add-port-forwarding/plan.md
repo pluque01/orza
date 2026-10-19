@@ -12,7 +12,7 @@ Planning ends after research and interface/data design. No application code, cat
 
 ## Technical Context
 
-**Language/Version**: Go 1.26.0 module, toolchain Go 1.26.6; preserve the pinned Nix toolchain and vendoring.
+**Language/Version**: Go 1.26.0 module, toolchain Go 1.26.6; preserve the pinned Nix toolchain and dependency integrity.
 
 **Primary Dependencies**: Existing `golang.org/x/crypto v0.56.0`, Bubble Tea v2.0.8, Bubbles v2.1.1, Lip Gloss v2.0.5, Cobra v1.10.2, and standard-library `net`, `io`, `context`, and synchronization. No new dependency planned. A bounded internal SOCKS5 CONNECT parser implements only the approved application-protocol subset, not SSH or cryptography.
 

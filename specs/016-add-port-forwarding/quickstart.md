@@ -21,7 +21,7 @@ Evidence date: 2026-10-03, Linux/amd64 with Go 1.26.6 from Nix. This records the
 | T065 full races | `nix develop --command go test -race ./...` | All packages passed, not only forwarding packages. |
 | T065 vet/staticcheck | `go vet ./...` and `staticcheck ./...` in the Nix environment | Passed. One initial staticcheck ST1005 finding was corrected before the successful final run. |
 | T065 Nix checks | `nix flake check --no-update-lock-file --keep-going -L path:.` | All nine current-host checks passed: build, formatting, go-test, race, vet, staticcheck, govulncheck, automation and native-smoke. `path:.` was deliberately used to include the working tree and new untracked source/test files, rather than a Git-filtered source missing them. Checks for other hosts were omitted, not executed or accepted. The flake native-smoke is a version check, not interactive acceptance. |
-| T065 vendor | `nix develop --command bash scripts/check-vendor.sh` | Clean; `go.mod`, `go.sum` and `vendor/` unchanged. No vendored SSH modification or new dependency. |
+| T065 dependencies | `nix build .#checks.x86_64-linux.dependencies --no-update-lock-file --option sandbox true` | Tidy manifests and hash-verified dependencies; no SSH dependency modification or new dependency. |
 | T065 tree secrets | `nix develop --command gitleaks dir --redact --config .gitleaks.toml .` | Initial scan found two reviewed false positives in Shift+Tab/F2 keyboard-label literals at `internal/tui/actions.go:207` and `internal/tui/tunnels.go:189`. Specific reviewed fingerprints were added to `.gitleaksignore`; final tree scan found no leaks. No broad rule exclusion was added. |
 | T065 history secrets | `nix develop --command gitleaks git --redact --config .gitleaks.toml --log-opts=--all .` | 46 commits scanned; no leaks. History scanning is separate from the working-tree scan. |
 | T065 application build | `go build -o /tmp/opencode/orza-forwarding ./cmd/orza` in Nix | Passed; native Linux/amd64 binary used by the real OpenSSH harness. |
@@ -100,7 +100,7 @@ go test ./internal/sshclient -run '^$' -fuzz '^FuzzSOCKSRequest$' -fuzztime=30s
 `FuzzSOCKSRequest` and the multi-transport direct/forwarded TCP fixtures are current tests. They support listener requests/cancellation, denied or absent replies and transport loss. Never use a production server as the automated fixture. For the separate dependency/secrets gates:
 
 ```sh
-nix develop --command bash scripts/check-vendor.sh
+nix build .#checks.x86_64-linux.dependencies --no-update-lock-file --option sandbox true
 nix develop --command gitleaks dir --redact --config .gitleaks.toml .
 nix develop --command gitleaks git --redact --config .gitleaks.toml --log-opts=--all .
 ```

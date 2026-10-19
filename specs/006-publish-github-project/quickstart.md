@@ -36,9 +36,9 @@ Validate that the committed Go dependency graph regenerates without change:
 
 ```sh
 test -z "$(git status --porcelain=v1 --untracked-files=all)"
-go mod tidy -diff
-go mod vendor
-test -z "$(git status --porcelain=v1 --untracked-files=all -- go.mod go.sum vendor)"
+nix build .#checks.x86_64-linux.dependencies --no-update-lock-file --option sandbox true -L
+test -z "$(git status --porcelain=v1 --untracked-files=all -- go.mod go.sum flake.nix flake.lock)"
+test -z "$(git ls-files vendor)"
 ```
 
 Run focused automation tests and static workflow/script checks provided by the implementation:
@@ -209,7 +209,7 @@ Validate `.github/renovate.json`, configure its fine-grained repository token wi
 
 Confirm discovery includes:
 
-- `go.mod`, `go.sum`, and `vendor/`
+- `go.mod`, `go.sum`, and the Orza `vendorHash` in `flake.nix` (see CONTRIBUTING.md)
 - Full-SHA references in `.github/workflows/`
 - `nixpkgs` and vulnerability-database inputs/locks
 
@@ -217,7 +217,7 @@ Acceptance cases:
 
 | Case | Expected result |
 |------|-----------------|
-| Compatible Go updates | One ecosystem-local group; tidy/vendor changes included |
+| Compatible Go updates | One ecosystem-local group; tidy manifests and verified Nix dependency hash included |
 | Compatible Actions updates | Full SHA and readable version comment updated together |
 | Major update | Separate and waits for dependency-dashboard approval |
 | Nix toolchain update | Separate from vulnerability database update |

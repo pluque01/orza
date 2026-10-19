@@ -7,7 +7,7 @@ script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 . "$script_dir/testlib.sh"
 testlib_init
 
-categories=(format test race vet static vulnerability build vendor secret)
+categories=(format test race vet static vulnerability build dependencies secret)
 passing=()
 for category in "${categories[@]}"; do passing+=("$category=success"); done
 

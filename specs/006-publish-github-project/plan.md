@@ -6,7 +6,7 @@
 
 ## Summary
 
-Prepare Orza for safe public distribution at `github.com/pluque01/orza` through GitHub with least-privilege CI, vulnerability-monitoring, dependency-update, and atomic tag-driven release workflows; repository security and contribution metadata; complete installation and usage documentation; and automated dependency proposals. Preserve Nix as the reproducible local and CI validation contract; build release binaries directly with a pinned Go toolchain so native cgo-enabled Darwin builds use Keychain correctly. Publish six archives plus one sorted SHA-256 manifest from a draft release only after all builds succeed. Run a Nix-pinned Renovate command exactly once in a weekly workflow for Go modules, vendored dependencies, GitHub Actions, and Nix inputs, with immutable action pins and a five-branch/five-PR ceiling that no proposal class bypasses.
+Prepare Orza for safe public distribution at `github.com/pluque01/orza` through GitHub with least-privilege CI, vulnerability-monitoring, dependency-update, and atomic tag-driven release workflows; repository security and contribution metadata; complete installation and usage documentation; and automated dependency proposals. Preserve Nix as the pinned local, CI, and release interface, including native cgo-enabled Darwin builds for Keychain. Publish six archives plus one sorted SHA-256 manifest from a draft release only after all builds succeed. Run a Nix-pinned Renovate command exactly once in a weekly workflow for Go modules and their Nix hash, GitHub Actions, and Nix inputs, with immutable action pins and a five-branch/five-PR ceiling that no proposal class bypasses.
 
 ## Technical Context
 
@@ -39,8 +39,8 @@ Prepare Orza for safe public distribution at `github.com/pluque01/orza` through 
 | I. Secure SSH Operations | Automation uses synthetic data, scans source/history before exposure, redacts findings, grants no secrets to untrusted PRs, and leaves SSH behavior and credential handling unchanged. | PASS |
 | II. Terminal-First Usability | README retains keyboard, minimum terminal, no-color, cancel/back/quit, platform, and installation guidance; no application interaction changes. | PASS |
 | III. Predictable State and Failure Handling | CI and release stages fail closed with bounded diagnostics; draft-first publication prevents stable partial releases; duplicate tag runs are serialized. | PASS |
-| IV. Behavior-Focused Testing | Existing behavioral suites remain mandatory; policy parsing, release inventory, tag/main eligibility, checksums, vendoring, and failure paths gain automated coverage. | PASS |
-| V. Simplicity and Maintainability | Existing Nix checks are reused; direct Go release builds avoid an unnecessary release framework; the only new helper exists because `govulncheck` has no native expiring-exception mechanism. | PASS |
+| IV. Behavior-Focused Testing | Existing behavioral suites remain mandatory; policy parsing, release inventory, tag/main eligibility, checksums, dependency integrity, and failure paths gain automated coverage. | PASS |
+| V. Simplicity and Maintainability | Nix packages and checks are reused for releases; the policy helper exists because `govulncheck` has no native expiring-exception mechanism. | PASS |
 | Untrusted input and bounded output | Tags and GitHub context enter scripts through quoted environment variables, release inventory is allowlisted, logs are bounded, and secret findings are redacted. | PASS |
 | Supported platforms and documentation | README will state all six destinations, cgo/credential-store consequences, terminal assumptions, checksum limits, installation, update, and removal. | PASS |
 | Workflow and quality gates | Formatting, full tests, race, vet, static analysis, vulnerability analysis, build, documentation, and constitutional review remain pre-merge requirements. | PASS |
@@ -102,7 +102,7 @@ CONTRIBUTING.md                    # Local checks and release contribution workf
 README.md                          # Releases, install, verify, use, update, remove
 flake.nix                          # Shared tools/check entry points as needed
 flake.lock                         # Reviewed toolchain and vulnerability-data pins
-go.mod / go.sum / vendor/          # Reproducible Go dependency graph
+go.mod / go.sum / flake.nix        # Pinned Go graph and verified dependency hash
 ```
 
 **Structure Decision**: Keep one Go module and the existing Nix flake. Repository automation lives under `.github`; small shell entry points only coordinate established tools and quote all input; exception semantics live in a tested internal Go package rather than fragile output matching. No release framework, package-manager publishing, application updater, telemetry, or application persistence is added.
@@ -111,10 +111,10 @@ go.mod / go.sum / vendor/          # Reproducible Go dependency graph
 
 1. Add MIT, security, contribution, ownership, and pre-public secret-review files; establish the clean-tree/history decision before any visibility change.
 2. Implement and test the expiring vulnerability-exception policy, then make pinned and live scans use the same fail-closed wrapper.
-3. Add stable-name CI jobs for pull requests, `main`, manual runs, and merge groups, reusing `nix flake check` and validating vendor regeneration plus all Linux/Windows outputs.
+3. Add stable-name CI jobs for pull requests, `main`, manual runs, and merge groups, reusing `nix flake check` and validating tidy manifests and the Nix dependency hash plus all Linux/Windows outputs.
 4. Add release packaging/verification scripts and contract tests before wiring the six-target tag workflow.
 5. Add draft-first publication with exact tag syntax, `main` ancestry, duplicate protection, sorted SHA-256 manifest, exact seven-asset inventory, and job-local write permission.
-6. Configure one weekly Renovate workflow for Go, vendoring, Actions SHAs, and Nix; acquire a durable UTC week tag before mutation, serialize runs, isolate majors, disable auto-merge and vulnerability-alert PR bypasses, and cap every branch/proposal class at five.
+6. Configure one weekly Renovate workflow for Go, its Nix dependency hash, Actions SHAs, and Nix; acquire a durable UTC week tag before mutation, serialize runs, isolate majors, disable auto-merge and vulnerability-alert PR bypasses, and cap every branch/proposal class at five.
 7. Expand README with release installation, checksum verification and limitation, source/Nix build, update/removal, keyboard-first use, platform/credential-store constraints, and local quality gates.
 8. Validate workflows and scripts locally where possible, run all repository gates, then perform authenticated GitHub visibility, ruleset, security-feature, metadata, and dry-run release checks.
 

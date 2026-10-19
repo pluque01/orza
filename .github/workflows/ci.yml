@@ -29,8 +29,8 @@ jobs:
       - name: Run reproducible quality checks
         run: nix flake check --no-update-lock-file --keep-going -L
 
-  vendor:
-    name: vendor
+  dependencies:
+    name: dependencies
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -40,11 +40,15 @@ jobs:
           persist-credentials: false
       - name: Install Nix
         uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
-      - name: Regenerate module and vendor files
-        run: nix develop --command bash scripts/check-vendor.sh
-      - name: Confirm untracked vendor files are visible
+      - name: Validate fixed dependency hash and tidy manifests offline
+        run: nix build .#checks.x86_64-linux.dependencies --no-update-lock-file --option sandbox true -L
+      - name: Reject versioned vendor content and changed manifests
+        run: |
+          test -z "$(git ls-files vendor)"
+          git diff --exit-code -- go.mod go.sum flake.lock
+      - name: Show dependency manifest status
         if: ${{ always() }}
-        run: git status --porcelain=v1 --untracked-files=all -- go.mod go.sum vendor
+        run: git status --porcelain=v1 --untracked-files=all -- go.mod go.sum flake.nix flake.lock
 
   release-builds:
     name: build (${{ matrix.target }})
@@ -86,7 +90,7 @@ jobs:
   required:
     name: required
     if: ${{ always() }}
-    needs: [quality, vendor, release-builds, secrets]
+    needs: [quality, dependencies, release-builds, secrets]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -98,7 +102,7 @@ jobs:
         env:
           QUALITY_RESULT: ${{ needs.quality.result }}
           BUILD_RESULT: ${{ needs.release-builds.result }}
-          VENDOR_RESULT: ${{ needs.vendor.result }}
+          DEPENDENCIES_RESULT: ${{ needs.dependencies.result }}
           SECRET_RESULT: ${{ needs.secrets.result }}
         run: |
           bash scripts/ci-gate.sh \
@@ -109,5 +113,5 @@ jobs:
             "static=$QUALITY_RESULT" \
             "vulnerability=$QUALITY_RESULT" \
             "build=$BUILD_RESULT" \
-            "vendor=$VENDOR_RESULT" \
+            "dependencies=$DEPENDENCIES_RESULT" \
             "secret=$SECRET_RESULT"
