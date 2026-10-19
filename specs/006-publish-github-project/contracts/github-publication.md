@@ -6,7 +6,7 @@ This contract defines observable repository behavior for feature 006. It does no
 
 Before changing visibility to public:
 
-- Root `LICENSE` contains the canonical MIT terms for project-owned code and leaves vendored third-party notices intact.
+- Root `LICENSE` contains the canonical MIT terms for project-owned code; fetched dependency sources retain third-party notices.
 - Root `README.md`, `SECURITY.md`, and `CONTRIBUTING.md` are present and linked where appropriate.
 - The current publication tree is scanned for secrets with redacted output.
 - If Git history exists or is imported, every available ref is scanned. If no history exists, the publication record says `not_present` rather than claiming a passed historical scan.
@@ -42,7 +42,7 @@ The stable aggregate required check passes only after:
 5. Staticcheck succeeds.
 6. The pinned-database vulnerability policy succeeds.
 7. Native package/build and existing smoke checks succeed.
-8. `go mod tidy` plus vendor regeneration produce no repository difference.
+8. Offline `go mod tidy` leaves both manifests unchanged; Nix validates the fixed dependency hash.
 9. Linux amd64/arm64 and Windows amd64/arm64 release outputs compile.
 10. Secret scanning reports no unapproved current-tree/history finding.
 
@@ -129,7 +129,7 @@ IDs must also be unique. Text fields reject leading/trailing-only content and co
 | Windows | amd64 | Linux cross | disabled | `.zip` |
 | Windows | arm64 | Linux cross | disabled | `.zip` |
 
-Every build uses exactly Go 1.26.6, `GOTOOLCHAIN=local`, committed vendor source, path trimming, VCS metadata, and version derived from the validated tag. The compile-only gate does not execute target binaries. A later Go patch requires one reviewed change to every visible builder pin.
+Every build uses `release.nix`, exactly Go 1.26.6, `GOTOOLCHAIN=local`, hash-verified dependencies, path trimming, VCS metadata, and version derived from the validated tag. Dependencies are obtained by a fixed-output derivation; ordinary builds run without external network access. No bit-for-bit reproducibility claim is made. The compile-only gate does not execute target binaries. A later Go patch requires one reviewed change to every visible builder pin.
 
 Packaging tests assert that every matrix command receives the same validated linker version. A host-native post-public check may execute `--version` as evidence for FR-009, but it is not part of the six-target publication gate.
 
@@ -167,7 +167,7 @@ Only the trusted scheduled job receives a fine-grained token limited to this rep
 - Compatible updates: grouped only within the same ecosystem.
 - Major/unknown-scheme updates: individual and require dependency-dashboard approval.
 - Auto-merge: disabled for every update class.
-- Go post-update: tidy and regenerate vendor source.
+- Go post-update: tidy manifests and run the explicitly allowlisted `bash scripts/update-go-dependencies.sh` once per branch; retain manifests and the verified `vendorHash` in `flake.nix`. Use the pinned global tools; the Go manager alone does not update the hash.
 - Actions post-update: preserve full SHA and readable version comment.
 - Nix: separate `nixpkgs` from vulnerability-database proposals; onboarding must prove recognition of the explicit revision or install a narrowly scoped reviewed updater.
 - Every created proposal runs ordinary CI and follows the current maintainer approval policy.

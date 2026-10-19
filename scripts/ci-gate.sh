@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-required='format test race vet static vulnerability build vendor secret'
+required='format test race vet static vulnerability build dependencies secret'
 seen=' '
 failed=0
 

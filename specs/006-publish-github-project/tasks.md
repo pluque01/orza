@@ -75,7 +75,7 @@ description: "Task list for secure GitHub publication, CI, releases, documentati
 
 ## Phase 4: User Story 2 - Validate Every Change Automatically (Priority: P2)
 
-**Goal**: Make one stable required CI gate enforce formatting, tests, race, vet, static analysis, vulnerability policy, builds, vendoring, and redacted secret checks for pull requests and `main`.
+**Goal**: Make one stable required CI gate enforce formatting, tests, race, vet, static analysis, vulnerability policy, builds, dependency integrity, and redacted secret checks for pull requests and `main`.
 
 **Independent Test**: Run the workflow contract locally and in a disposable pull request, inject one controlled failure per category, and verify read-only fork behavior, actionable diagnostics, stable aggregation, and event-specific cancellation.
 
@@ -84,14 +84,14 @@ description: "Task list for secure GitHub publication, CI, releases, documentati
 > Write these tests first and ensure they fail before implementation.
 
 - [X] T019 [P] [US2] Add failing static contract cases for required events, no path filters, full-SHA actions, read-only permissions, non-persisted credentials, hosted runners, stable job names, and pull-request-only cancellation in `scripts/ci_workflow_test.sh`
-- [X] T020 [P] [US2] Add failing vendor-integrity cases for tidy changes, modified tracked vendor files, and newly generated untracked vendor files in `scripts/vendor_test.sh`
-- [X] T021 [P] [US2] Add failing aggregate-gate simulations for controlled format, test, race, vet, static, vulnerability, build, vendor, and secret failures in `scripts/ci_gate_test.sh`
+- [X] T020 [P] [US2] Cover inconsistent Go manifests and module integrity in `scripts/go_dependencies_test.sh`; dependency-storage migration adds updater fetch/verification failures in `scripts/update_go_dependencies_test.sh`
+- [X] T021 [P] [US2] Add failing aggregate-gate simulations for controlled format, test, race, vet, static, vulnerability, build, dependencies, and secret failures in `scripts/ci_gate_test.sh`
 
 ### Implementation for User Story 2
 
 - [X] T022 [US2] Add pull-request, `main`, merge-group, and manual CI orchestration with read-only default permissions and superseded-PR concurrency in `.github/workflows/ci.yml`
 - [X] T023 [US2] Reuse `nix flake check --no-update-lock-file --keep-going -L` and expose stable format/test/race/vet/static/vulnerability/build diagnostics in `.github/workflows/ci.yml` and `flake.nix`
-- [X] T024 [US2] Add clean-checkout tidy/vendor regeneration, four Linux/Windows release-output builds, and redacted repository secret scanning in `.github/workflows/ci.yml`
+- [X] T024 [US2] Add clean-checkout offline manifest/hash validation, four Linux/Windows release-output builds, and redacted repository secret scanning in `.github/workflows/ci.yml`
 - [X] T025 [US2] Add the scheduled/manual live-database policy scan with read-only permissions and independent concurrency in `.github/workflows/vulnerability-monitor.yml`
 - [X] T026 [US2] Add an always-evaluated stable aggregate result that fails unless every required dependency job passed or used a valid vulnerability exception in `.github/workflows/ci.yml`
 
@@ -118,7 +118,7 @@ description: "Task list for secure GitHub publication, CI, releases, documentati
 - [X] T030 [US3] Implement deterministic `orza_v...` `.tar.gz`/`.zip` assembly with one root `orza` or `orza.exe` executable per target and exact closed-inventory names in `scripts/package-release.sh`
 - [X] T031 [US3] Implement exact seven-asset, archive content, zero-byte, sorted SHA-256, tag, target, release-name, and generated-note verification in `scripts/verify-release.sh`
 - [X] T032 [US3] Add exact `vMAJOR.MINOR.PATCH`, `origin/main` ancestry, required-CI, duplicate-release, and non-cancelling same-tag eligibility gates in `.github/workflows/release.yml`
-- [X] T033 [US3] Add the six-entry Go 1.26.6 matrix with vendored `-trimpath`/VCS/version builds, Linux-hosted Linux/Windows compilation, and matching native cgo Darwin runners in `.github/workflows/release.yml`
+- [X] T033 [US3] Add the six-entry Go 1.26.6 matrix with Nix `-trimpath`/VCS/version builds, Linux-hosted Linux/Windows compilation, and matching native cgo Darwin runners in `.github/workflows/release.yml`
 - [X] T034 [US3] Add one-day intermediate artifacts and job-local `contents: write` draft assembly, exact verification, generated notes, and final publication in `.github/workflows/release.yml`
 
 **Checkpoint**: US3 publishes no stable release on any negative path and produces the exact seven-asset contract for an eligible test tag.
@@ -151,7 +151,7 @@ description: "Task list for secure GitHub publication, CI, releases, documentati
 
 ## Phase 7: User Story 5 - Keep Dependencies Current (Priority: P5)
 
-**Goal**: Run exactly one mutating weekly Renovate cycle covering Go/vendor, full-SHA Actions, and Nix while capping every update class at five open branches/PRs and forbidding auto-merge.
+**Goal**: Run exactly one mutating weekly Renovate cycle covering Go and its Nix hash, full-SHA Actions, and Nix while capping every update class at five open branches/PRs and forbidding auto-merge.
 
 **Independent Test**: Run dry-run discovery and a deterministic four-week simulation proving the durable week guard, no mutating reruns/overlap, all-class ceilings, ecosystem-local compatible groups, isolated majors, affected-file/diagnostic output, and ordinary CI on proposals.
 
@@ -159,13 +159,13 @@ description: "Task list for secure GitHub publication, CI, releases, documentati
 
 > Write these tests first and ensure they fail before implementation.
 
-- [X] T041 [P] [US5] Add failing Renovate policy cases for all three managers, tidy/vendor updates, full-SHA comments, ecosystem-local compatible groups, isolated majors, three-day age, disabled auto-merge/bypass modes, and five branch/PR ceilings in `scripts/renovate_config_test.sh`
+- [X] T041 [P] [US5] Add failing Renovate policy cases for all three managers, tidy/hash updates, full-SHA comments, ecosystem-local compatible groups, isolated majors, three-day age, disabled auto-merge/bypass modes, and five branch/PR ceilings in `scripts/renovate_config_test.sh`
 - [X] T042 [P] [US5] Add failing scheduled/manual permission cases for one Monday cron, non-cancelling concurrency, scheduled-only fine-grained token, dry-run manual mode, non-persisted credentials, and redacted logs in `scripts/dependencies_workflow_test.sh`
 - [X] T043 [P] [US5] Add failing four-week simulations for atomic `automation/renovate/YYYY-Www` acquisition, overlap/rerun no-op, retained failed-cycle marker, sixth proposal blocking, affected files, and actionable failed-update diagnostics in `scripts/dependencies_cycle_test.sh`
 
 ### Implementation for User Story 5
 
-- [X] T044 [US5] Configure Go, GitHub Actions, and beta Nix discovery, post-update tidy/vendor, grouping, major approval, release age, branch/PR ceilings, and disabled automerge/vulnerability PR modes in `.github/renovate.json`
+- [X] T044 [US5] Configure Go, GitHub Actions, and beta Nix discovery, post-update tidy/hash refresh, grouping, major approval, release age, branch/PR ceilings, and disabled automerge/vulnerability PR modes in `.github/renovate.json`
 - [X] T045 [US5] Implement the once-weekly trusted Renovate job and read-only manual dry run with durable UTC week-tag guard and least-privilege token isolation in `.github/workflows/dependencies.yml`
 - [X] T046 [US5] Add explicit separate handling for `nixpkgs` and `vulndb`, plus a narrowly scoped fallback custom manager when beta Nix discovery cannot update the explicit revision, in `.github/renovate.json`
 - [X] T047 [US5] Validate old/new version, affected-file, failed-update diagnostic, ordinary CI, no-automerge, and global-limit behavior in `scripts/dependencies_cycle_test.sh`
@@ -178,7 +178,7 @@ description: "Task list for secure GitHub publication, CI, releases, documentati
 
 **Purpose**: Validate all stories together, establish Git/GitHub state safely, and perform the authorized public release only after every reversible gate passes
 
-- [X] T048 Run actionlint, ShellCheck, focused automation tests, formatting, full/race/acceptance tests, vet, build, Staticcheck, pinned/live vulnerability policy, vendor integrity, and `nix flake check` from `specs/006-publish-github-project/quickstart.md`, recording results in `specs/006-publish-github-project/validation/quality-gates.md`
+- [X] T048 Run actionlint, ShellCheck, focused automation tests, formatting, full/race/acceptance tests, vet, build, Staticcheck, pinned/live vulnerability policy, dependency integrity, and `nix flake check` from `specs/006-publish-github-project/quickstart.md`, recording results in `specs/006-publish-github-project/validation/quality-gates.md`
 - [X] T049 Execute the redacted current-tree pre-public scan, detect and separately inspect any Git LFS objects/submodules, and review repository documents, recording findings/remediation and `sourceReview=passed` in `specs/006-publish-github-project/validation/publication-readiness.md`
 - [X] T050 Resolve the authoritative-history decision, initialize a new Git history when none is supplied, rescan every resulting ref plus any imported LFS/submodule history, and record `historyReview=passed` without claiming nonexistent prior history in `specs/006-publish-github-project/validation/publication-readiness.md`
 - [X] T051 Create or connect the private `github.com/pluque01/orza` repository, push the reviewed `main` history, and verify no token or secret appears in repository/workflow output, recording evidence in `specs/006-publish-github-project/validation/github-settings.md`
@@ -249,7 +249,7 @@ Task: "T012 Add repository document tests in scripts/repository_docs_test.sh"
 
 ```text
 Task: "T019 Add CI workflow policy tests in scripts/ci_workflow_test.sh"
-Task: "T020 Add tracked/untracked vendor tests in scripts/vendor_test.sh"
+Task: "T020 Add offline manifest and dependency-integrity tests in scripts/go_dependencies_test.sh"
 Task: "T021 Add aggregate failure simulations in scripts/ci_gate_test.sh"
 ```
 

@@ -89,10 +89,10 @@ for proposal in 1 2 3 4 5 6; do
 done
 assert_eq 5 "$open"
 
-proposal='ecosystem=gomod dependency=example/module old=v1.2.3 new=v1.2.4 affected=go.mod,go.sum,vendor/modules.txt ci=ordinary automerge=false'
+proposal='ecosystem=gomod dependency=example/module old=v1.2.3 new=v1.2.4 affected=go.mod,go.sum,flake.nix ci=ordinary automerge=false'
 assert_contains "$proposal" 'old=v1.2.3'
 assert_contains "$proposal" 'new=v1.2.4'
-assert_contains "$proposal" 'affected=go.mod,go.sum,vendor/modules.txt'
+assert_contains "$proposal" 'affected=go.mod,go.sum,flake.nix'
 assert_contains "$proposal" 'ci=ordinary'
 assert_contains "$proposal" 'automerge=false'
 diagnostic='dependency=example/module cause=post-update-command-failed evidence=nix develop --command renovate --platform=local --dry-run=full'

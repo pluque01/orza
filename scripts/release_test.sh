@@ -64,8 +64,12 @@ for target in "${targets[@]}"; do assert_contains "$workflow" "target: $target";
 # shellcheck disable=SC2016
 assert_contains "$workflow" 'RELEASE_VERSION: ${{ needs.eligibility.outputs.version }}'
 # shellcheck disable=SC2016
-assert_contains "$workflow" '-ldflags "-X main.version=$RELEASE_VERSION"'
-assert_eq 1 "$(printf '%s\n' "$workflow" | grep -c 'go build -mod=vendor -trimpath -buildvcs=true')"
+assert_contains "$workflow" 'nix build --file release.nix --argstr version "$RELEASE_VERSION"'
+# shellcheck disable=SC2016
+assert_contains "$workflow" 'vcs.revision=$RELEASE_REVISION'
+assert_contains "$workflow" 'vcs.modified=false'
+# shellcheck disable=SC2016
+assert_contains "$(<"$script_dir/../release.nix")" '-X=main.version=${version}'
 
 marker=$TEST_TMPDIR/hostile-side-effect
 if bash "$script_dir/package-release.sh" --tag "v1.2.3;touch $marker" --target linux-amd64 \

@@ -10,9 +10,9 @@
   132.93 MB and found no leaks.
 - `scripts/repository_docs_test.sh` validates the root MIT license, README, SECURITY,
   CONTRIBUTING, and CODEOWNERS contracts.
-- `git diff --cached --check -- . ':!vendor/**'` passed before the root commit. Whitespace and a
+- The staged first-party whitespace check passed before the root commit. Whitespace and a
   conflict-marker-like line reported inside regenerated third-party vendor content were not edited.
-- Vendor regeneration and integrity passed with `scripts/check-vendor.sh` in `nix develop`.
+- The then-current vendor regeneration/integrity check passed in `nix develop`; this historical evidence predates the migration to the offline Nix dependency check documented in CONTRIBUTING.md.
 
 `sourceReview=passed`
 

@@ -5,7 +5,7 @@
 /flake.lock @pluque01
 /go.mod @pluque01
 /go.sum @pluque01
-/vendor/ @pluque01
+/release.nix @pluque01
 /.gitleaks.toml @pluque01
 /.vulnerability-exceptions.json @pluque01
 /cmd/vulncheck-policy/ @pluque01

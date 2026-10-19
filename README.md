@@ -179,8 +179,14 @@ go install ./cmd/orza
 ```
 
 Source builds report a development/static version. In contrast, stable release automation uses
-**exactly Go 1.26.6** with `GOTOOLCHAIN=local`, vendored dependencies, path trimming, VCS metadata,
-and the release version injected into all six executables.
+**exactly Go 1.26.6** through the locked Nix builds with `GOTOOLCHAIN=local`, hash-verified
+dependencies, path trimming, VCS metadata, and the release version injected into all six executables.
+
+`vendor/` is not stored in Git. Nix's `buildGoModule` obtains a module proxy in a fixed-output
+derivation verified by `vendorHash`; compilation and required checks consume it without network
+access in the sandbox. Version/toolchain pinning and dependency integrity do not by themselves
+prove bit-for-bit reproducibility. See [dependency updates and build guarantees](CONTRIBUTING.md#updating-go-dependencies)
+for the manual hash-refresh procedure and the weaker guarantees of non-Nix builds.
 
 On macOS, use a matching native Darwin builder with cgo enabled so the binary links the real Keychain
 backend: `CGO_ENABLED=1 go install ./cmd/orza`. This normally requires Xcode Command Line Tools. A

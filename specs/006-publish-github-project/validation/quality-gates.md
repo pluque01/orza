@@ -19,7 +19,7 @@
 - `gitleaks dir --redact --config .gitleaks.toml .` (no leaks found)
 - Pinned vulnerability policy through the Nix flake
 - Live vulnerability policy through `scripts/check-vulnerabilities.sh live`
-- `scripts/check-vendor.sh` in `nix develop` after the initial commit
+- The then-current vendor-integrity check in `nix develop` after the initial commit (historical; superseded by the offline Nix dependency check in CONTRIBUTING.md)
 - `scripts/prepublish.sh --repository . --history new` in `nix develop`
 
 The direct Go checks ran inside `nix develop`; the host environment does not expose `go` on `PATH`.

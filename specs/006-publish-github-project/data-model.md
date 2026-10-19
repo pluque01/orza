@@ -41,7 +41,7 @@ One CI evaluation associated with a pull request, `main` commit, merge group, or
 | Field | Type | Rules |
 |-------|------|-------|
 | `name` | stable string | Unique required-check name used by repository rules. |
-| `category` | enum | `format`, `test`, `race`, `vet`, `static`, `vulnerability`, `build`, `vendor`, or `secret`. |
+| `category` | enum | `format`, `test`, `race`, `vet`, `static`, `vulnerability`, `build`, `dependencies`, or `secret`. |
 | `target` | optional platform/architecture | Present for target-specific builds. |
 | `status` | enum | `pending`, `passed`, `failed`, `cancelled`, or `excepted`. |
 | `diagnostic` | optional Diagnostic | Required for `failed` and `excepted`. |
@@ -154,7 +154,7 @@ One Renovate-managed pull request.
 |-------|------|-------|
 | `ecosystem` | enum | `gomod`, `github-actions`, or `nix`. |
 | `packages` | non-empty set | Every package has current and proposed versions/revisions. |
-| `affectedFiles` | non-empty set of paths | Lists every manifest, lock, vendor, workflow, or policy file changed by the proposal. |
+| `affectedFiles` | non-empty set of paths | Lists every manifest, lock, Nix hash, workflow, or policy file changed by the proposal. |
 | `updateClass` | enum | `compatible`, `major`, `digest`, or `security`. |
 | `group` | optional string | Compatible updates only, within one ecosystem. |
 | `status` | enum | `proposed`, `validated`, `blocked`, `approved`, `merged`, or `closed`. |
@@ -166,7 +166,7 @@ One Renovate-managed pull request.
 - At most five Renovate branches and five update proposals are open repository-wide across every update class.
 - Vulnerability-alert and other bypass proposal modes are disabled; GitHub security alerts remain visible without creating a sixth update PR.
 - Major and version-scheme-unknown updates are separate and require dashboard approval before proposal.
-- Go proposals regenerate `go.mod`, `go.sum`, `vendor/`, and `vendor/modules.txt` coherently.
+- Go proposals update `go.mod`, `go.sum`, and the verified Orza `vendorHash` in `flake.nix` coherently.
 - Action proposals preserve full-SHA pins and update readable release comments.
 - `nixpkgs` and vulnerability-database changes remain separate.
 - Every proposal uses the ordinary pull-request CI and current maintainer approval policy.
