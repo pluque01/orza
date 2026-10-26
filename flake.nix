@@ -21,7 +21,7 @@
     let
       version = "unstable-${self.shortRev or self.dirtyShortRev or "unknown"}";
       # Updated by scripts/update-go-dependencies.sh; hashes the local module proxy.
-      orzaVendorHash = "sha256-j/XFDaxgaKNsbqF+5OFeqKLIS7WXuA90DbCFCfSxChY=";
+      orzaVendorHash = "sha256-k/xAbsQqJJU30hDJ8Otb2YPI0WzHzHFOuiUefWrNwpk=";
       source = nixpkgs.lib.cleanSourceWith {
         src = ./.;
         filter = path: type: baseNameOf path != "vendor" && nixpkgs.lib.cleanSourceFilter path type;
