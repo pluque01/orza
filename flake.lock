@@ -42,17 +42,17 @@
     "vulndb": {
       "flake": false,
       "locked": {
-        "lastModified": 1785255188,
-        "narHash": "sha256-D6MMH8oYWj4iKpQFFNumipA5/ps4ZN2DfNgP0Sn5XqM=",
+        "lastModified": 1793135778,
+        "narHash": "sha256-ug9DbBPTeoS0hnZlx3Vju1H2QiXYWtUw1AH/B3NINF0=",
         "owner": "golang",
         "repo": "vulndb",
-        "rev": "4a2cb55ee69f6a16c07b5b551676eca8f2065019",
+        "rev": "8f7e390a0ff7345d74ecd7a056a1073214466db9",
         "type": "github"
       },
       "original": {
         "owner": "golang",
         "repo": "vulndb",
-        "rev": "4a2cb55ee69f6a16c07b5b551676eca8f2065019",
+        "rev": "8f7e390a0ff7345d74ecd7a056a1073214466db9",
         "type": "github"
       }
     }
