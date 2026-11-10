@@ -21,7 +21,7 @@
     let
       version = "unstable-${self.shortRev or self.dirtyShortRev or "unknown"}";
       # Updated by scripts/update-go-dependencies.sh; hashes the local module proxy.
-      orzaVendorHash = "sha256-nB4RWl9ee3JZOfOipSo/11+L9er1C20RVFOrIR6KBoA=";
+      orzaVendorHash = "sha256-USX2UFLVE/O4lVatzjALhDhlAAR6CFjySth0pZ5E/b0=";
       # Updated by scripts/update-vulndb-dependencies.sh alongside the vulndb input.
       vulndbVendorHash = "sha256-yNZzZYX0Fx86Gv48nz87eZHneSBCxWRDYYq0XUe/WDU=";
       source = nixpkgs.lib.cleanSourceWith {
