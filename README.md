@@ -171,15 +171,18 @@ Install or remove the native Nix package with `nix profile install '.#default'` 
 `x86_64-linux`, `aarch64-linux`, `x86_64-darwin`, and `aarch64-darwin`, plus `windows-amd64` and
 `windows-arm64` cross outputs. Nix does not run natively on Windows.
 
-Without Nix, the module currently declares Go 1.26 and `toolchain go1.26.6`:
+Nix is the source of truth for the compiler: `goVersion` in `flake.nix` selects its exact
+version from the pinned `goNixpkgs` recipe. Development, CI, and releases use that same
+compiler with `GOTOOLCHAIN=local`; `go.mod` has no `toolchain` directive. Its minimum Go
+version tracks the compiler's minor release (`1.N.0`). Run local Go commands inside Nix:
 
 ```sh
-go test ./...
-go install ./cmd/orza
+nix develop --command go test ./...
+nix develop --command go install ./cmd/orza
 ```
 
 Source builds report a development/static version. In contrast, stable release automation uses
-**exactly Go 1.26.6** through the locked Nix builds with `GOTOOLCHAIN=local`, hash-verified
+**the exact Go version declared in `flake.nix`** through the locked Nix builds with `GOTOOLCHAIN=local`, hash-verified
 dependencies, path trimming, VCS metadata, and the release version injected into all six executables.
 
 `vendor/` is not stored in Git. Nix's `buildGoModule` obtains a module proxy in a fixed-output
@@ -934,7 +937,7 @@ The current flake check builds and tests the native package and checks Go format
 nix flake check --no-update-lock-file --keep-going -L
 ```
 
-Run native Go checks from `nix develop` (or a direct Go 1.26.6 environment):
+Run native Go checks from `nix develop`:
 
 ```sh
 go test ./...

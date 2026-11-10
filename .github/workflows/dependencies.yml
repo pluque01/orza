@@ -38,7 +38,7 @@ jobs:
         env:
           CYCLE_MODE: ${{ github.event_name == 'schedule' && 'weekly' || 'manual' }}
           LOG_LEVEL: debug
-          RENOVATE_ALLOWED_COMMANDS: '["^bash scripts/update-vulndb-dependencies\\.sh$", "^bash scripts/update-go-dependencies\\.sh$"]'
+          RENOVATE_ALLOWED_COMMANDS: '["^bash scripts/update-vulndb-dependencies\\.sh$", "^bash scripts/update-go-dependencies\\.sh$", "^bash scripts/update-go-toolchain\\.sh$"]'
           RENOVATE_BINARY_SOURCE: global
           RENOVATE_CUSTOM_ENV_VARIABLES: '{"GOTOOLCHAIN":"local"}'
           GOTOOLCHAIN: local

@@ -32,6 +32,7 @@ assert_eq 1 "$(printf '%s\n' "$workflow" | grep -c 'secrets.RENOVATE_TOKEN')"
 assert_contains "$workflow" 'RENOVATE_ALLOWED_COMMANDS:'
 assert_contains "$workflow" '^bash scripts/update-vulndb-dependencies\\.sh$'
 assert_contains "$workflow" '^bash scripts/update-go-dependencies\\.sh$'
+assert_contains "$workflow" '^bash scripts/update-go-toolchain\\.sh$'
 assert_contains "$workflow" 'RENOVATE_BINARY_SOURCE: global'
 assert_contains "$workflow" 'RENOVATE_CUSTOM_ENV_VARIABLES: '\''{"GOTOOLCHAIN":"local"}'
 assert_contains "$workflow" '--platform=local --dry-run=full --require-config=required --config-validation-error=true'

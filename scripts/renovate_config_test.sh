@@ -51,10 +51,17 @@ jq -e --arg package "$vulndb_package" '.packageRules[] | select(.matchManagers =
   fail 'vulndb must refresh and retain both its lock and indexer hash'
 jq -e '.packageRules[] | select(.matchManagers == ["nix"] and (.matchPackageNames | index("vulndb")) and .enabled == false)' "$config" >/dev/null ||
   fail 'native Nix vulndb discovery must not duplicate the narrow fallback'
-jq -e '.customManagers | length == 1 and .[0].managerFilePatterns == ["/^flake\\.nix$/"] and .[0].depNameTemplate == "golang/vulndb" and .[0].packageNameTemplate == "https://github.com/golang/vulndb" and .[0].datasourceTemplate == "git-refs" and .[0].currentValueTemplate == "master"' "$config" >/dev/null ||
+jq -e '.customManagers[] | select(.depNameTemplate == "golang/vulndb") | .managerFilePatterns == ["/^flake\\.nix$/"] and .packageNameTemplate == "https://github.com/golang/vulndb" and .datasourceTemplate == "git-refs" and .currentValueTemplate == "master"' "$config" >/dev/null ||
   fail 'the vulndb fallback must be narrowly scoped to flake.nix'
-jq -e '.customManagers[0].matchStrings[] | contains("(?<currentDigest>")' "$config" >/dev/null ||
+jq -e '.customManagers[] | select(.depNameTemplate == "golang/vulndb") | .matchStrings[] | contains("(?<currentDigest>")' "$config" >/dev/null ||
   fail 'the vulndb fallback must capture the current digest'
+
+jq -e '.customManagers[] | select(.depNameTemplate == "go" and .datasourceTemplate == "golang-version" and .managerFilePatterns == ["/^flake\\.nix$/"])' "$config" >/dev/null ||
+  fail 'the Nix Go compiler must be discovered separately'
+jq -e '.packageRules[] | select(.matchManagers == ["custom.regex"] and .matchPackageNames == ["go"] and .groupName == null and .postUpgradeTasks.commands == ["bash scripts/update-go-toolchain.sh"] and .postUpgradeTasks.fileFilters == ["flake.nix", "flake.lock", "go.mod", "go.sum"])' "$config" >/dev/null ||
+  fail 'compiler updates must retain all coordinated files'
+jq -e '.packageRules[] | select(.matchManagers == ["gomod"] and .matchDepTypes == ["golang", "toolchain"] and .enabled == false)' "$config" >/dev/null ||
+  fail 'gomod must not independently update the Go directives'
 
 notes=$(jq -r '.prBodyNotes[]' "$config")
 assert_contains "$notes" 'Old and new versions'
