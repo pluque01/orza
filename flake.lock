@@ -2,17 +2,17 @@
   "nodes": {
     "goNixpkgs": {
       "locked": {
-        "lastModified": 1786683672,
-        "narHash": "sha256-axQZUhZtd5WIndO8Av8nAVytN+Eae7w2iAp8tPu2KZc=",
+        "lastModified": 1792517021,
+        "narHash": "sha256-GYg9NwhtA0mzCS6vsPs5WP82xjZkellvQeIq+80IQ0E=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "a5d32f8c86e7ca9388fd8b75758168f30174b218",
+        "rev": "be147c05f4a91a83e254e9ce5d7f0421f99fca5c",
         "type": "github"
       },
       "original": {
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "a5d32f8c86e7ca9388fd8b75758168f30174b218",
+        "rev": "be147c05f4a91a83e254e9ce5d7f0421f99fca5c",
         "type": "github"
       }
     },
@@ -42,17 +42,17 @@
     "vulndb": {
       "flake": false,
       "locked": {
-        "lastModified": 1785255188,
-        "narHash": "sha256-D6MMH8oYWj4iKpQFFNumipA5/ps4ZN2DfNgP0Sn5XqM=",
+        "lastModified": 1793135778,
+        "narHash": "sha256-ug9DbBPTeoS0hnZlx3Vju1H2QiXYWtUw1AH/B3NINF0=",
         "owner": "golang",
         "repo": "vulndb",
-        "rev": "4a2cb55ee69f6a16c07b5b551676eca8f2065019",
+        "rev": "8f7e390a0ff7345d74ecd7a056a1073214466db9",
         "type": "github"
       },
       "original": {
         "owner": "golang",
         "repo": "vulndb",
-        "rev": "4a2cb55ee69f6a16c07b5b551676eca8f2065019",
+        "rev": "8f7e390a0ff7345d74ecd7a056a1073214466db9",
         "type": "github"
       }
     }

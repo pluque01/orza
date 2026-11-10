@@ -3,9 +3,9 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/8b6d0ac8759bbc2499386ef5bcd7f11ee7f7ff52";
-    goNixpkgs.url = "github:NixOS/nixpkgs/a5d32f8c86e7ca9388fd8b75758168f30174b218";
+    goNixpkgs.url = "github:NixOS/nixpkgs/be147c05f4a91a83e254e9ce5d7f0421f99fca5c";
     vulndb = {
-      url = "github:golang/vulndb/4a2cb55ee69f6a16c07b5b551676eca8f2065019";
+      url = "github:golang/vulndb/8f7e390a0ff7345d74ecd7a056a1073214466db9";
       flake = false;
     };
   };
@@ -22,6 +22,8 @@
       version = "unstable-${self.shortRev or self.dirtyShortRev or "unknown"}";
       # Updated by scripts/update-go-dependencies.sh; hashes the local module proxy.
       orzaVendorHash = "sha256-nB4RWl9ee3JZOfOipSo/11+L9er1C20RVFOrIR6KBoA=";
+      # Updated by scripts/update-vulndb-dependencies.sh alongside the vulndb input.
+      vulndbVendorHash = "sha256-yNZzZYX0Fx86Gv48nz87eZHneSBCxWRDYYq0XUe/WDU=";
       source = nixpkgs.lib.cleanSourceWith {
         src = ./.;
         filter = path: type: baseNameOf path != "vendor" && nixpkgs.lib.cleanSourceFilter path type;
@@ -33,17 +35,20 @@
         "aarch64-darwin"
       ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
+      mkVulnerabilityIndexer =
+        pkgs:
+        pkgs.buildGo126Module {
+          pname = "vulndb-indexer";
+          version = "unstable";
+          src = vulndb;
+          vendorHash = vulndbVendorHash;
+          subPackages = [ "cmd/indexdb" ];
+          doCheck = false;
+        };
       mkVulnerabilityDatabase =
         pkgs:
         let
-          vulndbIndexer = pkgs.buildGo126Module {
-            pname = "vulndb-indexer";
-            version = "unstable";
-            src = vulndb;
-            vendorHash = "sha256-cHjJPluvGtuau9+qKTuT7PLfU1Iz56oG7eIYwHbdkY8=";
-            subPackages = [ "cmd/indexdb" ];
-            doCheck = false;
-          };
+          vulndbIndexer = mkVulnerabilityIndexer pkgs;
         in
         pkgs.runCommand "go-vulnerability-database"
           {
@@ -130,6 +135,7 @@
         in
         {
           default = nativeRelease;
+          vulndb-indexer = mkVulnerabilityIndexer pkgs;
           go-module-cache = nativeRelease.goModules;
           linux-amd64 = pureRelease "linux" "amd64";
           linux-arm64 = pureRelease "linux" "arm64";
