@@ -67,7 +67,7 @@
       "matchPackageNames": ["https://github.com/golang/vulndb"],
       "groupName": null,
       "postUpgradeTasks": {
-        "commands": ["nix flake lock --update-input vulndb"],
+        "commands": ["bash scripts/update-vulndb-dependencies.sh"],
         "fileFilters": ["flake.nix", "flake.lock"],
         "executionMode": "update"
       }
