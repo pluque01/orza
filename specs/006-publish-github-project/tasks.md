@@ -315,6 +315,6 @@ Task: "T043 Add four-week cycle simulations in scripts/dependencies_cycle_test.s
 - No task may insert a real secret to test scanning or workflow isolation.
 - Full-SHA action references retain readable release comments for automated review.
 - Do not enable Dependabot update PRs alongside Renovate.
-- Do not run mutating Renovate from manual dispatch or more than once per UTC week marker.
+- Scheduled Renovate runs mutate at most once per UTC week marker. Explicit manual `run` dispatches on `main` may retry independently without changing that marker (see the updated publication contract).
 - Do not publish a stable release from a non-main commit, failed/absent CI, or incomplete draft.
 - Do not switch visibility before T048-T054 pass and T055 receives explicit final owner authorization.
