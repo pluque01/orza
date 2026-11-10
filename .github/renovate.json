@@ -22,6 +22,29 @@
   ],
   "packageRules": [
     {
+      "description": "Nix owns the compiler and coordinates the module minimum",
+      "matchManagers": ["gomod"],
+      "matchDepTypes": ["golang", "toolchain"],
+      "enabled": false
+    },
+    {
+      "description": "Update the Go compiler, module minimum and Nix pin together",
+      "matchManagers": ["custom.regex"],
+      "matchPackageNames": ["go"],
+      "groupName": null,
+      "postUpgradeTasks": {
+        "commands": ["bash scripts/update-go-toolchain.sh"],
+        "fileFilters": ["flake.nix", "flake.lock", "go.mod", "go.sum"],
+        "executionMode": "branch"
+      }
+    },
+    {
+      "description": "The compiler updater owns the goNixpkgs input",
+      "matchManagers": ["nix"],
+      "matchDepNames": ["goNixpkgs"],
+      "enabled": false
+    },
+    {
       "description": "Tidy Go manifests and verify the Nix dependency hash",
       "matchManagers": ["gomod"],
       "postUpdateOptions": ["gomodTidy"],
@@ -86,6 +109,17 @@
     }
   ],
   "customManagers": [
+    {
+      "customType": "regex",
+      "description": "The exact Go compiler supplied by Nix",
+      "managerFilePatterns": ["/^flake\\.nix$/"],
+      "matchStrings": [
+        "goVersion = \"(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)\";"
+      ],
+      "depNameTemplate": "go",
+      "datasourceTemplate": "golang-version",
+      "versioningTemplate": "semver"
+    },
     {
       "customType": "regex",
       "description": "Fallback only for the explicit vulndb commit in flake.nix",

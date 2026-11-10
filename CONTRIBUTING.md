@@ -64,6 +64,46 @@ five-proposal limits, explicit approval, and ordinary CI remain required.
 Manual local discovery can validate extraction/configuration but does not prove post-upgrade
 execution; validate changed branch files and command execution in the proposal run logs.
 
+### Updating the Go compiler
+
+`goVersion` in `flake.nix` is the compiler's single version declaration. Its pinned recipe is
+loaded from `goNixpkgs` using the platform-compatible base `nixpkgs`; development, checks and
+release builds share that compiler. Release eligibility reads the same declaration, and CI
+checks the actual compiler version. `go.mod` must declare the selected minor as its minimum
+(`go 1.N.0`) and must not contain a `toolchain` directive. Patch updates preserve the minimum;
+minor updates raise it. Go commands always run with `GOTOOLCHAIN=local`.
+Staticcheck and govulncheck recipes follow the same `goNixpkgs` pin and are built with the
+selected compiler so their parsers and export-data readers can handle the app's Go version.
+
+Renovate discovers the exact compiler version separately from module dependencies, waits the
+configured three days after publication, and runs `bash scripts/update-go-toolchain.sh` once
+per compiler branch. The updater keeps the current recipe pin if it already provides the target
+on every supported host; otherwise it resolves `nixpkgs-unstable` once to an immutable commit.
+It accepts that commit only if it provides the exact requested version for all supported hosts.
+If nixpkgs has not packaged the target yet (or has moved past it), the update fails with a
+diagnostic and can be retried on a later cycle or superseded by a newer proposal.
+
+The updater changes only the `goNixpkgs` lock node, sets the module minimum, and re-enters the
+**new** Nix shell to tidy manifests and refresh/verify the Orza module-proxy hash. It restores
+all four coordinated files if preparation fails. The proposal retains `flake.nix`, `flake.lock`,
+`go.mod`, and `go.sum`, stays separate from library updates, and requires ordinary CI and manual
+merge. Native Nix and gomod discovery do not independently own compiler changes.
+
+For a manual update, run from the repository root:
+
+```sh
+bash scripts/update-go-toolchain.sh 1.27.3 # substitute the reviewed stable version
+nix develop --command bash scripts/check-go-toolchain.sh
+nix flake check --no-update-lock-file --option sandbox true --keep-going -L
+git diff -- flake.nix flake.lock go.mod go.sum
+```
+
+The workflow authorizes this exact updater alongside the module and vulnerability-database
+updaters. To inspect version/configuration discovery without creating proposals, use the
+Dependencies workflow's `dry-run` mode. Discovery alone does not execute post-upgrade tasks;
+also inspect the resulting proposal diff and its task logs. Verify a built executable with
+`nix develop --command go version ./result/bin/orza`.
+
 ### Run Renovate on demand
 
 Open **Actions → Dependencies → Run workflow**, select the **main** branch, and choose a mode:

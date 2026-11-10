@@ -37,9 +37,9 @@ jobs:
             printf 'release eligibility: tag must be exact vMAJOR.MINOR.PATCH without leading zeroes\n' >&2
             exit 1
           }
-          go_version=$(awk -F= '$1 == "GO_VERSION" { print $2 }' .github/release.env)
+          go_version=$(python3 scripts/go-toolchain.py version)
           [[ "$go_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
-            printf 'release eligibility: .github/release.env has no exact Go version\n' >&2
+            printf 'release eligibility: flake.nix has no exact Go version\n' >&2
             exit 1
           }
           git fetch --no-tags origin main

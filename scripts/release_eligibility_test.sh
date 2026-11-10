@@ -35,7 +35,7 @@ assert_contains "$workflow" 'cancel-in-progress: false'
 assert_contains "$workflow" 'GO_VERSION'
 # shellcheck disable=SC2016
 assert_contains "$workflow" 'EXPECTED_GO_VERSION: ${{ needs.eligibility.outputs.go-version }}'
-assert_contains "$(<"$script_dir/../.github/release.env")" 'GO_VERSION=1.26.6'
+assert_contains "$workflow" 'python3 scripts/go-toolchain.py version'
 
 assert_not_contains "$workflow" 'pull_request_target:'
 assert_contains "$workflow" $'permissions:\n  contents: read'

@@ -20,6 +20,38 @@
     }:
     let
       version = "unstable-${self.shortRev or self.dirtyShortRev or "unknown"}";
+      # renovate: datasource=golang-version depName=go
+      goVersion = "1.27.3";
+      goFor =
+        system:
+        let
+          go = import ./scripts/go-toolchain.nix {
+            inherit
+              nixpkgs
+              goNixpkgs
+              goVersion
+              system
+              ;
+          };
+        in
+        assert nixpkgs.lib.assertMsg (
+          go.version == goVersion
+        ) "goNixpkgs must provide Go ${goVersion}, got ${go.version}";
+        go;
+      goToolsFor =
+        system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+          buildGoModule = pkgs.buildGoModule.override { go = goFor system; };
+        in
+        {
+          staticcheck = pkgs.callPackage (goNixpkgs + "/pkgs/by-name/go/go-tools/package.nix") {
+            inherit buildGoModule;
+          };
+          govulncheck = pkgs.callPackage (goNixpkgs + "/pkgs/by-name/go/govulncheck/package.nix") {
+            buildGoLatestModule = buildGoModule;
+          };
+        };
       # Updated by scripts/update-go-dependencies.sh; hashes the local module proxy.
       orzaVendorHash = "sha256-USX2UFLVE/O4lVatzjALhDhlAAR6CFjySth0pZ5E/b0=";
       # Updated by scripts/update-vulndb-dependencies.sh alongside the vulndb input.
@@ -63,7 +95,7 @@
         system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
-          go = goNixpkgs.legacyPackages.${system}.go_1_26;
+          go = goFor system;
           mkRelease =
             {
               goos,
@@ -76,7 +108,7 @@
                   go
                 else
                   pkgs.symlinkJoin {
-                    name = "go-1.26-${goos}-${goarch}";
+                    name = "go-${goVersion}-${goos}-${goarch}";
                     paths = [ go ];
                     passthru = {
                       GOOS = goos;
@@ -85,7 +117,7 @@
                     };
                     meta = go.meta;
                   };
-              buildGoModule = pkgs.buildGo126Module.override { go = targetGo; };
+              buildGoModule = pkgs.buildGoModule.override { go = targetGo; };
             in
             buildGoModule {
               pname = "orza-${goos}-${goarch}";
@@ -154,8 +186,9 @@
         system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
-          go = goNixpkgs.legacyPackages.${system}.go_1_26;
+          go = goFor system;
           modules = self.packages.${system}.default.goModules;
+          tools = goToolsFor system;
           preparedModules = pkgs.runCommand "orza-prepared-modules" { nativeBuildInputs = [ go ]; } ''
             cp -R ${source} source
             chmod -R u+w source
@@ -205,13 +238,14 @@
         in
         {
           build = self.packages.${system}.default;
-          dependencies = mkGoCheck "dependencies" [ ] ''
+          dependencies = mkGoCheck "dependencies" [ pkgs.python3 ] ''
+            bash scripts/check-go-toolchain.sh
             bash scripts/check-go-dependencies.sh
           '';
           formatting = mkGoCheck "formatting" [ pkgs.nixfmt ] ''
             files=$(gofmt -l cmd internal tests)
             test -z "$files"
-            nixfmt --check flake.nix release.nix
+            nixfmt --check flake.nix release.nix scripts/go-toolchain.nix
           '';
           go-test = mkGoCheck "go-test" [ ] ''
             CGO_ENABLED=${nativeCgo} go test ./...
@@ -222,10 +256,10 @@
           vet = mkGoCheck "vet" [ ] ''
             CGO_ENABLED=${nativeCgo} go vet ./...
           '';
-          staticcheck = mkGoCheck "staticcheck" [ pkgs.go-tools ] ''
+          staticcheck = mkGoCheck "staticcheck" [ tools.staticcheck ] ''
             CGO_ENABLED=${nativeCgo} staticcheck ./...
           '';
-          govulncheck = mkGoCheck "govulncheck" [ pkgs.govulncheck ] ''
+          govulncheck = mkGoCheck "govulncheck" [ tools.govulncheck ] ''
             CGO_ENABLED=${nativeCgo} ORZA_VULNDB=${vulnerabilityDatabase} bash scripts/check-vulnerabilities.sh pinned
           '';
           automation =
@@ -271,15 +305,16 @@
         system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
-          go = goNixpkgs.legacyPackages.${system}.go_1_26;
+          go = goFor system;
           vulnerabilityDatabase = mkVulnerabilityDatabase pkgs;
+          tools = goToolsFor system;
         in
         {
           default = pkgs.mkShell {
             packages = [
               go
-              pkgs.go-tools
-              pkgs.govulncheck
+              tools.staticcheck
+              tools.govulncheck
               pkgs.nixfmt-tree
               pkgs.gitleaks
               pkgs.actionlint

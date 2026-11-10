@@ -35,7 +35,7 @@ for text in \
   'Remove-Item (Join-Path $env:LOCALAPPDATA "Programs\Orza\orza.exe")' \
   'Do not delete catalog directories' \
   'nix flake check --no-update-lock-file --keep-going -L' \
-  'exactly Go 1.26.6' \
+  'the exact Go version declared in `flake.nix`' \
   'matching native Darwin builder with cgo enabled' \
   'cannot remember passwords in Keychain' \
   'proves source compatibility, not native terminal' \
