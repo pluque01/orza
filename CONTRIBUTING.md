@@ -52,16 +52,36 @@ Renovate's Go manager does not update this hash itself. The repository's `postUp
 `bash scripts/update-go-dependencies.sh` once per Go update branch after manifest changes, including
 major updates, and retains `go.mod`, `go.sum`, and `flake.nix`. The scheduled self-hosted CLI uses
 the pinned tools on PATH (`RENOVATE_BINARY_SOURCE=global`) and explicitly authorizes that exact
-command through `RENOVATE_ALLOWED_COMMANDS`, alongside the existing vulndb lock command.
+command through `RENOVATE_ALLOWED_COMMANDS`, alongside `bash scripts/update-vulndb-dependencies.sh`
+which refreshes the vulndb lock and indexer hash.
 `RENOVATE_CUSTOM_ENV_VARIABLES` passes `GOTOOLCHAIN=local` to its filtered child environment;
 setting only the parent process variable would not enforce it for Go artifact updates.
-Only trusted scheduled runs receive the repository-scoped token (metadata read; Contents, Pull
+Only trusted scheduled and manual `run` executions on `main` receive the repository-scoped token (metadata read; Contents, Pull
 requests, Issues, and Workflows read/write). PRs and manual discovery receive no write token.
 The command executes repository code and evaluates its flake, so keep it restricted to trusted
 Renovate branches and never enable it for arbitrary PR code. The token scope, weekly guard,
 five-proposal limits, explicit approval, and ordinary CI remain required.
 Manual local discovery can validate extraction/configuration but does not prove post-upgrade
-execution; validate changed branch files and command execution in the scheduled run logs.
+execution; validate changed branch files and command execution in the proposal run logs.
+
+### Run Renovate on demand
+
+Open **Actions → Dependencies → Run workflow**, select the **main** branch, and choose a mode:
+
+- `dry-run` (default): discovers dependencies and validates configuration without a write token or PR changes.
+- `run`: creates or updates Renovate branches, PRs, and the dashboard immediately using trusted `main` code.
+
+You can also launch a real cycle with GitHub CLI:
+
+```bash
+gh workflow run dependencies.yml --ref main -f mode=run
+```
+
+Manual `run` executions bypass the weekly marker without reading, creating, or deleting it, so
+you can retry after fixing a failed update without waiting for Monday. Scheduled cycles still
+run at most once per UTC ISO week. Manual and scheduled runs share the same non-cancelling
+concurrency group and retain the five-branch/five-PR limits, release-age policy, and disabled
+auto-merge. Launching a cycle does not force every dependency to receive an update.
 
 ### Build guarantees
 

@@ -4,6 +4,14 @@ on:
   schedule:
     - cron: '23 7 * * 1'
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Discover updates only, or create/update Renovate PRs'
+        type: choice
+        default: dry-run
+        options:
+          - dry-run
+          - run
 
 permissions:
   contents: read
@@ -14,8 +22,8 @@ concurrency:
 
 jobs:
   scheduled-renovate:
-    name: scheduled dependency proposals
-    if: ${{ github.event_name == 'schedule' }}
+    name: dependency proposals
+    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'run' && github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -26,8 +34,9 @@ jobs:
           persist-credentials: false
       - name: Install Nix
         uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31
-      - name: Acquire UTC week marker and run Renovate
+      - name: Run Renovate dependency proposals
         env:
+          CYCLE_MODE: ${{ github.event_name == 'schedule' && 'weekly' || 'manual' }}
           LOG_LEVEL: debug
           RENOVATE_ALLOWED_COMMANDS: '["^bash scripts/update-vulndb-dependencies\\.sh$", "^bash scripts/update-go-dependencies\\.sh$"]'
           RENOVATE_BINARY_SOURCE: global
@@ -36,11 +45,11 @@ jobs:
           RENOVATE_REPOSITORY: ${{ github.repository }}
           RENOVATE_REVISION: ${{ github.sha }}
           RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
-        run: bash scripts/run-renovate-cycle.sh
+        run: bash scripts/run-renovate-cycle.sh "$CYCLE_MODE"
 
   manual-dry-run:
     name: manual dependency discovery (full dry-run)
-    if: ${{ github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'dry-run' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:

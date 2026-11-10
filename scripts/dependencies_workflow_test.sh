@@ -17,9 +17,15 @@ assert_contains "$workflow" 'workflow_dispatch:'
 assert_contains "$workflow" 'group: dependencies-weekly'
 assert_contains "$workflow" 'cancel-in-progress: false'
 # shellcheck disable=SC2016
-assert_contains "$workflow" 'if: ${{ github.event_name == '\''schedule'\'' }}'
+assert_contains "$workflow" 'if: ${{ github.event_name == '\''schedule'\'' || (github.event_name == '\''workflow_dispatch'\'' && inputs.mode == '\''run'\'' && github.ref == '\''refs/heads/main'\'') }}'
 # shellcheck disable=SC2016
-assert_contains "$workflow" 'if: ${{ github.event_name == '\''workflow_dispatch'\'' }}'
+assert_contains "$workflow" 'if: ${{ github.event_name == '\''workflow_dispatch'\'' && inputs.mode == '\''dry-run'\'' }}'
+assert_contains "$workflow" 'default: dry-run'
+assert_contains "$workflow" 'type: choice'
+# shellcheck disable=SC2016
+assert_contains "$workflow" 'run: bash scripts/run-renovate-cycle.sh "$CYCLE_MODE"'
+# shellcheck disable=SC2016
+assert_contains "$workflow" 'CYCLE_MODE: ${{ github.event_name == '\''schedule'\'' && '\''weekly'\'' || '\''manual'\'' }}'
 # shellcheck disable=SC2016
 assert_contains "$workflow" 'RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}'
 assert_eq 1 "$(printf '%s\n' "$workflow" | grep -c 'secrets.RENOVATE_TOKEN')"

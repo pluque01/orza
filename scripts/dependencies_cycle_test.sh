@@ -51,7 +51,7 @@ run_cycle() {
   RENOVATE_TOKEN='synthetic-sensitive-token' \
   RENOVATE_REPOSITORY='example/orza' \
   RENOVATE_REVISION='0123456789012345678901234567890123456789' \
-    bash "$cycle" 2>&1
+    bash "$cycle" "$@" 2>&1
 }
 
 for week in 36 37 38 39; do
@@ -72,6 +72,31 @@ assert_contains "$failed" 'marker=automation/renovate/2026-W40 retained'
 failed_rerun=$(run_cycle) || fail 'failed-cycle rerun was not a no-op'
 assert_contains "$failed_rerun" 'already exists; no mutation performed'
 assert_eq 5 "$(wc -l <"$calls" | tr -d ' ')"
+
+# Manual runs can retry within the same week, including after a failed cycle,
+# without consuming or deleting the scheduled marker.
+export TEST_NIX_FAIL=0
+for attempt in 1 2; do
+  output=$(run_cycle manual) || fail "manual attempt $attempt failed"
+  assert_contains "$output" 'manual cycle'
+  assert_redacted 'synthetic-sensitive-token' "$output"
+done
+assert_eq 7 "$(wc -l <"$calls" | tr -d ' ')"
+assert_eq 5 "$(wc -l <"$refs" | tr -d ' ')"
+export TEST_NIX_FAIL=1
+failed=$(run_cycle manual) && fail 'failed manual cycle unexpectedly passed'
+assert_contains "$failed" 'mode=manual'
+assert_not_contains "$failed" 'marker='
+export TEST_NIX_FAIL=0
+export TEST_WEEK=2026-W41
+output=$(run_cycle manual) || fail 'manual cycle in a new week failed'
+assert_eq 5 "$(wc -l <"$refs" | tr -d ' ')"
+output=$(run_cycle weekly) || fail 'manual cycle consumed scheduled marker'
+assert_eq 6 "$(wc -l <"$refs" | tr -d ' ')"
+assert_eq 10 "$(wc -l <"$calls" | tr -d ' ')"
+invalid=$(run_cycle invalid) && fail 'invalid cycle mode accepted'
+assert_contains "$invalid" 'usage:'
+assert_eq 10 "$(wc -l <"$calls" | tr -d ' ')"
 while IFS= read -r call; do
   assert_contains "$call" '--config-validation-error=true'
 done <"$calls"
@@ -106,4 +131,4 @@ assert_not_contains "$ci" 'paths:'
 assert_not_contains "$ci" 'paths-ignore:'
 assert_contains "$ci" $'  required:\n    name: required'
 
-printf 'PASS: four-week dependency cycle, durable guard, limits, and diagnostics\n'
+printf 'PASS: weekly guard, manual retries, limits, and diagnostics\n'

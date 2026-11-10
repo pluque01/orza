@@ -205,7 +205,7 @@ Confirm the release changes from draft to public only after the exact seven-asse
 
 ## Dependency Automation Validation
 
-Validate `.github/renovate.json`, configure its fine-grained repository token with metadata read plus Contents, Pull requests, Issues, and Workflows read/write only for this repository, and run the Nix-pinned Renovate CLI in dry-run discovery before enabling the once-weekly schedule. Confirm the workflow has exactly one weekly cron trigger, one non-cancelling concurrency group, an atomic `automation/renovate/YYYY-Www` marker, scheduled-job-only secret injection, non-persisted checkout credentials, masked logs, and manual dispatch forced to full dry-run mode with no write token or mutation.
+Validate `.github/renovate.json`, configure its fine-grained repository token with metadata read plus Contents, Pull requests, Issues, and Workflows read/write only for this repository, and run the Nix-pinned Renovate CLI in dry-run discovery before enabling the once-weekly schedule. Confirm the workflow has exactly one weekly cron trigger, one non-cancelling concurrency group, an atomic `automation/renovate/YYYY-Www` marker for scheduled runs, trusted-main proposal-job-only secret injection, non-persisted checkout credentials, and masked logs. Manual dispatch defaults to `dry-run` without a write token; selecting `run` on `main` launches real proposals without consuming or changing the weekly marker. See CONTRIBUTING.md for UI and CLI instructions.
 
 Confirm discovery includes:
 

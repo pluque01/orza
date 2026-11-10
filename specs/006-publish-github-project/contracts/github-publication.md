@@ -154,11 +154,11 @@ Any failure before step 6 leaves no stable public release. A published release a
 
 ## Dependency Update Contract
 
-Renovate is the sole version-update proposal tool. It has one mutating scheduled workflow invocation each Monday UTC; manual runs are forced to full dry-run mode and cannot mutate branches or proposals. GitHub dependency alerts remain enabled, but Renovate vulnerability-alert PR mode and duplicate Dependabot update PRs are disabled so no proposal bypasses the global ceiling.
+Renovate is the sole version-update proposal tool. It has one mutating scheduled workflow invocation each Monday UTC. Manual dispatch offers `dry-run` (default, without a write token) or `run` (real proposals, only on `main`). GitHub dependency alerts remain enabled, but Renovate vulnerability-alert PR mode and duplicate Dependabot update PRs are disabled so no proposal bypasses the global ceiling.
 
-The mutating workflow uses one non-cancelling concurrency group and atomically creates the UTC ISO-week tag `automation/renovate/YYYY-Www` before Renovate runs. If that tag already exists, overlap and rerun attempts exit without mutation. The marker is retained on success or failure; failed cycles provide diagnostics and cannot be retried mutably until the next weekly key.
+All executions share one non-cancelling concurrency group. Scheduled cycles atomically create the UTC ISO-week tag `automation/renovate/YYYY-Www` before Renovate runs. If that tag already exists, scheduled rerun attempts exit without mutation. The marker is retained on success or failure. Manual `run` cycles bypass the marker without reading, creating, or deleting it, allowing immediate retries without consuming the next scheduled cycle.
 
-Only the trusted scheduled job receives a fine-grained token limited to this repository with metadata read and Contents, Pull requests, Issues, and Workflows read/write. Checkout credentials are not persisted, the token is masked, and logs never print environment/config values containing it. Pull-request and manual dry-run jobs receive no Renovate write token; manual discovery uses read-only repository access.
+Only the trusted proposal job (scheduled or manual `run` on `main`, always checking out `main`) receives a fine-grained token limited to this repository with metadata read and Contents, Pull requests, Issues, and Workflows read/write. Checkout credentials are not persisted, the token is masked, and logs never print environment/config values containing it. Pull-request and manual dry-run jobs receive no Renovate write token; manual discovery uses read-only repository access.
 
 - Managers: Go modules, GitHub Actions, and Nix flakes/refs.
 - Schedule: exactly one automatic invocation each Monday UTC.
