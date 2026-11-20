@@ -320,6 +320,9 @@ func (repository *Repository) DeleteConnection(ctx context.Context, request app.
 		if err := checkExpectedRevision(result.Deleted.Revision, request.Expected); err != nil {
 			return err
 		}
+		if result.Deleted.CredentialRef != "" {
+			return ErrConflict
+		}
 		mutation, err := connection.ExecContext(ctx, `DELETE FROM nodes WHERE id = ? AND revision = ?`, item.id, result.Deleted.Revision)
 		if err != nil {
 			return fmt.Errorf("delete connection: %w", err)
