@@ -25,7 +25,10 @@ func TestServiceDeletePreservesConcurrentChanges(t *testing.T) {
 			repository, store := testConnectionRepository(t)
 			writer := NewRepository(store)
 			ctx := context.Background()
-			original, err := writer.CreateConnection(ctx, app.CreateConnectionRequest{Parent: app.ItemSelector{Path: "/"}, Name: "server", Host: "server.example", AuthMethod: app.AuthMethodPassword})
+			original, err := writer.CreateConnection(ctx, app.CreateConnectionRequest{
+				Parent: app.ItemSelector{Path: "/"}, Name: "server",
+				Host: "server.invalid", AuthMethod: app.AuthMethodPassword,
+			})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -42,7 +45,10 @@ func TestServiceDeletePreservesConcurrentChanges(t *testing.T) {
 					if _, err := writer.DeleteConnection(ctx, app.DeleteConnectionRequest{Connection: app.ItemSelector{ID: original.Connection.ID}}); err != nil {
 						t.Fatal(err)
 					}
-					created, err := writer.CreateConnection(ctx, app.CreateConnectionRequest{Parent: app.ItemSelector{Path: "/"}, Name: "server", Host: "new.example", AuthMethod: app.AuthMethodPassword})
+					created, err := writer.CreateConnection(ctx, app.CreateConnectionRequest{
+						Parent: app.ItemSelector{Path: "/"}, Name: "server",
+						Host: "new.invalid", AuthMethod: app.AuthMethodPassword,
+					})
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -92,7 +98,10 @@ func TestServiceDeletePreservesConcurrentChanges(t *testing.T) {
 func TestDirectDeleteRejectsRememberedCredential(t *testing.T) {
 	repository, store := testConnectionRepository(t)
 	ctx := context.Background()
-	created, err := repository.CreateConnection(ctx, app.CreateConnectionRequest{Parent: app.ItemSelector{Path: "/"}, Name: "server", Host: "server.example", AuthMethod: app.AuthMethodPassword})
+	created, err := repository.CreateConnection(ctx, app.CreateConnectionRequest{
+		Parent: app.ItemSelector{Path: "/"}, Name: "server",
+		Host: "server.invalid", AuthMethod: app.AuthMethodPassword,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
