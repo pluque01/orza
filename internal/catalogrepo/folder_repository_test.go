@@ -85,7 +85,10 @@ func TestMoveFolderSubtreeMaximumDepth(t *testing.T) {
 			source := mustCreateFolder(t, repository, app.ItemSelector{Path: "/"}, "source")
 			child := mustCreateFolder(t, repository, app.ItemSelector{ID: source.Folder.ID}, "child")
 			connection, err := repository.CreateConnection(ctx, app.CreateConnectionRequest{
-				Parent: app.ItemSelector{ID: child.Folder.ID}, Name: "host", Host: "host.example", AuthMethod: app.AuthMethodAgent,
+				Parent:     app.ItemSelector{ID: child.Folder.ID},
+				Name:       "host",
+				Host:       "host.invalid",
+				AuthMethod: app.AuthMethodAgent,
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -104,7 +107,10 @@ func TestMoveFolderSubtreeMaximumDepth(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			moved, err := repository.MoveFolder(ctx, app.MoveFolderRequest{Folder: app.ItemSelector{ID: source.Folder.ID}, Destination: destination})
+			moved, err := repository.MoveFolder(ctx, app.MoveFolderRequest{
+				Folder:      app.ItemSelector{ID: source.Folder.ID},
+				Destination: destination,
+			})
 			if depth == 101 {
 				if !errors.Is(err, ErrHierarchyTooDeep) || !errors.Is(err, ErrConflict) {
 					t.Fatalf("move error = %v, want depth conflict", err)
@@ -125,7 +131,10 @@ func TestMoveFolderSubtreeMaximumDepth(t *testing.T) {
 				}
 			}
 			if depth == 100 {
-				if _, err := repository.MoveFolder(ctx, app.MoveFolderRequest{Folder: app.ItemSelector{ID: top.Folder.ID}, Destination: app.ItemSelector{Path: "/"}}); err != nil {
+				if _, err := repository.MoveFolder(ctx, app.MoveFolderRequest{
+					Folder:      app.ItemSelector{ID: top.Folder.ID},
+					Destination: app.ItemSelector{Path: "/"},
+				}); err != nil {
 					t.Fatalf("move level-100 subtree to root: %v", err)
 				}
 			}
