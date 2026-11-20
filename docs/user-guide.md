@@ -781,6 +781,9 @@ password unless Password is selected when saving.
 
 ### Text And Secret Paste
 
+The focused text field shows `▏` at the insertion point in both color and no-color mode. Use Left,
+Right, Home, and End to move it within the field. During selection, it marks the end that moves.
+
 Connection text fields (excluding the closed Method selector) and the folder-name field accept terminal-native bracketed paste. Paste is
 inserted at the cursor or replaces a Shift+arrow selection as one operation. CR, LF, NEL, `U+2028`, and
 `U+2029` are removed; other control characters reject the whole payload without changing value,
