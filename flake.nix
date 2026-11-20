@@ -45,9 +45,16 @@
           buildGoModule = pkgs.buildGoModule.override { go = goFor system; };
         in
         {
-          staticcheck = pkgs.callPackage (goNixpkgs + "/pkgs/by-name/go/go-tools/package.nix") {
-            inherit buildGoModule;
-          };
+          staticcheck =
+            (pkgs.callPackage (goNixpkgs + "/pkgs/by-name/go/go-tools/package.nix") {
+              inherit buildGoModule;
+            }).overrideAttrs
+              {
+                subPackages = [ "cmd/staticcheck" ];
+                # Orza's check runs Staticcheck itself. The upstream tool suite
+                # would otherwise run on every cold build of this dependency.
+                doCheck = false;
+              };
           govulncheck = pkgs.callPackage (goNixpkgs + "/pkgs/by-name/go/govulncheck/package.nix") {
             buildGoLatestModule = buildGoModule;
           };
@@ -167,6 +174,7 @@
         in
         {
           default = nativeRelease;
+          inherit (pkgs) gitleaks;
           vulndb-indexer = mkVulnerabilityIndexer pkgs;
           go-module-cache = nativeRelease.goModules;
           linux-amd64 = pureRelease "linux" "amd64";

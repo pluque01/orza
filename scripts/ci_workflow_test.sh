@@ -39,8 +39,8 @@ assert_contains "$ci_text" 'linux-amd64'
 assert_contains "$ci_text" 'linux-arm64'
 assert_contains "$ci_text" 'windows-amd64'
 assert_contains "$ci_text" 'windows-arm64'
-assert_contains "$ci_text" 'gitleaks dir --redact'
-assert_contains "$ci_text" 'gitleaks git --redact'
+assert_contains "$ci_text" 'nix shell .#gitleaks --no-update-lock-file --command gitleaks dir --redact --config .gitleaks.toml .'
+assert_contains "$ci_text" 'nix shell .#gitleaks --no-update-lock-file --command gitleaks git --redact --config .gitleaks.toml --log-opts=--all .'
 
 combined=$(printf '%s\n%s\n' "$ci_text" "$monitor_text")
 assert_not_contains "$combined" 'self-hosted'

@@ -66,9 +66,10 @@ execution; validate changed branch files and command execution in the proposal r
 
 ### Updating the Go compiler
 
-`goVersion` in `flake.nix` is the compiler's single version declaration. Its pinned recipe is
-loaded from `goNixpkgs` using the platform-compatible base `nixpkgs`; development, checks and
-release builds share that compiler. Release eligibility reads the same declaration, and CI
+`goVersion` in `flake.nix` is the compiler's single version declaration. On x86_64 Linux, the
+compiler comes directly from the pinned `goNixpkgs` so Nix can use the official binary cache.
+Other hosts load the same recipe using the platform-compatible base `nixpkgs`. Development,
+checks and release builds share that compiler. Release eligibility reads the same declaration, and CI
 checks the actual compiler version. `go.mod` must declare the selected minor as its minimum
 (`go 1.N.0`) and must not contain a `toolchain` directive. Patch updates preserve the minimum;
 minor updates raise it. Go commands always run with `GOTOOLCHAIN=local`.

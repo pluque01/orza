@@ -84,9 +84,9 @@ jobs:
       - name: Install Nix
         uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31
       - name: Scan current repository tree with redaction
-        run: nix develop --command gitleaks dir --redact --config .gitleaks.toml .
+        run: nix shell .#gitleaks --no-update-lock-file --command gitleaks dir --redact --config .gitleaks.toml .
       - name: Scan available history with redaction
-        run: nix develop --command gitleaks git --redact --config .gitleaks.toml --log-opts=--all .
+        run: nix shell .#gitleaks --no-update-lock-file --command gitleaks git --redact --config .gitleaks.toml --log-opts=--all .
 
   required:
     name: required
