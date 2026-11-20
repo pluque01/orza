@@ -179,12 +179,27 @@ func (c *Client) Run(ctx context.Context, request app.SSHSessionRequest) (result
 		return result, normalizePreActiveFailure(StageSession, errors.New("SSH client returned no session"))
 	}
 	resources.session = newCloseOnce(remote)
-	remote.SetIO(c.options.Stdin, c.options.Stdout, c.options.Stderr)
 	if request.Activate != nil {
 		if err := request.Activate(ctx); err != nil {
 			return canceledOrFailed(ctx, result, StageTerminal, err)
 		}
 	}
+
+	stdin := c.options.Stdin
+	if file, ok := stdin.(*os.File); ok {
+		input, err := newInteractiveInput(file)
+		if err != nil {
+			return canceledOrFailed(ctx, result, StageTerminal, err)
+		}
+		defer func() {
+			if err := input.Close(); err != nil {
+				runErr = errors.Join(runErr, stageError(StageCleanup, err))
+				result.State, result.Outcome = app.SessionFailed, app.SessionOutcomeTransportFailure
+			}
+		}()
+		stdin = input
+	}
+	remote.SetIO(stdin, c.options.Stdout, c.options.Stderr)
 
 	sessionResult, err := runSession(ctx, remote, resources.session, request.Terminal, size, c.options.Now, c.options.resize)
 	return sessionResult, err
