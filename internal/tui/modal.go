@@ -563,7 +563,10 @@ func projectModalViewport(state modalState, lines []string, rows, width, active 
 		bodyActive -= leadingCount
 	}
 	bodyProjection := state.viewport.project(body, bodyRows, width, bodyActive)
-	projection.lines = append(append(append([]string(nil), leadingLines...), bodyProjection.lines...), controlLines...)
+	projection.lines = make([]string, rows)
+	copy(projection.lines, leadingLines)
+	copy(projection.lines[len(leadingLines):], bodyProjection.lines)
+	copy(projection.lines[rows-len(controlLines):], controlLines)
 	projection.renderOffset = bodyProjection.renderOffset
 	projection.hasPrevious = bodyProjection.hasPrevious
 	projection.hasNext = bodyProjection.hasNext
