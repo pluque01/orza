@@ -5,7 +5,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/8b6d0ac8759bbc2499386ef5bcd7f11ee7f7ff52";
     goNixpkgs.url = "github:NixOS/nixpkgs/be147c05f4a91a83e254e9ce5d7f0421f99fca5c";
     vulndb = {
-      url = "github:golang/vulndb/e91d8491530fd8782760dd3916cd2708182b9f10";
+      url = "github:golang/vulndb/08d4efaf08a5f66964db742ab4c3b4bacabb274e";
       flake = false;
     };
   };
@@ -55,7 +55,7 @@
       # Updated by scripts/update-go-dependencies.sh; hashes the local module proxy.
       orzaVendorHash = "sha256-USX2UFLVE/O4lVatzjALhDhlAAR6CFjySth0pZ5E/b0=";
       # Updated by scripts/update-vulndb-dependencies.sh alongside the vulndb input.
-      vulndbVendorHash = "sha256-yNZzZYX0Fx86Gv48nz87eZHneSBCxWRDYYq0XUe/WDU=";
+      vulndbVendorHash = "sha256-9+UlrfrOmEK1wMaCbWRX7OXo9w0hd/Eq2RTEE347WWA=";
       source = nixpkgs.lib.cleanSourceWith {
         src = ./.;
         filter = path: type: baseNameOf path != "vendor" && nixpkgs.lib.cleanSourceFilter path type;
