@@ -709,8 +709,9 @@ therefore produces a conflict rather than creating or moving under a path the us
 Before connecting, the TUI confirms the captured path and `host:port`; the application compares the
 captured revision again before network I/O so a concurrent edit cannot redirect an accepted target.
 Bubble Tea then yields the terminal to SSH. A failure before the remote shell becomes
-active returns to a stable TUI error screen. Once active, the remote shell owns stdin/stdout/stderr;
-terminal resize events are sent to its PTY, and local terminal state is restored when it ends.
+active returns to a stable TUI error screen. Once active, the remote shell owns stdin/stdout/stderr.
+Terminal resize events are sent to its PTY. When the shell ends, the TUI restores the local terminal
+and accepts keyboard input as soon as the browser returns.
 
 ### Forwarding And Shells
 
