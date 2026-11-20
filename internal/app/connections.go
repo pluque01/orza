@@ -250,7 +250,10 @@ func (s *ConnectionService) Delete(ctx context.Context, request DeleteConnection
 		return DeleteConnectionResult{}, safeUseCaseError("delete connection", target, ErrConflict)
 	}
 	if current.CredentialRef == "" {
-		result, err := s.repository.DeleteConnection(ctx, request)
+		result, err := s.repository.DeleteConnection(ctx, DeleteConnectionRequest{
+			Connection: ItemSelector{ID: current.ID},
+			Expected:   &current.Revision,
+		})
 		if err != nil {
 			return DeleteConnectionResult{}, safeUseCaseError("delete connection", target, err)
 		}
