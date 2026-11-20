@@ -128,3 +128,34 @@ func TestUS5DeleteConfirmationPreservesCapturedEndpointThroughScopeLookup(t *tes
 		}
 	}
 }
+
+func TestConnectionConfirmationSuppressesBrowserLegend(t *testing.T) {
+	for _, size := range [][2]int{{40, 12}, {80, 24}} {
+		root := testFolder("root", "", "/", 1)
+		conn := testConnection("host", root.ID, "/production", 1)
+		conn.Host = "prod.example"
+		conn.Port = 2202
+		snapshot := newCatalogSnapshot(root, 1)
+		_ = snapshot.addChildren(root.ID, app.ListChildrenResult{Connections: []app.Connection{conn}})
+		m := New(Config{Width: size[0], Height: size[1], NoColor: true})
+		m.browser.setSnapshot(snapshot, conn.ID)
+		m.ownedSelectionID = conn.ID
+		updateModel(m, keyPress("c"))
+		view := m.View().Content
+		for _, want := range []string{"/production", "prod.example:2202", "y Confirm", "Enter/Esc Cancel"} {
+			if !strings.Contains(view, want) {
+				t.Fatalf("%v missing %q: %s", size, want, view)
+			}
+		}
+		for _, unwanted := range []string{"c Connect", "/ Filter", "n New connection", "q Quit"} {
+			if strings.Contains(view, unwanted) {
+				t.Fatalf("%v leaked %q: %s", size, unwanted, view)
+			}
+		}
+		updateModel(m, keyPress("esc"))
+		view = m.View().Content
+		if m.modal.isOpen() || !strings.Contains(view, "c Connect") || !strings.Contains(view, "/ Filter") {
+			t.Fatalf("%v did not restore legend: %s", size, view)
+		}
+	}
+}

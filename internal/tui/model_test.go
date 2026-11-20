@@ -630,3 +630,92 @@ func keyPress(value string) tea.KeyPressMsg {
 		return tea.KeyPressMsg(tea.Key{Code: runes[0], Text: value})
 	}
 }
+
+func TestCompactSearchAndBrowserActions(t *testing.T) {
+	for _, size := range [][2]int{{40, 12}, {80, 24}} {
+		root := testFolder("root", "", "/", 1)
+		first := testConnection("first", root.ID, "/api-one", 1)
+		first.Name = "api-one"
+		second := testConnection("second", root.ID, "/api-two", 1)
+		second.Name = "api-two"
+		snapshot := newCatalogSnapshot(root, 1)
+		_ = snapshot.addChildren(root.ID, app.ListChildrenResult{Connections: []app.Connection{first, second}})
+		m := New(Config{Width: size[0], Height: size[1], NoColor: true})
+		m.browser.setSnapshot(snapshot, "")
+		m.ownedSelectionID = m.browser.selectedID
+		view := m.View().Content
+		for _, want := range []string{"n New connection", "f New folder", "/ Filter"} {
+			if !strings.Contains(view, want) {
+				t.Fatalf("%v missing %q: %s", size, want, view)
+			}
+		}
+		_, _ = m.Update(keyPress("/"))
+		_, _ = m.Update(keyPress("a"))
+		if view = m.View().Content; !strings.Contains(view, "1/2 api-one") {
+			t.Fatalf("%v: %s", size, view)
+		}
+		_, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
+		if view = m.View().Content; !strings.Contains(view, "2/2 api-two") {
+			t.Fatalf("%v: %s", size, view)
+		}
+		_, _ = m.Update(keyPress("enter"))
+		if m.search != nil || m.browser.selectedID != second.ID {
+			t.Fatal("failed to accept second result")
+		}
+		if view = m.View().Content; !strings.Contains(view, "c Connect") || !strings.Contains(view, "/ Filter") {
+			t.Fatalf("%v: %s", size, view)
+		}
+		_, _ = m.Update(keyPress("/"))
+		_, _ = m.Update(keyPress("z"))
+		view = m.View().Content
+		if !strings.Contains(view, "No matching connections") || strings.Contains(view, "Enter Accept result") || strings.Contains(view, "api-two") {
+			t.Fatalf("%v: %s", size, view)
+		}
+		_, _ = m.Update(keyPress("enter"))
+		if m.search == nil {
+			t.Fatal("accepted empty result")
+		}
+		_, _ = m.Update(keyPress("esc"))
+		if m.browser.selectedID != second.ID {
+			t.Fatal("cancel did not restore selection")
+		}
+		_, _ = m.Update(keyPress("/"))
+		_, _ = m.Update(keyPress("["))
+		view = m.View().Content
+		if !strings.Contains(view, "Invalid expression") || strings.Contains(view, "Enter Accept result") {
+			t.Fatalf("%v: %s", size, view)
+		}
+	}
+}
+
+func TestCompactConnectionValidationKeepsFieldVisible(t *testing.T) {
+	m := New(Config{Width: 40, Height: 12, NoColor: true})
+	_, _ = m.Update(keyPress("n"))
+	_, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: 's', Mod: tea.ModCtrl}))
+	view := m.View().Content
+	for _, want := range []string{"Name", ">!", "Name is required"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("missing %q: %s", want, view)
+		}
+	}
+	if m.form.focus != fieldName {
+		t.Fatalf("focus = %v", m.form.focus)
+	}
+}
+
+func TestInvalidEditFocusesCorrectableField(t *testing.T) {
+	for _, size := range [][2]int{{40, 12}, {80, 24}} {
+		conn := testConnection("host", syntheticRootID, "/production", 1)
+		m := New(Config{Width: size[0], Height: size[1], NoColor: true})
+		form := newConnectionForm(&conn)
+		form.inputs[fieldHost].SetValue("")
+		form.setFocus(fieldSave)
+		m.openConnectionForm(form, m.captureConnectionTarget(conn))
+		m.connectionEdit.quitAfterSave = true
+		_, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: 's', Mod: tea.ModCtrl}))
+		view := m.View().Content
+		if form.focus != fieldHost || m.connectionEdit.quitAfterSave || !strings.Contains(view, "Host") || !strings.Contains(view, ">!") || !strings.Contains(view, "enter a host") {
+			t.Fatalf("%v invalid edit: %s", size, view)
+		}
+	}
+}

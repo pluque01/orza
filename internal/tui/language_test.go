@@ -47,6 +47,7 @@ var controlledTerms = map[string]string{
 }
 
 var sourceTechnicalLiterals = map[string]string{
+	"%d/%d %s":                   "search result counter format",
 	"tunnel":                     "modal identifier",
 	"start":                      "tunnel action identifier",
 	"stop":                       "tunnel action identifier",

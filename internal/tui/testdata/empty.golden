@@ -20,5 +20,5 @@
 │                             │ │                                              │
 └─────────────────────────────┘ └──────────────────────────────────────────────┘
 
-q Quit  |  ? Help  |  Tab/Shift+Tab/F2 Focus  |  t Tunnels  |  Up/k Move up
-Down/j Move down  |  / Filter  |  n New connection  |  f New folder
+n New connection  |  f New folder  |  / Filter  |  q Quit  |  ? Help
+Tab/Shift+Tab/F2 Focus  |  t Tunnels  |  Up/k Move up  |  Down/j Move down

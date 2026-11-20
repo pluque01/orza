@@ -189,3 +189,45 @@ func TestModalScrollbarTrackExcludesLeadingFixedNotices(t *testing.T) {
 		})
 	}
 }
+
+func TestModalControlsAnchorToBottom(t *testing.T) {
+	style := newStyles(true)
+	state := modalState{kind: modalKindHelp, payload: helpPayload{lines: []string{"Short body"}}}
+	layout := calculateLayout(80, 24, regionTree)
+	rect := layout.modalOverlay()
+	view := renderModalOverlay(strings.Repeat("\n", 23), state, layout, style, nil)
+	frame := strings.Split(view, "\n")
+	if !strings.Contains(frame[rect.y+1], "Short body") || !strings.Contains(frame[rect.bottom()-2], "?/Esc Close") {
+		t.Fatalf("short modal content or bottom controls misplaced:\n%s", view)
+	}
+	if strings.Contains(frame[rect.y+2], "?/Esc Close") {
+		t.Fatalf("controls followed short body:\n%s", view)
+	}
+
+	lines := []string{"Body", modalControlLine("first Action"), modalControlLine("second Action"), modalControlLine("third Action")}
+	for _, rows := range []int{4, 8} {
+		projection := projectModalViewport(modalState{}, lines, rows, 16, noActiveLine, style)
+		if len(projection.lines) != rows || projection.lines[0] != "Body" {
+			t.Fatalf("rows %d: %#v", rows, projection.lines)
+		}
+		for i, want := range []string{"first Action", "second Action", "third Action"} {
+			if !strings.Contains(projection.lines[rows-3+i], want) {
+				t.Fatalf("rows %d, control %q: %#v", rows, want, projection.lines)
+			}
+		}
+		if rows == 8 && projection.lines[1] != "" {
+			t.Fatalf("missing gap: %#v", projection.lines)
+		}
+	}
+
+	long := []string{"one", "two", "three", "four", "five", modalControlLine("Esc Cancel")}
+	for _, rows := range []int{3, 6, 8} {
+		projection := projectModalViewport(modalState{viewport: newViewportState(2)}, long, rows, 20, noActiveLine, style)
+		if len(projection.lines) != rows || !strings.Contains(projection.lines[rows-1], "Esc Cancel") {
+			t.Fatalf("resized to %d: %#v", rows, projection.lines)
+		}
+		if rows == 3 && (!projection.hasPrevious || !projection.hasNext) {
+			t.Fatalf("overflow lost scroll state: %#v", projection)
+		}
+	}
+}

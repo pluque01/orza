@@ -177,7 +177,7 @@ func (m *Model) renderTunnels(rect layoutRect) string {
 
 func (m *Model) tunnelLegend(width int) []string {
 	if m.search != nil {
-		return renderActionLegend(m.styles, treeSearchActionDescriptors, width)
+		return renderActionLegend(m.styles, m.searchActionDescriptors(), width)
 	}
 	if m.operation != nil {
 		return packActions(m.operation.loadingStatus(), m.visibleActionDescriptors(m.currentActionDescriptors()), width, 3)
