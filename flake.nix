@@ -5,7 +5,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/8b6d0ac8759bbc2499386ef5bcd7f11ee7f7ff52";
     goNixpkgs.url = "github:NixOS/nixpkgs/be147c05f4a91a83e254e9ce5d7f0421f99fca5c";
     vulndb = {
-      url = "github:golang/vulndb/e22db6528018f9725b3230c4e6429c791f40bb15";
+      url = "github:golang/vulndb/e91d8491530fd8782760dd3916cd2708182b9f10";
       flake = false;
     };
   };
