@@ -60,6 +60,7 @@ func TestSC013OperationConformanceMatrix20Runs(t *testing.T) {
 	for _, kind := range kinds {
 		for _, outcome := range outcomes {
 			t.Run(kind.name+"/"+outcome, func(t *testing.T) {
+				t.Parallel()
 				for run := range operationConformanceRuns {
 					fixture := newOperationConformanceFixture(t, kind.kind)
 					assertOperationConformanceLoading(t, fixture, run)
@@ -254,8 +255,8 @@ func assertOperationConformanceLoading(t *testing.T, fixture operationConformanc
 
 func assertOperationConformanceMutationSuppression(t *testing.T, fixture operationConformanceFixture, run int) {
 	t.Helper()
+	before := captureOperationConformanceState(fixture.model)
 	for _, pressed := range []string{"n", "f", "e", "m", "d", "r", "c", "j", "k", "tab", "enter", "y", "b", "x", "ctrl+s"} {
-		before := captureOperationConformanceState(fixture.model)
 		_, command := fixture.model.Update(keyPress(pressed))
 		if command != nil {
 			t.Fatalf("run %d: key %q started a mutation during operation", run, pressed)

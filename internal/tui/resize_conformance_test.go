@@ -203,6 +203,7 @@ type resizeSecuritySnapshot struct {
 func TestSC005AllStatesAllContractSizes20Runs(t *testing.T) {
 	for _, test := range checkedResizeConformanceCases(t) {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			for run := range resizeConformanceRuns {
 				model := test.setup(t)
 				want := snapshotResizeConformanceModel(model)
@@ -225,6 +226,7 @@ func TestSC005AllStatesNormativeResizeSequence20Runs(t *testing.T) {
 	sequence := []int{40, 60, 79, 80, 100, 160, 80, 79, 40}
 	for _, test := range checkedResizeConformanceCases(t) {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			for run := range resizeConformanceRuns {
 				model := test.setup(t)
 				want := snapshotResizeConformanceModel(model)

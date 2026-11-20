@@ -213,6 +213,7 @@ func TestSC007ScaleDetailsFormActionsAndHelpOverflowAcrossTwelveSizes(t *testing
 
 	for _, method := range []app.AuthMethod{app.AuthMethodAgent, app.AuthMethodKey, app.AuthMethodPassword} {
 		t.Run("form/"+string(method), func(t *testing.T) {
+			t.Parallel()
 			for run := range scConformanceRuns {
 				formModel, _ := newSC007ScaleModel(t)
 				selectSCNode(formModel, snapshot.rootID)
@@ -337,6 +338,7 @@ func TestSC007PickerAndConfirmationOverflowAcrossTwelveSizesTwentyRuns(t *testin
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			for run := range scConformanceRuns {
 				for _, size := range us5ContractSizes {
 					for _, offset := range []int{0, 3, 1000} {

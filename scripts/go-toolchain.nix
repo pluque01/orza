@@ -1,5 +1,3 @@
-# Use the compiler recipe from goNixpkgs with the project's platform-compatible
-# base package set (new nixpkgs releases may drop a supported host platform).
 {
   nixpkgs,
   goNixpkgs,
@@ -9,9 +7,15 @@
 let
   pkgs = nixpkgs.legacyPackages.${system};
   minor = nixpkgs.lib.versions.majorMinor goVersion;
-  builder = "buildGo" + builtins.replaceStrings [ "." ] [ "" ] minor + "Module";
+  versionSuffix = builtins.replaceStrings [ "." ] [ "" ] minor;
+  builder = "buildGo" + versionSuffix + "Module";
   go = pkgs.callPackage (goNixpkgs + "/pkgs/development/compilers/go/${minor}.nix") {
     ${builder} = pkgs.buildGoModule.override { inherit go; };
   };
 in
-go
+# The hosted CI runners can substitute the pinned nixpkgs compiler directly.
+# Keep the platform-compatible recipe for other hosts.
+if system == "x86_64-linux" then
+  goNixpkgs.legacyPackages.${system}."go_${builtins.replaceStrings [ "." ] [ "_" ] minor}"
+else
+  go
