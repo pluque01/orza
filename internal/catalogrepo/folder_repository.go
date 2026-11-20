@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/pluque01/orza/internal/app"
@@ -241,10 +242,19 @@ func (repository *Repository) MoveFolder(ctx context.Context, request app.MoveFo
 		if err != nil {
 			return err
 		}
+		destinationDepth := strings.Count(destinationFolder.Path, "/")
+		if destinationFolder.Path == "/" {
+			destinationDepth = 0
+		}
+		maxSubtreeDepth := 0
 		for _, descendant := range subtree {
 			if descendant.id == destination.id {
 				return errors.Join(ErrConflict, ErrFolderCycle)
 			}
+			maxSubtreeDepth = max(maxSubtreeDepth, descendant.depth)
+		}
+		if destinationDepth+1+maxSubtreeDepth > maxHierarchyDepth {
+			return errors.Join(ErrConflict, ErrHierarchyTooDeep)
 		}
 		if err := ensureNameAvailable(ctx, connection, destination.id, current.Name, item.id); err != nil {
 			return err

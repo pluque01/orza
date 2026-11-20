@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/pluque01/orza/internal/app"
@@ -73,6 +74,87 @@ func TestFolderRepositoryCRUDSelectorsAndDirectChildren(t *testing.T) {
 	}
 	if got, err := repository.GetFolder(ctx, app.ItemSelector{Path: "/archive/ACME"}); err != nil || got.Folder.ID != acme.Folder.ID {
 		t.Fatalf("moved lookup = %#v, %v", got, err)
+	}
+}
+
+func TestMoveFolderSubtreeMaximumDepth(t *testing.T) {
+	for _, depth := range []int{100, 101} {
+		t.Run(fmt.Sprintf("deepest node at level %d", depth), func(t *testing.T) {
+			repository, store := testConnectionRepository(t)
+			ctx := context.Background()
+			source := mustCreateFolder(t, repository, app.ItemSelector{Path: "/"}, "source")
+			child := mustCreateFolder(t, repository, app.ItemSelector{ID: source.Folder.ID}, "child")
+			connection, err := repository.CreateConnection(ctx, app.CreateConnectionRequest{
+				Parent:     app.ItemSelector{ID: child.Folder.ID},
+				Name:       "host",
+				Host:       "host.invalid",
+				AuthMethod: app.AuthMethodAgent,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			destination := app.ItemSelector{Path: "/"}
+			var top app.FolderResult
+			for i := 0; i < depth-3; i++ {
+				folder := mustCreateFolder(t, repository, destination, fmt.Sprintf("d%d", i))
+				if i == 0 {
+					top = folder
+				}
+				destination = app.ItemSelector{ID: folder.Folder.ID}
+			}
+			before := catalogRevision(t, store)
+			destinationFolder, err := repository.GetFolder(ctx, destination)
+			if err != nil {
+				t.Fatal(err)
+			}
+			moved, err := repository.MoveFolder(ctx, app.MoveFolderRequest{
+				Folder:      app.ItemSelector{ID: source.Folder.ID},
+				Destination: destination,
+			})
+			if depth == 101 {
+				if !errors.Is(err, ErrHierarchyTooDeep) || !errors.Is(err, ErrConflict) {
+					t.Fatalf("move error = %v, want depth conflict", err)
+				}
+				if got := catalogRevision(t, store); got != before {
+					t.Fatalf("catalog revision = %d, want %d", got, before)
+				}
+				current, err := repository.GetFolder(ctx, app.ItemSelector{ID: source.Folder.ID})
+				if err != nil || current.Folder != source.Folder {
+					t.Fatalf("source after rejected move = %#v, %v", current.Folder, err)
+				}
+			} else {
+				if err != nil {
+					t.Fatal(err)
+				}
+				if moved.CatalogRevision != before+1 || moved.Folder.Revision != source.Folder.Revision+1 || moved.Folder.ParentID != destinationFolder.Folder.ID {
+					t.Fatalf("move result = %#v", moved)
+				}
+			}
+			if depth == 100 {
+				if _, err := repository.MoveFolder(ctx, app.MoveFolderRequest{
+					Folder:      app.ItemSelector{ID: top.Folder.ID},
+					Destination: app.ItemSelector{Path: "/"},
+				}); err != nil {
+					t.Fatalf("move level-100 subtree to root: %v", err)
+				}
+			}
+			base := "/source"
+			if depth == 100 {
+				base = strings.TrimSuffix(destinationFolder.Folder.Path, "/") + "/source"
+			}
+			for _, selector := range []app.ItemSelector{{ID: child.Folder.ID}, {Path: base + "/child"}} {
+				got, err := repository.GetFolder(ctx, selector)
+				if err != nil || got.Folder.ID != child.Folder.ID || got.Folder.Path != base+"/child" {
+					t.Fatalf("child lookup = %#v, %v", got, err)
+				}
+			}
+			for _, selector := range []app.ItemSelector{{ID: connection.Connection.ID}, {Path: base + "/child/host"}} {
+				got, err := repository.GetConnection(ctx, selector)
+				if err != nil || got.Connection.ID != connection.Connection.ID || got.Connection.Path != base+"/child/host" {
+					t.Fatalf("connection lookup = %#v, %v", got, err)
+				}
+			}
+		})
 	}
 }
 
