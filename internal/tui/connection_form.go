@@ -271,7 +271,11 @@ func (f *connectionForm) validate() bool {
 	clear(f.errors)
 	f.formError = ""
 	if _, err := domain.NewName(f.inputs[fieldName].Value()); err != nil {
-		f.errors[fieldName] = "enter a non-empty name without / or control characters"
+		if strings.TrimSpace(f.inputs[fieldName].Value()) == "" {
+			f.errors[fieldName] = "Name is required"
+		} else {
+			f.errors[fieldName] = "Name cannot contain / or controls"
+		}
 	}
 	if _, err := domain.ParseLogicalPath(f.inputs[fieldFolder].Value()); err != nil {
 		f.errors[fieldFolder] = "enter an absolute existing folder path"
@@ -296,6 +300,14 @@ func (f *connectionForm) validate() bool {
 				f.errors[fieldIdentity] = "enter the private key path"
 			} else {
 				f.errors[fieldHost] = "check host, user, and authentication fields"
+			}
+		}
+	}
+	if len(f.errors) != 0 {
+		for _, field := range f.focusableFields() {
+			if f.errors[field] != "" {
+				f.setFocus(field)
+				break
 			}
 		}
 	}
@@ -399,6 +411,9 @@ func (f *connectionForm) view(style styles, dimensions ...int) string {
 
 func (f *connectionForm) project(style styles) viewportProjection {
 	lines, activeLine := f.content(style)
+	if f.height == 1 && f.focusedError() != "" {
+		return f.viewport.project(lines, f.height, f.width, activeLine-1)
+	}
 	if f.errors[f.focus] != "" || f.focus <= fieldIdentity && f.focus != fieldAuth && f.inputs[f.focus].Error() != "" {
 		return projectActiveBlock(lines, activeLine-1, activeLine, f.height, f.width)
 	}
@@ -517,4 +532,14 @@ func compactConnectionFormRow(style styles, label, value string, labelWidth int)
 	label = safeText(label, labelWidth)
 	padding := strings.Repeat(" ", max(0, labelWidth-ansi.StringWidth(label)))
 	return style.descriptiveLabel(label) + padding + " " + value
+}
+
+func (f *connectionForm) focusedError() string {
+	if message := f.errors[f.focus]; message != "" {
+		return message
+	}
+	if f.focus <= fieldIdentity && f.focus != fieldAuth {
+		return f.inputs[f.focus].Error()
+	}
+	return f.formError
 }

@@ -185,9 +185,9 @@ func TestBrowserLegendAndHelpSelectApplicableDescriptorsInOrder(t *testing.T) {
 		context actionContext
 		legend  []actionID
 	}{
-		{"root tree", actionContext{selection: actionSelectionRoot, state: actionStateNormal, focus: actionFocusTree}, []actionID{actionQuit, actionHelp, actionShowDetails, actionTunnels, actionUp, actionDown, actionSearch, actionNewConnection, actionNewFolder}},
-		{"folder details", actionContext{selection: actionSelectionFolder, state: actionStateNormal, focus: actionFocusDetails}, []actionID{actionQuit, actionHelp, actionShowTree, actionTunnels, actionUp, actionDown, actionNewConnection, actionNewFolder}},
-		{"connection tree", actionContext{selection: actionSelectionConnection, state: actionStateNormal, focus: actionFocusTree}, []actionID{actionQuit, actionHelp, actionShowDetails, actionTunnels, actionForward, actionUp, actionDown, actionSearch, actionConnect, actionNewConnection, actionNewFolder}},
+		{"root tree", actionContext{selection: actionSelectionRoot, state: actionStateNormal, focus: actionFocusTree}, []actionID{actionNewConnection, actionNewFolder, actionSearch, actionQuit, actionHelp, actionShowDetails, actionTunnels, actionUp, actionDown}},
+		{"folder details", actionContext{selection: actionSelectionFolder, state: actionStateNormal, focus: actionFocusDetails}, []actionID{actionNewConnection, actionNewFolder, actionQuit, actionHelp, actionShowTree, actionTunnels, actionUp, actionDown}},
+		{"connection tree", actionContext{selection: actionSelectionConnection, state: actionStateNormal, focus: actionFocusTree}, []actionID{actionConnect, actionSearch, actionNewConnection, actionNewFolder, actionQuit, actionHelp, actionShowDetails, actionTunnels, actionForward, actionUp, actionDown}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			descriptors := actionsFor(test.context)

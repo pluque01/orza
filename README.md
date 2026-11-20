@@ -613,7 +613,7 @@ Every normal browser frame has three named panels and a borderless action legend
 
 The bottom legend shows available keys for the current selection and focus owner in at most three rows;
 there is no titled or bordered Actions panel. Connection create/edit screens use their own Tree/Details
-and control layout; forwarding drafts remain in the browser Details panel with Tunnels visible.
+and control layout; forwarding drafts remain in the browser Details panel with Tunnels visible. During filtering, Details shows the selected result index and name, or the reason no result is available.
 
 Panel titles use plain text such as `Details`; the existing `[*]` and `[ ]` markers identify active
 and inactive regions. Content types use unbracketed labels such as `Connection` and `Folder`; Details
@@ -624,7 +624,7 @@ secondary emphasis while values remain primary.
 Read-only identity rows align values in one shared column when the local panel leaves at least eight
 display cells for values. Below that threshold, every label is followed by its indented value on the
 next line; fields are not hidden to preserve alignment. Connection forms instead keep each label and
-bounded control on one compact row, leaving the next line available for a validation error at 40x12.
+bounded control on one compact row. At 40x12, the focused invalid field stays visible and its validation reason appears in the legend.
 
 At 80 columns or wider, Tree is left of vertically stacked Details and Tunnels, with the legend below.
 Below 80 columns, Tree, Details, and Tunnels are stacked above the legend. The complete layout target is

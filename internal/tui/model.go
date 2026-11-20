@@ -1376,6 +1376,12 @@ func (m *Model) saveForm() tea.Cmd {
 	}
 	request, changed := m.form.updateRequest()
 	if !changed {
+		if len(m.form.errors) != 0 {
+			if m.connectionEdit != nil {
+				m.connectionEdit.quitAfterSave = false
+			}
+			return nil
+		}
 		m.form.errors[fieldSave] = "change at least one field before saving"
 		if m.connectionEdit != nil {
 			m.connectionEdit.quitAfterSave = false
@@ -2164,11 +2170,6 @@ func (m *Model) browserShell(layout layoutState) string {
 	if m.search != nil {
 		m.searchInputWidth(layout.tree.contentWidth())
 		searchLines = append(searchLines, "Filter: "+m.search.input.View())
-		if m.search.error != "" {
-			searchLines = append(searchLines, m.styles.failureMessage(safeText(m.search.error, layout.tree.contentWidth())))
-		} else if m.search.input.Value() != "" && len(m.search.matches) == 0 {
-			searchLines = append(searchLines, m.styles.warningMessage("No matching connections"))
-		}
 		treeRows = max(0, treeRows-len(searchLines))
 	}
 	treeProjection := m.browser.projectTree(m.styles, layout.tree.contentWidth(), treeRows)
@@ -2181,6 +2182,28 @@ func (m *Model) browserShell(layout layoutState) string {
 		details = strings.Split(m.securityInput.trust.view(m.styles), "\n")
 	} else if m.securityInput != nil && m.securityInput.secret != nil {
 		details = strings.Split(m.securityInput.secret.view(m.styles), "\n")
+	} else if m.search != nil && m.search.input.Value() != "" {
+		message := "No matching connections"
+		if m.search.error != "" {
+			message = "Invalid expression"
+		} else if len(m.search.matches) > 0 {
+			for i, id := range m.search.matches {
+				if id == m.browser.selectedID {
+					message = fmt.Sprintf("%d/%d %s", i+1, len(m.search.matches), m.browser.snapshot.nodes[id].node.Name)
+					break
+				}
+			}
+		}
+		details = []string{safeText(message, layout.details.contentWidth())}
+		remaining := layout.details.contentHeight() - 1
+		if remaining > 0 && m.search.error != "" {
+			details = append(details, safeText(m.search.error, layout.details.contentWidth()))
+		} else if remaining > 0 && len(m.search.matches) > 0 {
+			projection := m.detailState.project(remaining, layout.details.contentWidth(), m.styles)
+			detailTrackStart = 1
+			details = append(details, projection.lines...)
+			detailScrollbar = projection.scrollbar
+		}
 	} else if m.tunnelForm != nil {
 		projection := m.tunnelForm.project(m.styles, layout.details.contentWidth(), layout.details.contentHeight())
 		details, detailScrollbar = projection.lines, projection.scrollbar
@@ -2222,7 +2245,7 @@ func (m *Model) browserShell(layout layoutState) string {
 			actions = renderActionLegend(m.styles, m.formActionDescriptors(), layout.actions.width)
 		}
 	} else if m.search != nil {
-		actions = renderActionLegend(m.styles, treeSearchActionDescriptors, layout.actions.width)
+		actions = renderActionLegend(m.styles, m.searchActionDescriptors(), layout.actions.width)
 	} else if m.operation == nil && context.state == actionStateNormal {
 		actions = renderBrowserLegend(m.styles, m.visibleActionDescriptors(actionsFor(context)), layout.actions.width)
 	} else {
@@ -2258,6 +2281,14 @@ func (m *Model) browserShell(layout layoutState) string {
 		} else {
 			actions = m.tunnelLegend(layout.legend.width)
 		}
+		if m.screen == screenConnectionForm && m.form != nil {
+			if message := m.form.focusedError(); message != "" {
+				actions = append([]string{safeText(message, layout.legend.width)}, actions...)
+			}
+		}
+		if m.modal.isOpen() {
+			actions = nil
+		}
 		actions = bottomAlignActions(actions, layout.legend.height)
 		if layout.mode == layoutWide {
 			left := strings.Split(treePanel, "\n")
@@ -2269,6 +2300,9 @@ func (m *Model) browserShell(layout layoutState) string {
 			return strings.Join(append(base, actions...), "\n")
 		}
 		return treePanel + "\n" + detailPanel + "\n" + tunnelPanel + "\n" + strings.Join(actions, "\n")
+	}
+	if m.modal.isOpen() {
+		actions = nil
 	}
 	actions = bottomAlignActions(actions, layout.actions.height)
 	if layout.mode == layoutWide {
@@ -2352,7 +2386,7 @@ func (m *Model) actionContext() actionContext {
 
 func (m *Model) currentActionDescriptors() []actionDescriptor {
 	if m.search != nil {
-		return treeSearchActionDescriptors
+		return m.searchActionDescriptors()
 	}
 	if m.operation != nil {
 		return actionsFor(actionContext{state: actionStateOperation})
@@ -2467,4 +2501,17 @@ func fitContent(content string, width, height int) string {
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+func (m *Model) searchActionDescriptors() []actionDescriptor {
+	if m.search != nil && len(m.search.matches) > 0 {
+		return treeSearchActionDescriptors
+	}
+	var result []actionDescriptor
+	for _, descriptor := range treeSearchActionDescriptors {
+		if descriptor.id != actionConfirm {
+			result = append(result, descriptor)
+		}
+	}
+	return result
 }

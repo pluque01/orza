@@ -579,11 +579,14 @@ func actionHelpLines(descriptors []actionDescriptor) []string {
 }
 
 func browserLegendDescriptors(descriptors []actionDescriptor) []actionDescriptor {
-	wanted := []actionID{actionQuit, actionHelp, actionShowDetails, actionShowTree, actionTunnels, actionForward, actionInspectTunnel, actionStopTunnel, actionRetry, actionDismissTunnel, actionUp, actionDown, actionSearch, actionConnect, actionNewConnection, actionNewFolder}
+	wanted := []actionID{actionConnect, actionSearch, actionNewConnection, actionNewFolder, actionQuit, actionHelp, actionShowDetails, actionShowTree, actionTunnels, actionForward, actionInspectTunnel, actionStopTunnel, actionRetry, actionDismissTunnel, actionUp, actionDown}
+	if len(filterActionsByID(descriptors, actionConnect)) == 0 {
+		wanted = append([]actionID{actionNewConnection, actionNewFolder}, wanted...)
+	}
 	legend := make([]actionDescriptor, 0, len(wanted))
 	for _, id := range wanted {
 		for _, descriptor := range descriptors {
-			if descriptor.id == id {
+			if descriptor.id == id && len(filterActionsByID(legend, id)) == 0 {
 				legend = append(legend, descriptor)
 				break
 			}
@@ -593,9 +596,10 @@ func browserLegendDescriptors(descriptors []actionDescriptor) []actionDescriptor
 }
 
 func renderBrowserLegend(style styles, descriptors []actionDescriptor, width int) []string {
-	lines := renderActionLegend(style, browserLegendDescriptors(descriptors), width)
+	ordered := browserLegendDescriptors(descriptors)
+	lines := renderActionLegend(style, ordered, width)
 	if len(lines) > 3 {
-		lines = append(lines[:2], viewportEllipsis(actionsOverflowMarker, width))
+		lines = lines[:3]
 	}
 	return lines
 }
@@ -692,4 +696,17 @@ func renderActionFields(style styles, fields []displayField, width, keyWidth int
 		lines = append(lines, strings.Repeat(" ", indent*2)+style.descriptiveLabel(viewportEllipsis(field.value, max(0, width-indent*2))))
 	}
 	return lines
+}
+
+func filterActionsByID(descriptors []actionDescriptor, ids ...actionID) []actionDescriptor {
+	var result []actionDescriptor
+	for _, d := range descriptors {
+		for _, id := range ids {
+			if d.id == id {
+				result = append(result, d)
+				break
+			}
+		}
+	}
+	return result
 }

@@ -7,6 +7,6 @@
 ┌[ ] Tunnels (0 active)────────────────┐
 │ No tunnels                           │
 └──────────────────────────────────────┘
-q Quit  |  ? Help
+n New connection  |  f New folder
+/ Filter  |  q Quit  |  ? Help
 Tab/Shift+Tab/F2 Focus  |  t Tunnels
-Hidden actions — ? Help
