@@ -501,7 +501,7 @@ func pathForNode(ctx context.Context, query rowQuerier, id string) (string, erro
 	visited := make(map[string]struct{})
 	current := id
 	for current != root {
-		if _, exists := visited[current]; exists || len(visited) >= 100 {
+		if _, exists := visited[current]; exists || len(visited) >= maxHierarchyDepth {
 			return "", errors.New("catalog hierarchy is cyclic or too deep")
 		}
 		visited[current] = struct{}{}
