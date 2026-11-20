@@ -9,6 +9,24 @@ root=$(CDPATH='' cd -- "$script_dir/.." && pwd)
 
 readme=$(tr '\n' ' ' <"$root/README.md")
 
+for text in \
+  'Navigate remote systems from your terminal.' \
+  'github.com/pluque01/orza/releases' \
+  'orza --version' \
+  '](docs/user-guide.md#requirements-and-downloads)' \
+  '](docs/user-guide.md)' \
+  '](CONTRIBUTING.md)' \
+  '](SECURITY.md)' \
+  'actions/workflows/ci.yml/badge.svg' \
+  '[![License: MIT]'; do
+  assert_contains "$readme" "$text"
+done
+
+guide=$(tr '\n' ' ' <"$root/docs/user-guide.md")
+
+assert_contains "$guide" '## Requirements And Downloads'
+assert_not_contains "$readme" '## Data, Concurrency, And Recovery'
+
 for asset in \
   orza_v1.2.3_linux_amd64.tar.gz \
   orza_v1.2.3_linux_arm64.tar.gz \
@@ -17,7 +35,7 @@ for asset in \
   orza_v1.2.3_windows_amd64.zip \
   orza_v1.2.3_windows_arm64.zip \
   orza_v1.2.3_checksums.txt; do
-  assert_contains "$readme" "$asset"
+  assert_contains "$guide" "$asset"
 done
 
 # Literal documentation snippets intentionally contain shell and PowerShell variables.
@@ -50,17 +68,14 @@ for text in \
   'orza connection create /quickstart/lab/shell' \
   'orza connection move /quickstart/lab/shell /quickstart' \
   'Press `q` from the browser or `Ctrl-C`' \
-  '[contribution guidance](CONTRIBUTING.md)' \
-  '[private security reporting](SECURITY.md)' \
-  '[dependency vulnerability policy](SECURITY.md#dependency-findings)' \
-  'actions/workflows/ci.yml/badge.svg' \
-  'github.com/pluque01/orza/releases' \
-  '[![License: MIT]'; do
-  assert_contains "$readme" "$text"
+  '[contribution guidance](../CONTRIBUTING.md)' \
+  '[private security reporting](../SECURITY.md)' \
+  '[dependency vulnerability policy](../SECURITY.md#dependency-findings)'; do
+  assert_contains "$guide" "$text"
 done
 
-assert_not_contains "$readme" '--host bastion.example.com'
-assert_not_contains "$readme" '--host database.example.com'
-assert_not_contains "$readme" '--host legacy.example.com'
+assert_not_contains "$readme $guide" '--host bastion.example.com'
+assert_not_contains "$readme $guide" '--host database.example.com'
+assert_not_contains "$readme $guide" '--host legacy.example.com'
 
-printf 'PASS: README release, installation, usage, and safety contract\n'
+printf 'PASS: README entry points and user guide installation, usage, and safety contract\n'
