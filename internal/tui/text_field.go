@@ -12,6 +12,7 @@ import (
 )
 
 const maxTextFieldRunes = 4096
+const textFieldCaret = '▏'
 
 const (
 	textFieldControlError = "Paste rejected: unsupported control character"
@@ -267,23 +268,38 @@ func (f *textField) clearSelection() {
 }
 
 func (f *textField) View() string {
-	start, end := f.selection()
-	if start == end || !f.Focused() {
-		return f.viewport(f.Value(), f.Position())
+	value := f.Value()
+	position := f.Position()
+	if !f.Focused() {
+		return f.viewport(value, position, false)
 	}
 
-	value := []rune(f.Value())
-	marked := make([]rune, 0, len(value)+2)
-	marked = append(marked, value[:start]...)
-	marked = append(marked, '[')
-	marked = append(marked, value[start:end]...)
-	marked = append(marked, ']')
-	marked = append(marked, value[end:]...)
+	start, end := f.selection()
+	runes := []rune(value)
+	marked := make([]rune, 0, len(runes)+3)
+	marked = append(marked, runes[:start]...)
+	if start == end {
+		marked = append(marked, textFieldCaret)
+		marked = append(marked, runes[end:]...)
+		return f.viewport(string(marked), position, true)
+	}
 
-	return f.viewport(string(marked), end+2)
+	cursor := start
+	if position == start {
+		marked = append(marked, textFieldCaret)
+	}
+	marked = append(marked, '[')
+	marked = append(marked, runes[start:end]...)
+	marked = append(marked, ']')
+	if position == end {
+		cursor = len(marked)
+		marked = append(marked, textFieldCaret)
+	}
+	marked = append(marked, runes[end:]...)
+	return f.viewport(string(marked), cursor, true)
 }
 
-func (f *textField) viewport(value string, cursor int) string {
+func (f *textField) viewport(value string, cursor int, caret bool) string {
 	if f.Width() <= 0 {
 		return ""
 	}
@@ -291,35 +307,42 @@ func (f *textField) viewport(value string, cursor int) string {
 	runes := []rune(value)
 	cursor = min(max(0, cursor), len(runes))
 	projected := safeText(value, max(1, len(value)*6+1))
-	if ansi.StringWidth(projected) <= width {
+	totalWidth := ansi.StringWidth(projected)
+	if totalWidth <= width {
 		return projected
 	}
 
 	prefix := safeText(string(runes[:cursor]), max(1, len(value)*6+1))
 	cursorWidth := ansi.StringWidth(prefix)
-	totalWidth := ansi.StringWidth(projected)
+	if caret && width <= 2 {
+		if width == 1 {
+			return string(textFieldCaret)
+		}
+		if cursorWidth == 0 {
+			return string(textFieldCaret) + "…"
+		}
+		return "…" + string(textFieldCaret)
+	}
 	if width == 1 {
 		return "…"
 	}
 	if cursorWidth < width-1 {
-		return ansi.Cut(projected, 0, width-1) + "…"
+		return ansi.Truncate(projected, width-1, "") + "…"
 	}
 	if totalWidth-cursorWidth < width-1 {
-		available := width - 1
-		projectedRunes := []rune(projected)
-		start := len(projectedRunes)
-		used := 0
-		for start > 0 {
-			runeWidth := ansi.StringWidth(string(projectedRunes[start-1]))
-			if used+runeWidth > available {
-				break
-			}
-			start--
-			used += runeWidth
-		}
-		return "…" + string(projectedRunes[start:])
+		return "…" + trimTextFieldLeft(projected, totalWidth-width+1)
 	}
-	available := max(0, width-2)
+	available := width - 2
 	start := min(max(1, cursorWidth-available/2), max(1, totalWidth-available-1))
-	return "…" + ansi.Cut(projected, start, start+available) + "…"
+	return "…" + ansi.Truncate(trimTextFieldLeft(projected, start), available, "") + "…"
+}
+
+// trimTextFieldLeft drops any grapheme that crosses the left edge of the window.
+func trimTextFieldLeft(value string, cells int) string {
+	for cells > 0 && value != "" {
+		cluster, width := ansi.FirstGraphemeCluster(value, ansi.GraphemeWidth)
+		value = value[len(cluster):]
+		cells -= width
+	}
+	return value
 }

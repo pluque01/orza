@@ -111,8 +111,11 @@ func (f *folderForm) modalLines(width int, semanticStyles ...styles) ([]string, 
 	} else if f.destination != nil {
 		fields = append(fields, displayField{label: "Destination ID", value: safeText(string(f.destination.ID), int(^uint(0)>>1))})
 	}
-	fields = append(fields, displayField{label: "Name", value: safeText(f.input.View(), int(^uint(0)>>1))})
-	lines := newStructuredFieldGroup(fields, 2, width, true).render(style)
+	fields = append(fields, displayField{label: "Name"})
+	group := newStructuredFieldGroup(fields, 2, width, true)
+	f.input.SetWidth(group.availableValueWidth())
+	group.fields[len(group.fields)-1].value = f.input.View()
+	lines := group.render(style)
 	active := len(lines) - 1
 	lines[active] = "> " + strings.TrimPrefix(lines[active], "  ")
 	message := f.err

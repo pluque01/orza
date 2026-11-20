@@ -1,12 +1,102 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/pluque01/orza/internal/app"
 )
+
+func TestTextFieldShowsCursorAtInsertionPoint(t *testing.T) {
+	field := newTextField()
+	field.Focus()
+	if got := field.View(); got != "▏" {
+		t.Fatalf("empty focused field = %q, want cursor", got)
+	}
+	field.SetValue("a界🙂z")
+	field.CursorEnd()
+	for _, step := range []struct {
+		key  rune
+		want string
+	}{
+		{tea.KeyHome, "▏a界🙂z"},
+		{tea.KeyRight, "a▏界🙂z"},
+		{tea.KeyRight, "a界▏🙂z"},
+		{tea.KeyEnd, "a界🙂z▏"},
+	} {
+		field.Update(modifiedKey(step.key, 0))
+		if got := field.View(); got != step.want {
+			t.Fatalf("field after key %U = %q, want %q", step.key, got, step.want)
+		}
+	}
+	field.Blur()
+	if got := field.View(); got != "a界🙂z" || field.Value() != got {
+		t.Fatalf("blurred field = %q, value = %q", got, field.Value())
+	}
+}
+
+func TestTextFieldKeepsCursorInNarrowViewport(t *testing.T) {
+	field := newTextField()
+	field.Focus()
+	value := "prefix界🙂e\u0301suffix"
+	field.SetValue(value)
+	for _, width := range []int{1, 2, 3, 8} {
+		field.SetWidth(width)
+		for position := 0; position <= utf8.RuneCountInString(value); position++ {
+			field.SetCursor(position)
+			view := field.View()
+			if !strings.Contains(view, "▏") || ansi.StringWidth(view) > width {
+				t.Fatalf("viewport at width %d and position %d = %q", width, position, view)
+			}
+		}
+	}
+}
+
+func TestFolderNameCursorStaysVisibleInModal(t *testing.T) {
+	form := newFolderForm(nil, app.ItemSelector{Path: "/"})
+	form.input.SetValue(strings.Repeat("a", 40))
+	form.input.CursorEnd()
+	lines, active := form.modalLines(24)
+	if line := lines[active]; !strings.HasSuffix(line, "▏") || ansi.StringWidth(line) > 24 {
+		t.Fatalf("folder Name row clipped the cursor: %q", line)
+	}
+}
+
+func TestTextCursorInConnectionAndTunnelForms(t *testing.T) {
+	for _, size := range [][2]int{{80, 24}, {40, 12}} {
+		for _, noColor := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%dx%d/noColor=%t", size[0], size[1], noColor), func(t *testing.T) {
+				config := Config{Width: size[0], Height: size[1], NoColor: noColor}
+				connection := testConnection("host", syntheticRootID, "/host", 1)
+				connection.Host = "host.test"
+				form := newConnectionForm(&connection)
+				form.setFocus(fieldHost)
+				browser := New(config)
+				browser.openConnectionForm(form, browser.captureConnectionTarget(connection))
+				browser.Update(modifiedKey(tea.KeyHome, 0))
+				browser.Update(modifiedKey(tea.KeyRight, 0))
+				if frame := ansi.Strip(browser.View().Content); !strings.Contains(frame, "h▏ost.test") || strings.Count(frame, "▏") != 1 {
+					t.Fatalf("connection Host cursor missing or misplaced:\n%s", frame)
+				}
+
+				browser = New(config)
+				browser.openTunnelForm(connection, app.TunnelConfig{
+					Mode: app.TunnelLocal, Listen: app.TunnelEndpoint{Port: 8080},
+				}, 0)
+				browser.Update(modifiedKey(tea.KeyTab, 0))
+				browser.Update(modifiedKey(tea.KeyTab, 0))
+				browser.Update(modifiedKey(tea.KeyLeft, 0))
+				if frame := ansi.Strip(browser.View().Content); !strings.Contains(frame, "808▏0") || strings.Count(frame, "▏") != 1 {
+					t.Fatalf("tunnel Listen port cursor missing or misplaced:\n%s", frame)
+				}
+			})
+		}
+	}
+}
 
 func TestTextFieldSelectionEditingAndNonColorMarker(t *testing.T) {
 	field := newTextField()
@@ -18,8 +108,14 @@ func TestTextFieldSelectionEditingAndNonColorMarker(t *testing.T) {
 	if start, end := field.selection(); start != 1 || end != 3 {
 		t.Fatalf("selection = %d:%d, want 1:3", start, end)
 	}
-	if view := field.View(); !strings.Contains(view, "a[界🙂]z") {
-		t.Fatalf("selection lacks a non-color marker: %q", view)
+	if view := field.View(); view != "a[界🙂]▏z" {
+		t.Fatalf("selection moving right = %q, want cursor after selection", view)
+	}
+	field.SetCursor(3)
+	field.Update(modifiedKey(tea.KeyLeft, tea.ModShift))
+	field.Update(modifiedKey(tea.KeyLeft, tea.ModShift))
+	if view := field.View(); view != "a▏[界🙂]z" {
+		t.Fatalf("selection moving left = %q, want cursor before selection", view)
 	}
 
 	field.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyExtended, Text: "X"}))
