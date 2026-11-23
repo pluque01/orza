@@ -60,7 +60,7 @@
           };
         };
       # Updated by scripts/update-go-dependencies.sh; hashes the local module proxy.
-      orzaVendorHash = "sha256-Lb/g+6gVWASQiPUMXTvX5RfOSw7B1bk8w7j+WcJHAD0=";
+      orzaVendorHash = "sha256-S0qHJ3EG2KPhWxJ0htTHzuQyt/BX5dg98JWLk01AWfw=";
       # Updated by scripts/update-vulndb-dependencies.sh alongside the vulndb input.
       vulndbVendorHash = "sha256-yNZzZYX0Fx86Gv48nz87eZHneSBCxWRDYYq0XUe/WDU=";
       source = nixpkgs.lib.cleanSourceWith {
