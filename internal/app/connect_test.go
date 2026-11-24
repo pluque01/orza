@@ -432,6 +432,26 @@ func TestConnectRecordsAcceptedShellEvenWhenCanceledBeforeReturn(t *testing.T) {
 	}
 }
 
+func TestConnectPreservesLateCancellationAndRecordedOpening(t *testing.T) {
+	repository := newServiceRepository()
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	openedAt := time.Now()
+	runner := &fakeSessionRunner{run: func(_ context.Context, request SSHSessionRequest) (SSHSessionResult, error) {
+		request.Opened(openedAt)
+		cancel()
+		return SSHSessionResult{StartedAt: openedAt, State: SessionSucceeded, Outcome: SessionOutcomeSuccess}, nil
+	}}
+	service := mustConnectService(t, repository, &fakeCredentialLifecycle{repository: repository}, &fakeHostTrust{}, &fakeTrustedHosts{}, credential.NewFake(), runner, terminal.NewFake(terminal.Size{Columns: 80, Rows: 24}))
+	result, err := service.Connect(ctx, ConnectRequest{Connection: ItemSelector{ID: repository.connection.ID}})
+	if !errors.Is(err, context.Canceled) || result.Session.State != SessionCanceled || result.Session.Outcome != SessionOutcomeCanceled {
+		t.Fatalf("cancellation racing successful completion = %+v, %v", result.Session, err)
+	}
+	if result.RecentSaveFailed || !repository.connection.LastOpenedAt.Equal(openedAt) {
+		t.Fatalf("cancellation lost the recorded opening: %+v", result)
+	}
+}
+
 func mustConnectService(t *testing.T, repository ConnectionRepository, lifecycle CredentialLifecycle, trust HostTrust, trusted TrustedHostRepository, store CredentialStore, runner SSHSessionRunner, local Terminal) *ConnectService {
 	t.Helper()
 	service, err := NewConnectService(ConnectOptions{

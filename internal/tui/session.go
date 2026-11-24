@@ -966,7 +966,7 @@ func (m *Model) handleSession(msg sessionFinishedMsg) tea.Cmd {
 		m.status = "Shell connection ended; browser restored."
 	}
 	if msg.result.RecentSaveFailed {
-		m.status = "Shell closed. Could not save in Recent."
+		m.status += "\nCould not save in Recent."
 	}
 	if quit || m.ctx.Err() != nil {
 		return m.closeTunnelsAndQuit()

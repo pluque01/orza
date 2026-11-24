@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -84,5 +85,35 @@ func TestSessionPreCommitCancellationRestoresWithoutDiagnostic(t *testing.T) {
 	updateModel(model, sessionFinishedMsg{id: id, attempt: attempt, result: app.ConnectResult{Attempt: attempt, Session: app.SSHSessionResult{State: app.SessionCanceled, Outcome: app.SessionOutcomeCanceled, Failure: &failure}}, err: context.Canceled})
 	if model.operation != nil || model.modal.isOpen() || model.status != "READY" {
 		t.Fatalf("pre-commit cancel did not restore frame: operation=%+v modal=%+v status=%q", model.operation, model.modal, model.status)
+	}
+}
+
+func TestSessionRecentWarningPreservesShellOutcomeInTheBrowser(t *testing.T) {
+	remoteStatus := 23
+	for _, tc := range []struct {
+		name    string
+		outcome app.SessionOutcome
+		status  *int
+		message string
+	}{
+		{name: "remote exit", outcome: app.SessionOutcomeRemoteFailure, status: &remoteStatus, message: "Shell closed with status 23."},
+		{name: "transport failure", outcome: app.SessionOutcomeTransportFailure, message: "Shell connection ended"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, width := range []int{40, 80} {
+				model := New(Config{Width: width, Height: 12, NoColor: true})
+				id, _, _ := model.beginOperationWith(asyncOperationSSHStart, nil, operationOwnerModal)
+				result := app.ConnectResult{RecentSaveFailed: true, Session: app.SSHSessionResult{
+					StartedAt: time.Unix(1, 0), State: app.SessionFailed, Outcome: tc.outcome, RemoteExitStatus: tc.status,
+				}}
+				updateModel(model, sessionFinishedMsg{id: id, result: result, err: errors.New("controlled shell failure")})
+				view := model.View().Content
+				for _, want := range []string{tc.message, "Could not save in Recent."} {
+					if !strings.Contains(view, want) {
+						t.Fatalf("%d-column browser omitted %q:\n%s", width, want, view)
+					}
+				}
+			}
+		})
 	}
 }

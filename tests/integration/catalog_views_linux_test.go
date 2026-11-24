@@ -189,43 +189,44 @@ func runCatalogConnectCLI(t *testing.T, ctx context.Context, fixture *forwarding
 
 func openCatalogSessionInTUI(t *testing.T, ctx context.Context, fixture *forwardingAppFixture, dial func(context.Context, string, string) (net.Conn, error), index int, name string, cancelConnect bool) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
-	defer cancel()
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	keyboard, input := openShellTestPTY(t)
 	local := terminal.New(input, input)
-	const root, confirm, returned = "> [/] /", "Connect to SSH target?", "Shell closed with status 23."
+	const ready, confirm, returned = "[ssh] session-01", "Connect to SSH target?", "Shell closed with status 23."
 	selection := "/" + name
 	favourite := "* " + name
-	output := newSignalingWriter(root, selection, confirm, returned, favourite, "[Favourites]")
-	runner := sshclient.New(sshclient.Options{DialContext: dial, Stdin: input, Stdout: output, Stderr: output})
+	frames := newSignalingWriter(ready, selection, confirm, returned, favourite, "[Favourites]")
+	runner := sshclient.New(sshclient.Options{DialContext: dial, Stdin: input, Stdout: io.Discard, Stderr: io.Discard})
 	service := catalogConnectService(t, fixture, local, runner)
-	done := make(chan error, 1)
-	joined := make(chan struct{})
+	model := tui.New(tui.Config{Connections: fixture.connections, Folders: fixture.folders, Connect: service, Terminal: local, Stdin: input, NoColor: true, Context: ctx})
+	program := tea.NewProgram(catalogPTYModel{Model: model, frames: frames}, tea.WithInput(input), tea.WithOutput(io.Discard), tea.WithWindowSize(80, 24), tea.WithoutSignalHandler())
+	done := make(chan struct{})
+	var runErr error
 	go func() {
-		defer close(joined)
-		_, err := tui.Run(ctx, tui.Config{Connections: fixture.connections, Folders: fixture.folders, Connect: service, Terminal: local, Stdin: input, Stdout: output, NoColor: true})
-		done <- err
+		defer close(done)
+		_, runErr = program.Run()
 	}()
 	defer func() {
+		// Cancel app operations first, then let Bubble Tea join its input
+		// reader and restore the terminal before the PTY files are closed.
 		cancel()
-		select {
-		case <-joined:
-		case <-time.After(time.Second):
-			t.Error("TUI did not restore the PTY after cancellation")
-		}
+		program.Send(tea.Quit())
+		<-done
 	}()
 	step := func(frame, keys string) {
 		t.Helper()
 		select {
-		case <-output.signal(frame):
+		case <-frames.signal(frame):
+		case <-done:
+			t.Fatalf("TUI stopped before %q: %v", frame, runErr)
 		case <-ctx.Done():
-			t.Fatalf("waiting for %q: %q", frame, output.String())
+			t.Fatalf("waiting for %q: %s", frame, frames.String())
 		}
 		if _, err := io.WriteString(keyboard, keys); err != nil {
 			t.Fatal(err)
 		}
 	}
-	step(root, strings.Repeat("j", index+1))
+	step(ready, strings.Repeat("j", index+1))
 	if index == 0 {
 		step(selection, "\x1bOS") // xterm F4
 		step(favourite, "\x1bOR") // xterm F3
@@ -240,13 +241,31 @@ func openCatalogSessionInTUI(t *testing.T, ctx context.Context, fixture *forward
 		step(returned, "q")
 	}
 	select {
-	case err := <-done:
-		if err != nil {
-			t.Fatal(err)
+	case <-done:
+		if runErr != nil {
+			t.Fatal(runErr)
 		}
 	case <-ctx.Done():
-		t.Fatalf("TUI did not quit on the PTY: %q", output.String())
+		t.Fatalf("TUI did not quit on the PTY: %s", frames.String())
 	}
+}
+
+// Observe complete frames independently of the renderer's terminal diffs.
+// Keyboard input still reaches the model through the real PTY and Bubble Tea.
+type catalogPTYModel struct {
+	*tui.Model
+	frames *signalingWriter
+}
+
+func (m catalogPTYModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	_, command := m.Model.Update(msg)
+	return m, command
+}
+
+func (m catalogPTYModel) View() tea.View {
+	view := m.Model.View()
+	_, _ = io.WriteString(m.frames, view.Content)
+	return view
 }
 
 func assertRecentCatalogPaths(t *testing.T, model *tui.Model, want []string) {

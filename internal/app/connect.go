@@ -143,7 +143,7 @@ func (s *ConnectService) Connect(ctx context.Context, request ConnectRequest) (C
 		Terminal:   s.terminal,
 	})
 	result.Session = session
-	if runErr == nil && ctx.Err() != nil && !sessionWasActive(result.Session) {
+	if runErr == nil && ctx.Err() != nil {
 		failure := NormalizeSSHStartError(SSHFailureStageUnknown, ctx.Err())
 		result.Session = sessionResultForFailure(failure)
 		return result, safeUseCaseError("run SSH session", target, failure)
