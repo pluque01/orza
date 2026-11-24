@@ -181,7 +181,7 @@ func newOperationConformanceFixture(t *testing.T, kind asyncOperationKind) opera
 	case asyncOperationSSHStart:
 		fixture.model = loadedModel(t, []app.Connection{connection}, true)
 		updateModel(fixture.model, keyPress("l"))
-		updateModel(fixture.model, keyPress("c"))
+		openConnectForTest(t, fixture.model)
 		fixture.owner = operationOwnerModal
 		fixture.target = "server.test:22"
 		fixture.attempt = app.SSHAttemptTarget{ID: connection.ID, Revision: connection.Revision, Path: connection.Path, Host: connection.Host, Port: connection.Port}

@@ -206,7 +206,7 @@ func TestModelContextualNavigationConfirmationAndNarrowMode(t *testing.T) {
 	if model.browser.selectedID != connection.ID {
 		t.Fatalf("right selected %q", model.browser.selectedID)
 	}
-	updateModel(model, keyPress("c"))
+	openConnectForTest(t, model)
 	payload, ok := model.modal.payload.(connectConfirmationPayload)
 	if !ok {
 		t.Fatal("connect did not open confirmation")
@@ -598,12 +598,32 @@ func TestRetryCASConflictRestoresOriginalFailureContext(t *testing.T) {
 
 func loadedModel(t *testing.T, values []app.Connection, noColor bool) *Model {
 	t.Helper()
-	service := ConnectionFuncs{ListFunc: func(context.Context, app.ListConnectionsRequest) (app.ListConnectionsResult, error) {
+	service := ConnectionFuncs{GetFunc: testConnectionLookup(values...), ListFunc: func(context.Context, app.ListConnectionsRequest) (app.ListConnectionsResult, error) {
 		return app.ListConnectionsResult{Connections: values, CatalogRevision: 7}, nil
 	}}
 	model := New(Config{Connections: service, Width: 80, Height: 24, NoColor: noColor})
 	updateModel(model, model.Init()())
 	return model
+}
+
+func testConnectionLookup(values ...app.Connection) func(context.Context, app.ItemSelector) (app.ConnectionResult, error) {
+	return func(_ context.Context, selector app.ItemSelector) (app.ConnectionResult, error) {
+		for _, connection := range values {
+			if selector.ID == connection.ID {
+				return app.ConnectionResult{Connection: connection}, nil
+			}
+		}
+		return app.ConnectionResult{}, app.ErrNotFound
+	}
+}
+
+func openConnectForTest(t *testing.T, model *Model) {
+	t.Helper()
+	_, cmd := model.Update(keyPress("c"))
+	if cmd == nil {
+		t.Fatal("Connect did not request a current catalog record")
+	}
+	updateModel(model, cmd())
 }
 
 func updateModel(model *Model, msg tea.Msg) {

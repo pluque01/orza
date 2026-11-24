@@ -182,7 +182,7 @@ func TestTUITreeContextualActionMatrixAndReconciliation(t *testing.T) {
 	updateTUI(t, model, tuiKey("l"))
 	updateTUI(t, model, tuiKey("l"))
 	assertTreeSelectionPath(t, model, database.Connection.Path)
-	updateTUI(t, model, tuiKey("c"))
+	executeTUICommand(t, model, updateTUI(t, model, tuiKey("c")))
 	for _, value := range []string{database.Connection.Path, "db.test:22", string(database.Connection.ID)} {
 		if !strings.Contains(model.View().Content, value) {
 			t.Fatalf("connect confirmation omitted %q: %q", value, model.View().Content)
@@ -228,7 +228,7 @@ func TestTUITreeDetailsDirectChildrenEmptyAndFallback(t *testing.T) {
 	// root -> empty
 	updateTUI(t, model, tuiKey("l"))
 	view := model.View().Content
-	for _, want := range []string{"[*] Tree", "[ ] Details", "Folder", "Path               /empty", "Direct connections 0", "No direct connections."} {
+	for _, want := range []string{"[*] [Tree]", "[ ] Details", "Folder", "Path               /empty", "Direct connections 0", "No direct connections."} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("empty-folder Details omitted %q:\n%s", want, view)
 		}
@@ -302,9 +302,9 @@ func TestTUITreeDetailsBadgesSynchronizeWithSelectionInColorAndNoColor(t *testin
 
 		for name, view := range frames {
 			plain := ansi.Strip(view)
-			for _, region := range []string{"Tree", "Details"} {
-				if strings.Count(plain, "] "+region) != 1 {
-					t.Fatalf("no-color=%t %s region title %q count != 1:\n%s", noColor, name, region, plain)
+			for _, heading := range []string{"[Tree]", "] Details"} {
+				if strings.Count(plain, heading) != 1 {
+					t.Fatalf("no-color=%t %s region title %q count != 1:\n%s", noColor, name, heading, plain)
 				}
 			}
 			contentBadge := map[string]string{
@@ -314,7 +314,7 @@ func TestTUITreeDetailsBadgesSynchronizeWithSelectionInColorAndNoColor(t *testin
 				t.Fatalf("no-color=%t %s content badge is not distinct and singular:\n%s", noColor, name, plain)
 			}
 		}
-		if !strings.Contains(ansi.Strip(frames["connection"]), "[*] Tree") || !strings.Contains(ansi.Strip(frames["details-focused"]), "[*] Details") {
+		if !strings.Contains(ansi.Strip(frames["connection"]), "[*] [Tree]") || !strings.Contains(ansi.Strip(frames["details-focused"]), "[*] Details") {
 			t.Fatalf("no-color=%t region ownership changed across Details focus", noColor)
 		}
 
@@ -369,11 +369,11 @@ func TestTUIScrollbarKeyboardOnlyOverflow(t *testing.T) {
 	executeTUICommand(t, model, model.Init())
 	for _, key := range []string{"j", "j", "G", "k", "g"} {
 		updateTUI(t, model, tuiKey(key))
-		assertKeyboardOnlyOverflowView(t, model, "Tree after "+key, "Tree", "[*] Tree")
+		assertKeyboardOnlyOverflowView(t, model, "Tree after "+key, "[Tree]", "[*] [Tree]")
 	}
 
 	updateTUI(t, model, tuiKey("G"))
-	assertKeyboardOnlyOverflowView(t, model, "Tree end", "Tree", ">   [ssh] ")
+	assertKeyboardOnlyOverflowView(t, model, "Tree end", "[Tree]", ">   [ssh] ")
 	updateTUI(t, model, tuiKey("tab"))
 	assertKeyboardOnlyOverflowView(t, model, "Details start", "Details", "Connection")
 	updateTUI(t, model, tuiKey("G"))
@@ -399,7 +399,7 @@ func TestTUIScrollbarKeyboardOnlyOverflow(t *testing.T) {
 	assertKeyboardOnlyOverflowView(t, model, "move picker", "Move", "> /destination-11")
 	updateTUI(t, model, tuiKey("esc"))
 
-	updateTUI(t, model, tuiKey("c"))
+	executeTUICommand(t, model, updateTUI(t, model, tuiKey("c")))
 	assertKeyboardOnlyOverflowView(t, model, "connect confirmation", "Connect", "Connect to SSH target?", "Path     /zzzz", "Endpoint long-host.")
 	updateTUI(t, model, tuiKey("esc"))
 
@@ -410,7 +410,7 @@ func TestTUIScrollbarKeyboardOnlyOverflow(t *testing.T) {
 	}
 	updateTUI(t, model, tuiKey("l"))
 	updateTUI(t, model, tuiKey("l"))
-	assertKeyboardOnlyOverflowView(t, model, "long stale target", "Tree", ">     [ssh]")
+	assertKeyboardOnlyOverflowView(t, model, "long stale target", "[Tree]", ">     [ssh]")
 
 	changedHost := "changed-before-delete.test"
 	expected := longErrorConnection.Connection.Revision

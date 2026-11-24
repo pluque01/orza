@@ -54,6 +54,7 @@ func TestTUIContextualActionsAndCapturedConnectTarget(t *testing.T) {
 		AuthMethod: app.AuthMethodAgent,
 	}
 	service := tui.ConnectionFuncs{
+		GetFunc: testTUIConnectionGetter(connection),
 		ListFunc: func(context.Context, app.ListConnectionsRequest) (app.ListConnectionsResult, error) {
 			return app.ListConnectionsResult{Connections: []app.Connection{connection}, CatalogRevision: 1}, nil
 		},
@@ -75,7 +76,7 @@ func TestTUIContextualActionsAndCapturedConnectTarget(t *testing.T) {
 	connectionView := model.View().Content
 	assertCompactBrowserLegend(t, connectionView, true)
 	assertBrowserHelpActions(t, model, "e Edit", "m Move", "d Delete", "r Reload", "? Help")
-	updateTUI(t, model, tuiKey("c"))
+	executeTUICommand(t, model, updateTUI(t, model, tuiKey("c")))
 	confirmation := model.View().Content
 	assertColonlessCapturedFields(t, confirmation, []tuiCapturedField{
 		{"Path", "/server"},

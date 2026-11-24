@@ -61,7 +61,10 @@ func newConnectCommand(connections *app.ConnectionService, service *app.ConnectS
 			}
 			expected := resolved.Connection.Revision
 			captured := app.ItemSelector{ID: resolved.Connection.ID}
-			result, err := service.Connect(cmd.Context(), app.ConnectRequest{Connection: captured, Expected: &expected, DecideTrust: decide})
+			result, err := service.Connect(cmd.Context(), app.ConnectRequest{Connection: captured, Expected: &expected, ExpectedPath: resolved.Connection.Path, DecideTrust: decide})
+			if result.RecentSaveFailed {
+				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "Could not save this session in Recent.")
+			}
 			if result.Session.RemoteExitStatus != nil {
 				return NewRemoteExitError(*result.Session.RemoteExitStatus)
 			}

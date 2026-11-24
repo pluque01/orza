@@ -195,23 +195,18 @@ func (m *Model) tunnelLegend(width int) []string {
 	if m.tunnelForm != nil {
 		lines = renderActionLegend(m.styles, descriptors, width)
 	}
-	if len(lines) > 3 {
-		lines = lines[:3]
-	}
-	notice := ""
-	if strings.HasPrefix(m.status, "Shell") || strings.HasPrefix(m.status, "Tunnel") {
-		notice = m.status
+	var notices []string
+	if strings.HasPrefix(m.status, "Shell") || strings.HasPrefix(m.status, "Tunnel") || m.status == catalogRefreshFailed {
+		notices = strings.Split(m.status, "\n")
 	}
 	if m.tunnelForm != nil && m.tunnelForm.error != "" {
-		notice = m.tunnelForm.error
+		notices = []string{m.tunnelForm.error}
 	}
-	if notice != "" {
-		lines = append([]string{safeText(notice, width)}, lines...)
-		if len(lines) > 3 {
-			lines = lines[:3]
-		}
+	for index, notice := range notices {
+		notices[index] = safeText(notice, width)
 	}
-	return lines
+	lines = append(notices, lines...)
+	return lines[:min(3, len(lines))]
 }
 
 func tunnelActionDescriptors(state app.TunnelState) []actionDescriptor {

@@ -8,12 +8,15 @@ import (
 	"fmt"
 )
 
-const schemaVersion = 1
+const schemaVersion = 2
 
 var ErrMigrationSequence = errors.New("catalog migrations are not contiguous")
 
 //go:embed migrations/001_initial.sql
 var initialMigration string
+
+//go:embed migrations/002_connection_activity.sql
+var connectionActivityMigration string
 
 type migration struct {
 	version int
@@ -23,6 +26,7 @@ type migration struct {
 
 var catalogMigrations = []migration{
 	{version: 1, name: "initial", sql: initialMigration},
+	{version: 2, name: "connection activity", sql: connectionActivityMigration},
 }
 
 func applyMigrations(ctx context.Context, db *sql.DB, currentVersion int, migrations []migration) error {
@@ -62,6 +66,19 @@ func applyMigration(ctx context.Context, db *sql.DB, migration migration) (err e
 			_, _ = conn.ExecContext(context.Background(), `ROLLBACK`)
 		}
 	}()
+	// Another process may have migrated the catalog while this one waited for
+	// the write lock. Read the version again before executing schema changes.
+	var version int
+	if err = conn.QueryRowContext(ctx, `PRAGMA user_version`).Scan(&version); err != nil {
+		return fmt.Errorf("read version before migration %q: %w", migration.name, err)
+	}
+	if version >= migration.version {
+		_, err = conn.ExecContext(ctx, `COMMIT`)
+		return err
+	}
+	if version != migration.version-1 {
+		return fmt.Errorf("%w: migration %q follows version %d", ErrMigrationSequence, migration.name, version)
+	}
 
 	if _, err = conn.ExecContext(ctx, migration.sql); err != nil {
 		return fmt.Errorf("apply migration %q: %w", migration.name, err)

@@ -201,7 +201,7 @@ func (c *Client) Run(ctx context.Context, request app.SSHSessionRequest) (result
 	}
 	remote.SetIO(stdin, c.options.Stdout, c.options.Stderr)
 
-	sessionResult, err := runSession(ctx, remote, resources.session, request.Terminal, size, c.options.Now, c.options.resize)
+	sessionResult, err := runSession(ctx, remote, resources.session, request.Terminal, size, c.options.Now, c.options.resize, request.Opened)
 	return sessionResult, err
 }
 

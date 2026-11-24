@@ -100,6 +100,51 @@ func TestMigrationRollsBackOnFailure(t *testing.T) {
 	}
 }
 
+func TestConnectionActivityMigrationPreservesExistingConnections(t *testing.T) {
+	path := testCatalogPath(t)
+	if _, err := prepareCatalogPath(path); err != nil {
+		t.Fatal(err)
+	}
+	old, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = old.Close() })
+	if err := applyMigrations(t.Context(), old, 0, catalogMigrations[:1]); err != nil {
+		t.Fatal(err)
+	}
+	const connectionID = "11111111111111111111111111111111"
+	if _, err := old.Exec(`
+		INSERT INTO nodes(id, parent_id, kind, name, revision, created_at, updated_at)
+		SELECT ?, root_id, 'connection', 'saved', 4, created_at, created_at FROM catalog_meta`, connectionID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := old.Exec(`INSERT INTO connections(node_id, host, auth_method) VALUES(?, 'saved.invalid', 'agent')`, connectionID); err != nil {
+		t.Fatal(err)
+	}
+	if err := old.Close(); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	var host string
+	var revision int
+	var favourite bool
+	var lastOpened sql.NullInt64
+	if err := store.DB().QueryRow(`
+		SELECT c.host, n.revision, c.favourite, c.last_opened_at_ns
+		FROM connections c JOIN nodes n ON c.node_id = n.id WHERE c.node_id = ?`, connectionID).
+		Scan(&host, &revision, &favourite, &lastOpened); err != nil {
+		t.Fatal(err)
+	}
+	if host != "saved.invalid" || revision != 4 || favourite || lastOpened.Valid {
+		t.Fatalf("migrated existing connection = %q/%d favourite=%t lastOpened=%+v", host, revision, favourite, lastOpened)
+	}
+}
+
 func TestMigrationsMustBeContiguous(t *testing.T) {
 	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "catalog.db"))
 	if err != nil {

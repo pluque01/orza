@@ -138,6 +138,8 @@ type browserModel struct {
 	changed     bool
 	initialized bool
 	filter      *treeFilter
+	view        catalogView
+	positions   [catalogViewCount]catalogPosition
 }
 
 func (b *browserModel) setConnectionsPending(result app.ListConnectionsResult, pending app.NodeID) {
@@ -163,6 +165,14 @@ func (b *browserModel) setSnapshot(snapshot catalogSnapshot, pending app.NodeID)
 		}
 	}
 	b.expanded[snapshot.rootID] = struct{}{}
+	if b.view != catalogTree {
+		if pending != "" {
+			b.selectedID = pending
+		}
+		b.rebuildRows()
+		b.changed = false
+		return
+	}
 
 	selected := snapshot.rootID
 	if b.initialized {
@@ -214,6 +224,10 @@ func (b *browserModel) expandAncestors(id app.NodeID) {
 }
 
 func (b *browserModel) rebuildRows() {
+	if b.view != catalogTree {
+		b.rebuildList()
+		return
+	}
 	b.rows = b.rows[:0]
 	if b.snapshot.rootID == "" || b.filter != nil && len(b.filter.nodes) == 0 {
 		return
@@ -426,6 +440,9 @@ func (b browserModel) renderTree(style styles, width, rows int) string {
 }
 
 func (b browserModel) projectTree(style styles, width, rows int) viewportProjection {
+	if b.view != catalogTree {
+		return b.projectList(style, width, rows)
+	}
 	content := make([]string, len(b.rows))
 	for index, row := range b.rows {
 		node := b.snapshot.nodes[row.id]
@@ -442,6 +459,8 @@ func (b browserModel) projectTree(style styles, width, rows int) viewportProject
 			marker = "[-]"
 		case node.folder != nil:
 			marker = "[+]"
+		case node.connection != nil && node.connection.Favourite:
+			marker = "[ssh] *"
 		}
 		prefix := selector + strings.Repeat("  ", row.depth) + marker + " "
 		line := prefix + b.renderName(style, row.id, name, width-len(prefix))

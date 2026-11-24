@@ -105,6 +105,7 @@ func runSession(
 	initial terminal.Size,
 	now func() time.Time,
 	resizeObserver *resizeLifecycleObserver,
+	opened func(time.Time),
 ) (app.SSHSessionResult, error) {
 	result := app.SSHSessionResult{State: app.SessionFailed, Outcome: app.SessionOutcomeTransportFailure}
 	name := os.Getenv("TERM")
@@ -132,6 +133,9 @@ func runSession(
 		return canceledOrFailed(ctx, result, StageShell, err)
 	}
 	result.StartedAt = now()
+	if opened != nil {
+		opened(result.StartedAt)
+	}
 
 	waitResult := make(chan error, 1)
 	go func() { waitResult <- session.Wait() }()
