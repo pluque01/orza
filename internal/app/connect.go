@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/pluque01/orza/internal/credential"
 	"github.com/pluque01/orza/internal/terminal"
@@ -76,7 +77,7 @@ func (s *ConnectService) Connect(ctx context.Context, request ConnectRequest) (C
 		Host:     result.Connection.Host,
 		Port:     result.Connection.Port,
 	}
-	if request.Expected != nil && *request.Expected != result.Connection.Revision {
+	if request.Expected != nil && *request.Expected != result.Connection.Revision || request.ExpectedPath != "" && request.ExpectedPath != result.Connection.Path {
 		return result, safeUseCaseError("connect", target, ErrConflict)
 	}
 	if err := s.credentials.Recover(ctx); err != nil {
@@ -122,15 +123,27 @@ func (s *ConnectService) Connect(ctx context.Context, request ConnectRequest) (C
 		}
 	}
 
+	opened := func(startedAt time.Time) {
+		// The shell is already open. Finish recording it even if the local
+		// process receives cancellation at the same moment.
+		if err := s.connections.RecordConnectionOpened(context.WithoutCancel(ctx), result.Connection.ID, startedAt); err != nil {
+			result.RecentSaveFailed = !errors.Is(err, ErrNotFound)
+			return
+		}
+		if startedAt.After(result.Connection.LastOpenedAt) {
+			result.Connection.LastOpenedAt = startedAt
+		}
+	}
 	session, runErr := s.runner.Run(ctx, SSHSessionRequest{
 		Connection: result.Connection,
 		VerifyHost: gate.verify,
 		Secret:     secret,
 		Activate:   request.Activate,
+		Opened:     opened,
 		Terminal:   s.terminal,
 	})
 	result.Session = session
-	if runErr == nil && ctx.Err() != nil {
+	if runErr == nil && ctx.Err() != nil && !sessionWasActive(result.Session) {
 		failure := NormalizeSSHStartError(SSHFailureStageUnknown, ctx.Err())
 		result.Session = sessionResultForFailure(failure)
 		return result, safeUseCaseError("run SSH session", target, failure)

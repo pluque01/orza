@@ -81,6 +81,7 @@ func (payload unsavedChangesPayload) validModalPayload() bool { return payload.v
 type connectConfirmation struct {
 	connection app.Connection
 	previous   *app.SSHAttemptTarget
+	changed    bool
 }
 
 func newConnectConfirmation(connection app.Connection) *connectConfirmation {
@@ -428,7 +429,11 @@ func connectConfirmationLines(confirmation *connectConfirmation, width int, moda
 		displayField{label: "ID", value: string(connection.ID)},
 		displayField{label: "Revision", value: fmt.Sprint(connection.Revision)},
 	)
-	lines := append([]string{"Connect to SSH target?"}, renderWrappedModalFields(modalRenderStyle(modalStyle), width, fields)...)
+	heading := "Connect to SSH target?"
+	if confirmation.changed {
+		heading = "Target changed. Confirm new target?"
+	}
+	lines := append([]string{heading}, renderWrappedModalFields(modalRenderStyle(modalStyle), width, fields)...)
 	return append(lines, modalControlLine("y Confirm"), modalControlLine("Enter/Esc Cancel"))
 }
 

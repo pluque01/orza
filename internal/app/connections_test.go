@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestConnectionServiceCRUDAndCredentialLifecycle(t *testing.T) {
@@ -284,6 +285,19 @@ func (r *serviceRepository) DeleteConnection(context.Context, DeleteConnectionRe
 	deleted := r.connection
 	r.connection = Connection{}
 	return DeleteConnectionResult{Deleted: deleted, CatalogRevision: CatalogRevision(deleted.Revision + 2)}, nil
+}
+
+func (r *serviceRepository) ToggleConnectionFavourite(context.Context, NodeID) (bool, error) {
+	r.connection.Favourite = !r.connection.Favourite
+	return r.connection.Favourite, nil
+}
+
+func (r *serviceRepository) RecordConnectionOpened(ctx context.Context, _ NodeID, openedAt time.Time) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	r.connection.LastOpenedAt = openedAt
+	return nil
 }
 
 type fakeCredentialLifecycle struct {

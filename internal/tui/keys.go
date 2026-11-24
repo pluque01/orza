@@ -12,6 +12,7 @@ type keyMap struct {
 	Edit, Move, Delete, Connect, ForgetHostKey key.Binding
 	Reload, Save, Confirm, Detail              key.Binding
 	Search, SearchPrevious, SearchNext         key.Binding
+	PreviousView, NextView, Favourite          key.Binding
 }
 
 func newKeyMap() keyMap {
@@ -44,5 +45,8 @@ func newKeyMap() keyMap {
 		Search:         key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "Filter connections")),
 		SearchPrevious: key.NewBinding(key.WithKeys("ctrl+p"), key.WithHelp("Ctrl+P", "Previous result")),
 		SearchNext:     key.NewBinding(key.WithKeys("ctrl+n"), key.WithHelp("Ctrl+N", "Next result")),
+		PreviousView:   key.NewBinding(key.WithKeys("[")),
+		NextView:       key.NewBinding(key.WithKeys("]", "f3")),
+		Favourite:      key.NewBinding(key.WithKeys("f4")),
 	}
 }

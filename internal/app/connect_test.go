@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/pluque01/orza/internal/credential"
 	"github.com/pluque01/orza/internal/terminal"
@@ -396,6 +397,38 @@ func TestConnectKeepsPrimaryNormalizedFailureAheadOfJoinedCleanup(t *testing.T) 
 	}
 	if result.Session.Failure == nil || result.Session.Failure.Category != SSHFailureSSHNegotiation {
 		t.Fatalf("failure = %#v", result.Session.Failure)
+	}
+}
+
+func TestConnectRejectsPathChangeWithSameConnectionRevision(t *testing.T) {
+	repository := newServiceRepository()
+	repository.connection.Path = "/renamed/target"
+	runner := &fakeSessionRunner{}
+	service := mustConnectService(t, repository, &fakeCredentialLifecycle{repository: repository}, &fakeHostTrust{}, &fakeTrustedHosts{}, credential.NewFake(), runner, terminal.NewFake(terminal.Size{Columns: 80, Rows: 24}))
+	revision := repository.connection.Revision
+	result, err := service.Connect(t.Context(), ConnectRequest{Connection: ItemSelector{ID: repository.connection.ID}, Expected: &revision, ExpectedPath: "/original/target"})
+	if !errors.Is(err, ErrConflict) || runner.calls != 0 || result.Connection.Path != "/renamed/target" {
+		t.Fatalf("path-conflicted connect called SSH %d times and returned %+v, %v", runner.calls, result, err)
+	}
+}
+
+func TestConnectRecordsAcceptedShellEvenWhenCanceledBeforeReturn(t *testing.T) {
+	repository := newServiceRepository()
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	openedAt := time.Now()
+	runner := &fakeSessionRunner{run: func(_ context.Context, request SSHSessionRequest) (SSHSessionResult, error) {
+		cancel()
+		request.Opened(openedAt)
+		if !repository.connection.LastOpenedAt.Equal(openedAt) {
+			t.Fatal("accepted shell was still missing from history before the runner returned")
+		}
+		return SSHSessionResult{StartedAt: openedAt, State: SessionCanceled, Outcome: SessionOutcomeCanceled}, context.Canceled
+	}}
+	service := mustConnectService(t, repository, &fakeCredentialLifecycle{repository: repository}, &fakeHostTrust{}, &fakeTrustedHosts{}, credential.NewFake(), runner, terminal.NewFake(terminal.Size{Columns: 80, Rows: 24}))
+	result, err := service.Connect(ctx, ConnectRequest{Connection: ItemSelector{ID: repository.connection.ID}})
+	if !errors.Is(err, context.Canceled) || result.RecentSaveFailed || !result.Connection.LastOpenedAt.Equal(openedAt) || !result.Session.StartedAt.Equal(openedAt) {
+		t.Fatalf("canceled active session = %+v, %v", result, err)
 	}
 }
 

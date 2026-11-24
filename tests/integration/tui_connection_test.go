@@ -199,7 +199,7 @@ func TestTUISessionFailureRecoveryHandoffAndTerminalRestoration(t *testing.T) {
 	t.Run("active session hands off and restores browser before explicit quit", func(t *testing.T) {
 		local := terminal.NewFake(terminal.Size{Columns: 80, Rows: 24})
 		writer := newSignalingWriter("[ssh] prod", "Endpoint prod.test:22", "Connect to SSH target?", "Shell closed with status 23.")
-		services := tui.ConnectionFuncs{ListFunc: list}
+		services := tui.ConnectionFuncs{ListFunc: list, GetFunc: testTUIConnectionGetter(connection)}
 		status := 23
 		input := pipeInput(t, []readerStage{
 			{wait: writer.signal("[ssh] prod"), data: "j"},
@@ -231,7 +231,7 @@ func TestTUIConnectConfirmationCancelStartsZeroNetwork(t *testing.T) {
 	connection := app.Connection{Node: app.Node{ID: "11111111111111111111111111111111", Name: "prod", Path: "/prod", Revision: 1}, Host: "prod.test", Port: 22, AuthMethod: app.AuthMethodAgent}
 	connectCalls := 0
 	model := tui.New(tui.Config{
-		Connections: tui.ConnectionFuncs{ListFunc: func(context.Context, app.ListConnectionsRequest) (app.ListConnectionsResult, error) {
+		Connections: tui.ConnectionFuncs{GetFunc: testTUIConnectionGetter(connection), ListFunc: func(context.Context, app.ListConnectionsRequest) (app.ListConnectionsResult, error) {
 			return app.ListConnectionsResult{Connections: []app.Connection{connection}, CatalogRevision: 1}, nil
 		}},
 		Connect: tui.ConnectFunc(func(context.Context, app.ConnectRequest) (app.ConnectResult, error) {
@@ -242,7 +242,7 @@ func TestTUIConnectConfirmationCancelStartsZeroNetwork(t *testing.T) {
 	})
 	updateTUI(t, model, model.Init()())
 	updateTUI(t, model, tuiKey("j"))
-	updateTUI(t, model, tuiKey("c"))
+	executeTUICommand(t, model, updateTUI(t, model, tuiKey("c")))
 	if view := model.View().Content; !strings.Contains(view, "Connect") || strings.Count(view, "Connect to SSH target?") != 1 || !strings.Contains(view, connection.Path) || strings.Contains(view, "Path: "+connection.Path) || strings.Contains(view, "Endpoint: "+connection.Host) || strings.Contains(view, "Connect confirmation") {
 		t.Fatalf("connect confirmation = %q", view)
 	}
@@ -296,6 +296,15 @@ func updateTUI(t *testing.T, model *tui.Model, msg tea.Msg) tea.Cmd {
 		t.Fatal("root model pointer changed")
 	}
 	return command
+}
+
+func testTUIConnectionGetter(connection app.Connection) func(context.Context, app.ItemSelector) (app.ConnectionResult, error) {
+	return func(_ context.Context, selector app.ItemSelector) (app.ConnectionResult, error) {
+		if selector.ID != connection.ID {
+			return app.ConnectionResult{}, app.ErrNotFound
+		}
+		return app.ConnectionResult{Connection: connection}, nil
+	}
 }
 
 func executeTUICommand(t *testing.T, model *tui.Model, command tea.Cmd) {

@@ -16,6 +16,8 @@ type ConnectionRepository interface {
 	UpdateConnection(context.Context, UpdateConnectionRequest) (ConnectionResult, error)
 	MoveConnection(context.Context, MoveConnectionRequest) (ConnectionResult, error)
 	DeleteConnection(context.Context, DeleteConnectionRequest) (DeleteConnectionResult, error)
+	ToggleConnectionFavourite(context.Context, NodeID) (bool, error)
+	RecordConnectionOpened(context.Context, NodeID, time.Time) error
 }
 
 // FolderRepository persists folder aggregates and hierarchical operations.

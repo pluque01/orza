@@ -6,6 +6,23 @@
 # Tests require exact equality with the package-private test inventory and with
 # language-shaped literals extracted from production source. User/catalog and
 # allowlisted backend values are dynamic and therefore never belong here.
+copy	"["
+copy	"[ssh] *"
+copy	"]/F3"
+copy	"Add to favourites"
+copy	"Catalog refresh failed. Press r to retry."
+copy	"F4"
+copy	"Favourites"
+copy	"Next view"
+copy	"No favourites yet."
+copy	"No recent sessions yet."
+copy	"Previous view"
+copy	"prepare connection"
+copy	"Recent"
+copy	"Remove from favourites"
+copy	"Shell closed. Could not save in Recent."
+copy	"Target changed. Confirm new target?"
+copy	"toggle favourite"
 copy	"SOCKS5 proxy; clients are not authenticated."
 copy	"Tunnel host is unavailable; reload the catalog."
 copy	"Warning"

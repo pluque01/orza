@@ -14,6 +14,9 @@ type actionID string
 
 const (
 	actionConnect       actionID = "connect"
+	actionFavourite     actionID = "favourite"
+	actionPreviousView  actionID = "previous_view"
+	actionNextView      actionID = "next_view"
 	actionForgetHostKey actionID = "forget_host_key"
 	actionNewConnection actionID = "new_connection"
 	actionNewFolder     actionID = "new_folder"
@@ -108,6 +111,8 @@ type actionContext struct {
 	state       actionState
 	focus       actionFocus
 	canToggle   bool
+	view        catalogView
+	favourite   bool
 	tunnelState app.TunnelState
 }
 
@@ -150,6 +155,10 @@ func focusedOn(focus actionFocus) func(actionContext) bool {
 
 func toggleApplies(context actionContext) bool {
 	return context.state == actionStateNormal && context.focus == actionFocusTree && context.canToggle
+}
+
+func treeNavigation(context actionContext) bool {
+	return context.view == catalogTree && context.state == actionStateNormal && context.focus == actionFocusTree
 }
 
 var rootActionDescriptors = []actionDescriptor{
@@ -223,11 +232,13 @@ var treeNavigationDescriptors = []actionDescriptor{
 	{id: actionDown, key: "Down/j", label: "Move down", category: actionCategoryNavigation, priority: actionPriorityNavigation, applicable: focusedOn(actionFocusTree)},
 	{id: actionHome, key: "Home/g", label: "First row", category: actionCategoryNavigation, priority: actionPriorityNavigation, applicable: focusedOn(actionFocusTree)},
 	{id: actionEnd, key: "End/G", label: "Last row", category: actionCategoryNavigation, priority: actionPriorityNavigation, applicable: focusedOn(actionFocusTree)},
-	{id: actionLeft, key: "Left/h", label: "Collapse/parent", category: actionCategoryNavigation, priority: actionPriorityNavigation, applicable: focusedOn(actionFocusTree)},
-	{id: actionRight, key: "Right/l", label: "Expand/child", category: actionCategoryNavigation, priority: actionPriorityNavigation, applicable: focusedOn(actionFocusTree)},
+	{id: actionLeft, key: "Left/h", label: "Collapse/parent", category: actionCategoryNavigation, priority: actionPriorityNavigation, applicable: treeNavigation},
+	{id: actionRight, key: "Right/l", label: "Expand/child", category: actionCategoryNavigation, priority: actionPriorityNavigation, applicable: treeNavigation},
 	{id: actionToggle, key: "Enter/Space", label: "Toggle", category: actionCategoryNavigation, priority: actionPriorityNavigation, applicable: toggleApplies},
 	{id: actionShowDetails, key: "Tab/Shift+Tab/F2", label: "Focus", category: actionCategoryNavigation, priority: actionPriorityNavigation, applicable: focusedOn(actionFocusTree)},
-	{id: actionSearch, key: "/", label: "Filter", category: actionCategoryNavigation, priority: actionPriorityNavigation, applicable: focusedOn(actionFocusTree)},
+	{id: actionSearch, key: "/", label: "Filter", category: actionCategoryNavigation, priority: actionPriorityNavigation, applicable: treeNavigation},
+	{id: actionPreviousView, key: "[", label: "Previous view", category: actionCategoryNavigation, priority: actionPriorityNavigation, applicable: focusedOn(actionFocusTree)},
+	{id: actionNextView, key: "]/F3", label: "Next view", category: actionCategoryNavigation, priority: actionPriorityNavigation, applicable: focusedOn(actionFocusTree)},
 }
 
 var treeSearchActionDescriptors = []actionDescriptor{
@@ -255,6 +266,9 @@ func objectActions(context actionContext) []actionDescriptor {
 	case actionSelectionConnection:
 		inventory = connectionActionDescriptors
 	default:
+		if context.view != catalogTree {
+			return filterActionsByID(rootActionDescriptors, actionReload, actionHelp, actionQuit)
+		}
 		return nil
 	}
 	return applicableDescriptors(inventory, context)
@@ -288,6 +302,11 @@ func actionsFor(context actionContext) []actionDescriptor {
 		actions = append(actions, actionDescriptor{id: actionTunnels, key: "t", label: "Tunnels", category: actionCategoryNavigation, priority: actionPriorityNavigation})
 		if context.selection == actionSelectionConnection {
 			actions = append(actions, actionDescriptor{id: actionForward, key: "p", label: "Forward", category: actionCategoryDomain, priority: actionPriorityPrimary})
+			label := "Add to favourites"
+			if context.favourite {
+				label = "Remove from favourites"
+			}
+			actions = append(actions, actionDescriptor{id: actionFavourite, key: "F4", label: label, category: actionCategoryDomain, priority: actionPriorityDomain, target: actionTargetSelection})
 		}
 		return actions
 	default:
@@ -519,6 +538,12 @@ func actionForKey(msg tea.KeyPressMsg, descriptors []actionDescriptor, keys keyM
 			binding = keys.Delete
 		case actionConnect:
 			binding = keys.Connect
+		case actionFavourite:
+			binding = keys.Favourite
+		case actionPreviousView:
+			binding = keys.PreviousView
+		case actionNextView:
+			binding = keys.NextView
 		case actionForgetHostKey:
 			binding = keys.ForgetHostKey
 		case actionNewConnection:
@@ -579,7 +604,7 @@ func actionHelpLines(descriptors []actionDescriptor) []string {
 }
 
 func browserLegendDescriptors(descriptors []actionDescriptor) []actionDescriptor {
-	wanted := []actionID{actionConnect, actionSearch, actionNewConnection, actionNewFolder, actionQuit, actionHelp, actionShowDetails, actionShowTree, actionTunnels, actionForward, actionInspectTunnel, actionStopTunnel, actionRetry, actionDismissTunnel, actionUp, actionDown}
+	wanted := []actionID{actionConnect, actionFavourite, actionSearch, actionNewConnection, actionNewFolder, actionQuit, actionHelp, actionShowDetails, actionShowTree, actionTunnels, actionForward, actionInspectTunnel, actionStopTunnel, actionRetry, actionDismissTunnel, actionUp, actionDown}
 	if len(filterActionsByID(descriptors, actionConnect)) == 0 {
 		wanted = append([]actionID{actionNewConnection, actionNewFolder}, wanted...)
 	}
@@ -638,8 +663,8 @@ func browserHelpLines(style styles, descriptors []actionDescriptor, width int) [
 		name string
 		ids  []actionID
 	}{
-		{"Navigation", []actionID{actionUp, actionDown, actionHome, actionEnd, actionLeft, actionRight, actionToggle, actionShowDetails, actionShowTree, actionSearch, actionTunnels, actionInspectTunnel}},
-		{"Connection", []actionID{actionConnect, actionForgetHostKey, actionForward, actionStopTunnel, actionDismissTunnel}},
+		{"Navigation", []actionID{actionPreviousView, actionNextView, actionUp, actionDown, actionHome, actionEnd, actionLeft, actionRight, actionToggle, actionShowDetails, actionShowTree, actionSearch, actionTunnels, actionInspectTunnel}},
+		{"Connection", []actionID{actionConnect, actionFavourite, actionForgetHostKey, actionForward, actionStopTunnel, actionDismissTunnel}},
 		{"Management", []actionID{actionNewConnection, actionNewFolder, actionEdit, actionMove, actionDelete, actionReload, actionRetry, actionSave, actionConfirm, actionDiscard, actionMoveHere}},
 		{"Application", []actionID{actionCancel, actionCancelWarning, actionBack, actionHelp, actionQuit}},
 	}

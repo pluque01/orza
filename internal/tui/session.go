@@ -807,7 +807,7 @@ func (m *Model) sessionCommandWithRecovery(connection app.Connection, recovery *
 	expected := connection.Revision
 	runtime := &sessionRuntime{
 		id: id, ctx: operationCtx, service: m.connect,
-		request:  app.ConnectRequest{Connection: app.ItemSelector{ID: connection.ID}, Expected: &expected},
+		request:  app.ConnectRequest{Connection: app.ItemSelector{ID: connection.ID}, Expected: &expected, ExpectedPath: connection.Path},
 		requests: make(chan tea.Msg, 1), done: make(chan struct{}), attempt: attempt,
 		recoveryAttempt: recoveryAttempt, recoveryFailure: recoveryFailure,
 	}
@@ -881,6 +881,20 @@ func (m *Model) handleSession(msg sessionFinishedMsg) tea.Cmd {
 				return nil
 			}
 		}
+		current := msg.result.Connection
+		if resultKind == app.ErrorKindConflict && m.modal.kind == modalKindConnectConfirmation && current.ID != "" && current.ID == msg.attempt.ID &&
+			(current.Revision != msg.attempt.Revision || current.Path != msg.attempt.Path) {
+			if quit {
+				return m.requestTunnelQuit()
+			}
+			target := m.captureConnectionTarget(current)
+			m.modal.target = &target
+			confirmation := newConnectConfirmation(current)
+			confirmation.changed = true
+			m.modal.payload = connectConfirmationPayload{confirmation: confirmation}
+			m.modal.viewport = newViewportState(0)
+			return nil
+		}
 		target := ""
 		if operationTarget != nil {
 			target = operationTarget.path
@@ -936,11 +950,23 @@ func (m *Model) handleSession(msg sessionFinishedMsg) tea.Cmd {
 	}
 	m.sessionResult, m.sessionErr = app.ConnectResult{}, nil
 	m.reconcileTunnels()
+	connection := msg.result.Connection
+	if node := m.browser.snapshot.nodes[connection.ID]; node.connection != nil && connection.LastOpenedAt.After(node.connection.LastOpenedAt) {
+		node.connection.LastOpenedAt = connection.LastOpenedAt
+		if m.browser.view == catalogRecent {
+			m.browser.rebuildRows()
+			m.ownedSelectionID = m.browser.selectedID
+			m.syncDetail()
+		}
+	}
 	m.status = "Shell closed."
 	if msg.result.Session.RemoteExitStatus != nil {
 		m.status = "Shell closed with status " + strconv.Itoa(*msg.result.Session.RemoteExitStatus) + "."
 	} else if msg.err != nil {
 		m.status = "Shell connection ended; browser restored."
+	}
+	if msg.result.RecentSaveFailed {
+		m.status = "Shell closed. Could not save in Recent."
 	}
 	if quit || m.ctx.Err() != nil {
 		return m.closeTunnelsAndQuit()

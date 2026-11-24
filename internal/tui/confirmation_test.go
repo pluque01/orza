@@ -137,10 +137,10 @@ func TestConnectionConfirmationSuppressesBrowserLegend(t *testing.T) {
 		conn.Port = 2202
 		snapshot := newCatalogSnapshot(root, 1)
 		_ = snapshot.addChildren(root.ID, app.ListChildrenResult{Connections: []app.Connection{conn}})
-		m := New(Config{Width: size[0], Height: size[1], NoColor: true})
+		m := New(Config{Connections: ConnectionFuncs{GetFunc: testConnectionLookup(conn)}, Width: size[0], Height: size[1], NoColor: true})
 		m.browser.setSnapshot(snapshot, conn.ID)
 		m.ownedSelectionID = conn.ID
-		updateModel(m, keyPress("c"))
+		openConnectForTest(t, m)
 		view := m.View().Content
 		for _, want := range []string{"/production", "prod.example:2202", "y Confirm", "Enter/Esc Cancel"} {
 			if !strings.Contains(view, want) {

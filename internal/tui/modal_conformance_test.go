@@ -76,7 +76,7 @@ func assertSC009NoColorOwner(t *testing.T, model *Model) {
 	if calculateLayout(model.width, model.height, model.focusedLayoutRegion()).mode == layoutUndersized {
 		return
 	}
-	want := "[*] Tree"
+	want := "[*] [Tree]"
 	switch model.focusOwner {
 	case focusOwnerDetail, focusOwnerConnectionForm:
 		want = "[*] Details"
@@ -629,7 +629,7 @@ func TestSC009DeleteAndConnectEffects(t *testing.T) {
 			})
 			model.browser.selectedID = connection.ID
 			model.ownedSelectionID = connection.ID
-			sc009Update(t, model, keyPress("c"))
+			sc009RunCommand(t, model, sc009Update(t, model, keyPress("c")))
 			command := sc009Update(t, model, keyPress("y"))
 			if connectCalls != 0 || model.modal.kind != modalKindConnectConfirmation || model.operation == nil || model.operation.kind != asyncOperationSSHStart {
 				t.Fatalf("run %d: confirmation did not defer one SSH operation", run)
@@ -646,7 +646,7 @@ func TestSC009DeleteAndConnectEffects(t *testing.T) {
 			})
 			model.browser.selectedID = connection.ID
 			model.ownedSelectionID = connection.ID
-			sc009Update(t, model, keyPress("c"))
+			sc009RunCommand(t, model, sc009Update(t, model, keyPress("c")))
 			if command := sc009Update(t, model, keyPress("enter")); command != nil || connectCalls != 1 || model.modal.isOpen() {
 				t.Fatalf("run %d: cancel started network or retained modal", run)
 			}

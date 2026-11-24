@@ -155,7 +155,7 @@ func TestUS5NoColorSafeTextAcrossDisplayModes(t *testing.T) {
 				t.Fatalf("no-color %s frame contains ANSI/control sequence: %q", size.name, view)
 			}
 			if size.width >= minimumLayoutWidth && size.height >= minimumLayoutHeight {
-				for _, cue := range []string{"[*] Tree", "[ ] Details", "Connection", "> ", "[ssh]"} {
+				for _, cue := range []string{"[*] [Tree]", "[ ] Details", "Connection", "> ", "[ssh]"} {
 					if !strings.Contains(view, cue) {
 						t.Fatalf("%s frame omitted textual cue %q:\n%s", size.name, cue, view)
 					}

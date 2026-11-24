@@ -7,6 +7,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/pluque01/orza/internal/app"
 	"github.com/pluque01/orza/internal/credential"
@@ -325,6 +326,14 @@ func (r *connectionRepositoryFromService) MoveConnection(context.Context, app.Mo
 }
 func (r *connectionRepositoryFromService) DeleteConnection(context.Context, app.DeleteConnectionRequest) (app.DeleteConnectionResult, error) {
 	return app.DeleteConnectionResult{}, app.ErrInvalidRequest
+}
+
+func (r *connectionRepositoryFromService) ToggleConnectionFavourite(context.Context, app.NodeID) (bool, error) {
+	return false, app.ErrInvalidRequest
+}
+
+func (r *connectionRepositoryFromService) RecordConnectionOpened(context.Context, app.NodeID, time.Time) error {
+	return app.ErrInvalidRequest
 }
 
 type emptyCredentialOperations struct{}

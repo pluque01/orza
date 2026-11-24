@@ -199,7 +199,7 @@ func (m *Model) tunnelLegend(width int) []string {
 		lines = lines[:3]
 	}
 	notice := ""
-	if strings.HasPrefix(m.status, "Shell") || strings.HasPrefix(m.status, "Tunnel") {
+	if strings.HasPrefix(m.status, "Shell") || strings.HasPrefix(m.status, "Tunnel") || m.status == catalogRefreshFailed {
 		notice = m.status
 	}
 	if m.tunnelForm != nil && m.tunnelForm.error != "" {
