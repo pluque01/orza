@@ -68,7 +68,7 @@ func TestTunnelFormValidationUsesConnectionErrorStyles(t *testing.T) {
 			t.Fatal("invalid port accepted")
 		}
 		lines := f.project(style, 44, 40).lines
-		wantField := style.item(compactConnectionFormRow(style, "Listen port", "0▏", 16), itemSemantics{focused: true, invalid: true})
+		wantField := style.item(compactConnectionFormRow(style, "Listen port", "0 ", 16), itemSemantics{focused: true, invalid: true})
 		wantError := style.failureMessage(safeText(f.error, 44-7))
 		found := false
 		for i := 0; i+1 < len(lines); i++ {

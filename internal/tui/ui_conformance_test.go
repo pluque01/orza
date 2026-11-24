@@ -906,9 +906,10 @@ func TestSC006NoColorPrincipalBrowserAndConnectionFormFlowsTwentyRuns(t *testing
 		updateModel(model, keyPress("shift+tab"))
 
 		updateModel(model, keyPress("n"))
-		view = model.View().Content
+		createForm := model.View()
+		view = createForm.Content
 		assertSCNoANSI(t, view)
-		if !strings.Contains(view, "[*] Details") || !scContainsStructuredField(view, "Name", "▏") || !strings.Contains(view, "  * [ Save connection ]") {
+		if !strings.Contains(view, "[*] Details") || !scContainsStructuredField(view, "Name", "") || !strings.Contains(view, "  * [ Save connection ]") || createForm.Cursor == nil {
 			t.Fatalf("run %d: create form omitted focus/primary cues:\n%s", run, view)
 		}
 		updateModel(model, keyPress("ctrl+s"))
