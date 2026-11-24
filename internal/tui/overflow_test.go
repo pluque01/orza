@@ -117,7 +117,7 @@ func sc005RenderConnectionForm(field sc005FieldCase, canary string, width, heigh
 	form.inputs[fieldIdentity].SetValue(field.value)
 	form.setFocus(fieldName)
 	form.setDimensions(width, height)
-	logical, _ := form.content(newStyles(true))
+	logical, _, _ := form.content(newStyles(true))
 	return sc005ProjectedResult(logical, form.project(newStyles(true)), width, height)
 }
 

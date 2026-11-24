@@ -2142,9 +2142,8 @@ func (m *Model) View() tea.View {
 		return view
 	}
 
-	content := m.browserShell(layout)
+	content, cursor := m.browserShell(layout)
 	if m.modal.isOpen() {
-		background := m.browserShell(layout)
 		modal := m.modal
 		tunnelPayload, isTunnel := modal.payload.(tunnelModalPayload)
 		if m.securityInput != nil && m.securityInput.trust != nil && (modal.kind == modalKindConnectConfirmation || isTunnel && tunnelPayload.action == "start") {
@@ -2156,20 +2155,27 @@ func (m *Model) View() tea.View {
 		if modal.helpVisible {
 			modal.helpDescriptors = &modalHelpDescriptors{values: m.currentHelpDescriptors()}
 		}
-		content = renderModalOverlay(background, modal, layout, m.styles, m.currentHelpLines())
+		content, cursor = projectModalOverlay(content, modal, layout, m.styles, m.currentHelpLines())
 	}
 	view := tea.NewView(fitContent(content, m.width, m.height))
+	view.Cursor = cursor
 	view.AltScreen = true
 	view.WindowTitle = "Orza"
 	return view
 }
 
-func (m *Model) browserShell(layout layoutState) string {
+func (m *Model) browserShell(layout layoutState) (string, *tea.Cursor) {
 	treeRows := layout.tree.contentHeight()
 	var searchLines []string
+	var cursor *tea.Cursor
 	if m.search != nil {
+		const label = "Filter: "
 		m.searchInputWidth(layout.tree.contentWidth())
-		searchLines = append(searchLines, "Filter: "+m.search.input.View())
+		input := m.search.input.View()
+		searchLines = append(searchLines, label+input.text)
+		if input.cursor != noTextCursor {
+			cursor = panelTextCursor(layout.tree, len(label)+input.cursor, 0)
+		}
 		treeRows = max(0, treeRows-len(searchLines))
 	}
 	treeProjection := m.browser.projectTree(m.styles, layout.tree.contentWidth(), treeRows)
@@ -2207,6 +2213,9 @@ func (m *Model) browserShell(layout layoutState) string {
 	} else if m.tunnelForm != nil {
 		projection := m.tunnelForm.project(m.styles, layout.details.contentWidth(), layout.details.contentHeight())
 		details, detailScrollbar = projection.lines, projection.scrollbar
+		if projection.cursor != nil {
+			cursor = panelTextCursor(layout.details, projection.cursor.X, projection.cursor.Y)
+		}
 	} else if m.screen == screenConnectionForm && m.form != nil {
 		conflict := m.formConflictLines(layout.details.contentWidth())
 		formHeight := max(1, layout.details.contentHeight()-len(conflict))
@@ -2218,6 +2227,9 @@ func (m *Model) browserShell(layout layoutState) string {
 		detailTrackStart = len(details)
 		details = append(details, projection.lines...)
 		detailScrollbar = projection.scrollbar
+		if projection.cursor != nil && len(conflict) == 0 {
+			cursor = panelTextCursor(layout.details, projection.cursor.X, projection.cursor.Y)
+		}
 	} else {
 		detailRows := layout.details.contentHeight()
 		if notice := m.navigationNotice.text(); notice != "" {
@@ -2232,6 +2244,9 @@ func (m *Model) browserShell(layout layoutState) string {
 
 	context := m.actionContext()
 	status := ""
+	if m.operation != nil || m.securityInput != nil && m.securityInput.preemptsApplicationInput() {
+		cursor = nil
+	}
 	if m.operation != nil {
 		context.state = actionStateOperation
 		status = m.operation.loadingStatus()
@@ -2297,9 +2312,9 @@ func (m *Model) browserShell(layout layoutState) string {
 			for i := range base {
 				base[i] = left[i] + strings.Repeat(" ", wideGutterWidth) + right[i]
 			}
-			return strings.Join(append(base, actions...), "\n")
+			return strings.Join(append(base, actions...), "\n"), cursor
 		}
-		return treePanel + "\n" + detailPanel + "\n" + tunnelPanel + "\n" + strings.Join(actions, "\n")
+		return treePanel + "\n" + detailPanel + "\n" + tunnelPanel + "\n" + strings.Join(actions, "\n"), cursor
 	}
 	if m.modal.isOpen() {
 		actions = nil
@@ -2311,9 +2326,19 @@ func (m *Model) browserShell(layout layoutState) string {
 		for index := range base {
 			base[index] = left[index] + strings.Repeat(" ", wideGutterWidth) + right[index]
 		}
-		return strings.Join(append(base, actions...), "\n")
+		return strings.Join(append(base, actions...), "\n"), cursor
 	}
-	return treePanel + "\n" + detailPanel + "\n" + strings.Join(actions, "\n")
+	return treePanel + "\n" + detailPanel + "\n" + strings.Join(actions, "\n"), cursor
+}
+
+// panelTextCursor translates a content cell past the panel border and padding.
+func panelTextCursor(rect layoutRect, column, row int) *tea.Cursor {
+	if column < 0 || column >= rect.contentWidth() || row < 0 || row >= rect.contentHeight() {
+		return nil
+	}
+	cursor := tea.NewCursor(rect.x+2+column, rect.y+1+row)
+	cursor.Blink = false
+	return cursor
 }
 
 func (m *Model) searchInputWidth(width int) {

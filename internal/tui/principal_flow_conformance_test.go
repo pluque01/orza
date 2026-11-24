@@ -497,7 +497,7 @@ func sc006ValidationFailureFlow(t *testing.T) int {
 		model.form.setFocus(fieldName)
 		sc009Update(t, model, keyPress("ctrl+s"))
 		sc006ObserveModel(t, model, "validation failure", run, sc006Observation{
-			focus: []string{"[*] Details"}, selection: []string{"> [/] /"}, detailFields: []scStructuredFieldExpectation{{"Name", "bad/name▏"}},
+			focus: []string{"[*] Details"}, selection: []string{"> [/] /"}, detailFields: []scStructuredFieldExpectation{{"Name", "bad/name"}},
 			error: []string{"Error:"}, actions: []string{"Ctrl+S Save", "Esc Cancel"},
 		})
 		frames++
@@ -537,14 +537,18 @@ func sc006ConflictFlow(t *testing.T, outcome string) int {
 		model.form.inputs[fieldHost].SetValue("pending.test")
 		model.form.setFocus(fieldHost)
 		model.installFormConflict(conflictTypeRevisionChanged)
+		if view := model.View(); view.Cursor != nil {
+			t.Fatalf("conflict controls retained the Host cursor: %+v", view.Cursor)
+		}
 		switch outcome {
 		case "reload":
 			model.connections = ConnectionFuncs{ListFunc: func(context.Context, app.ListConnectionsRequest) (app.ListConnectionsResult, error) {
 				return app.ListConnectionsResult{Connections: []app.Connection{connection}, CatalogRevision: 8}, nil
 			}}
 			sc009RunCommand(t, model, sc009Update(t, model, keyPress("r")))
+			assertTextCursor(t, model.View(), "pending.test", len("pending.t"))
 			sc006ObserveModel(t, model, "conflict Reload", run, sc006Observation{
-				focus: []string{"[*] Details"}, selection: []string{"> "}, details: []string{"Edit connection", "pending.t▏est"},
+				focus: []string{"[*] Details"}, selection: []string{"> "}, details: []string{"Edit connection", "pending.test"},
 				targetFields: []scStructuredFieldExpectation{{"Path", connection.Path}}, actions: []string{"Ctrl+S Save", "Esc Cancel"},
 			})
 		case "back":
@@ -554,8 +558,11 @@ func sc006ConflictFlow(t *testing.T, outcome string) int {
 			})
 		case "cancel":
 			sc009Update(t, model, keyPress("esc"))
+			if view := model.View(); view.Cursor != nil {
+				t.Fatalf("compacted conflict controls retained the Host cursor: %+v", view.Cursor)
+			}
 			sc006ObserveModel(t, model, "conflict Cancel", run, sc006Observation{
-				focus: []string{"[*] Details"}, selection: []string{"> "}, details: []string{"Edit connection", "pending.t▏est"},
+				focus: []string{"[*] Details"}, selection: []string{"> "}, details: []string{"Edit connection", "pending.test"},
 				targetFields: []scStructuredFieldExpectation{{"Path", connection.Path}}, error: []string{"Warning: Save blocked"}, actions: []string{"r Reload", "b Back", "Esc Cancel warning"},
 			})
 		}

@@ -4,6 +4,7 @@ import (
 	"math/bits"
 	"strings"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -36,6 +37,15 @@ type viewportProjection struct {
 	activeLine     int
 	scrollbar      scrollbarGeometry
 	scrollbarStart int
+	cursor         *tea.Position
+}
+
+func (p viewportProjection) withTextCursor(column, logicalRow int) viewportProjection {
+	row := logicalRow - p.renderOffset
+	if column >= 0 && row >= 0 && row < p.visibleRows {
+		p.cursor = &tea.Position{X: column, Y: p.scrollbarStart + row}
+	}
+	return p
 }
 
 func newViewportState(offset int) viewportState {
