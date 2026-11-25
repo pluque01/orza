@@ -21,7 +21,7 @@
     let
       version = "unstable-${self.shortRev or self.dirtyShortRev or "unknown"}";
       # renovate: datasource=golang-version depName=go
-      goVersion = "1.27.3";
+      goVersion = "1.27.4";
       goFor =
         system:
         let
