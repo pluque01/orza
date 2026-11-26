@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/pluque01/orza/internal/catalog"
 )
@@ -66,6 +67,12 @@ func (*hostTrustConnectionRepository) MoveConnection(context.Context, MoveConnec
 }
 func (*hostTrustConnectionRepository) DeleteConnection(context.Context, DeleteConnectionRequest) (DeleteConnectionResult, error) {
 	return DeleteConnectionResult{}, ErrInvalidRequest
+}
+func (*hostTrustConnectionRepository) ToggleConnectionFavourite(context.Context, NodeID) (bool, error) {
+	return false, ErrInvalidRequest
+}
+func (*hostTrustConnectionRepository) RecordConnectionOpened(context.Context, NodeID, time.Time) error {
+	return ErrInvalidRequest
 }
 
 type hostTrustRepository struct {

@@ -70,8 +70,8 @@ func TestConnectionFormCompactRowsUseColonlessMutedLabelsAndBestAlignment(t *tes
 		Host: "host-value.test", Port: 2222, Username: "user-value", AuthMethod: app.AuthMethodKey,
 		IdentityFile: "/identity-value",
 	})
-	plainLines, _ := form.content(newStyles(true))
-	coloredLines, _ := form.content(newStyles(false))
+	plainLines, _, _ := form.content(newStyles(true))
+	coloredLines, _, _ := form.content(newStyles(false))
 	if got := ansi.Strip(strings.Join(coloredLines, "\n")); got != strings.Join(plainLines, "\n") {
 		t.Fatal("colored form changed plain-text semantics")
 	}

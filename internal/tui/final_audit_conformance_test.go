@@ -67,7 +67,7 @@ func TestSC009OperationErrorRetryFolderDeleteScopeAndSSHStart20Runs(t *testing.T
 					return app.ConnectResult{Connection: captured, Attempt: auditAttempt(captured), Session: app.SSHSessionResult{State: app.SessionSucceeded, StartedAt: time.Unix(1, 0)}}, nil
 				})
 				selectSCNode(model, captured.ID)
-				sc009Update(t, model, keyPress("c"))
+				sc009RunCommand(t, model, sc009Update(t, model, keyPress("c")))
 				if command := sc009Update(t, model, keyPress("y")); command == nil {
 					t.Fatalf("run %d: SSH start returned no command", run)
 				}
@@ -114,7 +114,7 @@ func TestSC012ConnectConfirmationConflictRecovery20Runs(t *testing.T) {
 						connectCalls++
 						return app.ConnectResult{Attempt: auditAttempt(captured)}, conflict.err
 					})
-					model.connections = ConnectionFuncs{ListFunc: func(context.Context, app.ListConnectionsRequest) (app.ListConnectionsResult, error) {
+					model.connections = ConnectionFuncs{GetFunc: testConnectionLookup(captured), ListFunc: func(context.Context, app.ListConnectionsRequest) (app.ListConnectionsResult, error) {
 						reloadCalls++
 						values := []app.Connection{other}
 						if conflict.err == app.ErrConflict {
@@ -123,7 +123,7 @@ func TestSC012ConnectConfirmationConflictRecovery20Runs(t *testing.T) {
 						return app.ListConnectionsResult{Connections: values, CatalogRevision: 9}, nil
 					}}
 					selectSCNode(model, captured.ID)
-					sc009Update(t, model, keyPress("c"))
+					sc009RunCommand(t, model, sc009Update(t, model, keyPress("c")))
 					payload := model.modal.payload
 					if command := sc009Update(t, model, keyPress("y")); command == nil {
 						t.Fatalf("run %d: connect confirmation returned no command", run)
@@ -263,7 +263,7 @@ func TestSC015RemoteStreamAbsentFromTUIModelModalAndDiagnostics(t *testing.T) {
 		}, errors.New("network interruption")
 	})
 	selectSCNode(model, connection.ID)
-	sc009Update(t, model, keyPress("c"))
+	sc009RunCommand(t, model, sc009Update(t, model, keyPress("c")))
 	sc009RunExec(t, model, sc009Update(t, model, keyPress("y")))
 
 	if remoteStdout.String() != remoteStreamCanary || remoteStderr.String() != remoteStreamCanary {
@@ -410,7 +410,7 @@ func auditMatchingOwnerAfterEsc(t *testing.T, kind asyncOperationKind, conflict 
 			return result, resultErr
 		})
 		selectSCNode(model, connection.ID)
-		sc009Update(t, model, keyPress("c"))
+		sc009RunCommand(t, model, sc009Update(t, model, keyPress("c")))
 		command = sc009Update(t, model, keyPress("y"))
 	}
 	if command == nil || model.operation == nil {

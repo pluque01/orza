@@ -17,6 +17,7 @@ type ConnectionService interface {
 	Move(context.Context, app.MoveConnectionRequest) (app.ConnectionResult, error)
 	DeleteScope(context.Context, app.ItemSelector) (app.ConnectionDeleteScope, error)
 	Delete(context.Context, app.DeleteConnectionRequest) (app.DeleteConnectionResult, error)
+	ToggleFavourite(context.Context, app.NodeID) (bool, error)
 }
 
 // FolderService is the shared hierarchy use-case boundary used by the TUI.
@@ -58,13 +59,14 @@ var errUnavailable = errors.New("TUI service is unavailable")
 
 // ConnectionFuncs is a compact deterministic adapter for model tests.
 type ConnectionFuncs struct {
-	CreateFunc      func(context.Context, app.CreateConnectionRequest) (app.ConnectionResult, error)
-	GetFunc         func(context.Context, app.ItemSelector) (app.ConnectionResult, error)
-	ListFunc        func(context.Context, app.ListConnectionsRequest) (app.ListConnectionsResult, error)
-	UpdateFunc      func(context.Context, app.UpdateConnectionRequest) (app.ConnectionResult, error)
-	MoveFunc        func(context.Context, app.MoveConnectionRequest) (app.ConnectionResult, error)
-	DeleteScopeFunc func(context.Context, app.ItemSelector) (app.ConnectionDeleteScope, error)
-	DeleteFunc      func(context.Context, app.DeleteConnectionRequest) (app.DeleteConnectionResult, error)
+	CreateFunc          func(context.Context, app.CreateConnectionRequest) (app.ConnectionResult, error)
+	GetFunc             func(context.Context, app.ItemSelector) (app.ConnectionResult, error)
+	ListFunc            func(context.Context, app.ListConnectionsRequest) (app.ListConnectionsResult, error)
+	UpdateFunc          func(context.Context, app.UpdateConnectionRequest) (app.ConnectionResult, error)
+	MoveFunc            func(context.Context, app.MoveConnectionRequest) (app.ConnectionResult, error)
+	DeleteScopeFunc     func(context.Context, app.ItemSelector) (app.ConnectionDeleteScope, error)
+	DeleteFunc          func(context.Context, app.DeleteConnectionRequest) (app.DeleteConnectionResult, error)
+	ToggleFavouriteFunc func(context.Context, app.NodeID) (bool, error)
 }
 
 func (f ConnectionFuncs) Create(ctx context.Context, request app.CreateConnectionRequest) (app.ConnectionResult, error) {
@@ -114,6 +116,13 @@ func (f ConnectionFuncs) Delete(ctx context.Context, request app.DeleteConnectio
 		return app.DeleteConnectionResult{}, errUnavailable
 	}
 	return f.DeleteFunc(ctx, request)
+}
+
+func (f ConnectionFuncs) ToggleFavourite(ctx context.Context, id app.NodeID) (bool, error) {
+	if f.ToggleFavouriteFunc == nil {
+		return false, errUnavailable
+	}
+	return f.ToggleFavouriteFunc(ctx, id)
 }
 
 // FolderFuncs is a deterministic adapter for hierarchy model tests.

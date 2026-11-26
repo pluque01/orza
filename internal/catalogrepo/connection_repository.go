@@ -453,16 +453,19 @@ func itemByID(ctx context.Context, query rowQuerier, id string) (catalogItem, er
 func connectionProjection(ctx context.Context, query rowQuerier, id string) (app.Connection, error) {
 	var projection app.Connection
 	var parentID, username, identityFile, credentialRef sql.NullString
+	var lastOpenedAt sql.NullInt64
 	var kind, authMethod string
 	var createdAt, updatedAt string
 	if err := query.QueryRowContext(ctx, `
 		SELECT n.id, n.parent_id, n.kind, n.name, n.revision, n.created_at, n.updated_at,
-		       c.host, c.port, c.username, c.auth_method, c.identity_file, c.credential_ref
+		       c.host, c.port, c.username, c.auth_method, c.identity_file, c.credential_ref,
+		       c.favourite, c.last_opened_at_ns
 		FROM nodes n JOIN connections c ON c.node_id = n.id
 		WHERE n.id = ?
 	`, id).Scan(
 		&projection.ID, &parentID, &kind, &projection.Name, &projection.Revision, &createdAt, &updatedAt,
 		&projection.Host, &projection.Port, &username, &authMethod, &identityFile, &credentialRef,
+		&projection.Favourite, &lastOpenedAt,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return app.Connection{}, ErrNotFound
@@ -475,6 +478,9 @@ func connectionProjection(ctx context.Context, query rowQuerier, id string) (app
 	projection.AuthMethod = app.AuthMethod(authMethod)
 	projection.IdentityFile = identityFile.String
 	projection.CredentialRef = credentialRef.String
+	if lastOpenedAt.Valid {
+		projection.LastOpenedAt = time.Unix(0, lastOpenedAt.Int64).UTC()
+	}
 
 	var err error
 	projection.CreatedAt, err = parseCatalogTime(createdAt)

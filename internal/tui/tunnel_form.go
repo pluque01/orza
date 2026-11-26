@@ -205,6 +205,7 @@ func (f *tunnelForm) project(style styles, width, height int) viewportProjection
 	modeLabelWidth := min(labelWidth, max(0, width-connectionFormMarkerWidth-ansi.StringWidth(selector)-1))
 	lines = append(lines, style.item(compactConnectionFormRow(style, "Mode", selector, modeLabelWidth), itemSemantics{focused: f.focus == 0}))
 	active, activeStart := 2, -1
+	cursor := tea.Position{X: noTextCursor}
 	errorShown := false
 	for i := 0; i < count; i++ {
 		f.inputs[i].SetWidth(valueWidth)
@@ -217,7 +218,11 @@ func (f *tunnelForm) project(style styles, width, height int) viewportProjection
 		if focused {
 			active = len(lines)
 		}
-		line := compactConnectionFormRow(style, tunnelInputLabels[i], f.inputs[i].View(), labelWidth)
+		input := f.inputs[i].View()
+		if input.cursor != noTextCursor {
+			cursor = tea.Position{X: connectionFormMarkerWidth + labelWidth + 1 + input.cursor, Y: len(lines)}
+		}
+		line := compactConnectionFormRow(style, tunnelInputLabels[i], input.text, labelWidth)
 		lines = append(lines, style.item(line, itemSemantics{focused: focused, invalid: message != ""}))
 		if message != "" {
 			lines = append(lines, style.failureMessage(safeText(message, max(0, width-7))))
@@ -254,11 +259,11 @@ func (f *tunnelForm) project(style styles, width, height int) viewportProjection
 			if f.focus == f.startField() {
 				control = active
 			}
-			return f.viewport.project(lines, height, width, control)
+			return f.viewport.project(lines, height, width, control).withTextCursor(cursor.X, cursor.Y)
 		}
-		return projectActiveBlock(lines, activeStart, active, height, width)
+		return projectActiveBlock(lines, activeStart, active, height, width).withTextCursor(cursor.X, cursor.Y)
 	}
-	return f.viewport.project(lines, height, width, active)
+	return f.viewport.project(lines, height, width, active).withTextCursor(cursor.X, cursor.Y)
 }
 
 func (m *Model) openTunnelForm(connection app.Connection, config app.TunnelConfig, retry uint64) {

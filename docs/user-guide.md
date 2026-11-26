@@ -591,7 +591,7 @@ drawing terminal control sequences.
 ### Terminal support and layout
 
 The supported interface is a VT-capable terminal on Linux, macOS, or Windows that reports printable
-keys, arrows, Tab, Escape, F1, F2, and Ctrl-C. The terminal must provide normal VT screen, keyboard,
+keys, arrows, Tab, Escape, F1 through F4, and Ctrl-C. The terminal must provide normal VT screen, keyboard,
 resize, and bracketed-paste behavior; native operating-system integration still needs testing on each
 platform. Startup verifies Windows VT input and output console modes directly. Unix terminal devices do
 not expose a reliable VT protocol query, so startup verifies only that stdin and stdout are terminals;
@@ -607,7 +607,7 @@ does not consume mouse events or read the operating-system clipboard.
 
 Every normal browser frame has three named panels and a borderless action legend:
 
-- **Tree** shows the catalog hierarchy and the one selected row.
+- **Catalog** shows the selected row in `Tree`, `Favourites`, or `Recent`.
 - **Details** shows the selected folder/connection or hosts an active connection form. Folder details
   list direct child connections only, not connections in descendant folders.
 - **Tunnels** permanently shows session-owned tunnels, including an empty state and active count,
@@ -617,8 +617,9 @@ The bottom legend shows available keys for the current selection and focus owner
 there is no titled or bordered Actions panel. Connection create/edit screens use their own Tree/Details
 and control layout; forwarding drafts remain in the browser Details panel with Tunnels visible. During filtering, Details shows the selected result index and name, or the reason no result is available.
 
-Panel titles use plain text such as `Details`; the existing `[*]` and `[ ]` markers identify active
-and inactive regions. Content types use unbracketed labels such as `Connection` and `Folder`; Details
+Panel titles use plain text such as `Details`. The `[*]` and `[ ]` markers identify panel focus. The
+catalog header also brackets the active view name, as in `Tree - [Favourites] - Recent`, independently
+of which panel owns focus. Content types use unbracketed labels such as `Connection` and `Folder`; Details
 keeps its stable region title while identifying selected content separately. When styling is available,
 content-type labels are bold without a foreground or background color; structured descriptive labels use
 secondary emphasis while values remain primary.
@@ -628,9 +629,9 @@ display cells for values. Below that threshold, every label is followed by its i
 next line; fields are not hidden to preserve alignment. Connection forms instead keep each label and
 bounded control on one compact row. At 40x12, the focused invalid field stays visible and its validation reason appears in the legend.
 
-At 80 columns or wider, Tree is left of vertically stacked Details and Tunnels, with the legend below.
-Below 80 columns, Tree, Details, and Tunnels are stacked above the legend. The complete layout target is
-**80x24**: Tree occupies 31x21, Details 48x11, and Tunnels 48x10, with a one-column gutter and three-row
+At 80 columns or wider, the catalog is left of vertically stacked Details and Tunnels, with the legend below.
+Below 80 columns, the catalog, Details, and Tunnels are stacked above the legend. The complete layout target is
+**80x24**: the catalog occupies 31x21, Details 48x11, and Tunnels 48x10, with a one-column gutter and three-row
 legend. At **40x12**, each panel has three rows including borders, leaving one content row, followed by
 the three-row legend. Larger stacked layouts share the panel height equally; wide layouts retain a
 40%/60% left/right split and share the right-column height between Details and Tunnels. Changing focus
@@ -653,16 +654,19 @@ diagnostic values are displayed without translation. Run `NO_COLOR=1 orza` or `o
 when color is unavailable. Color adds emphasis but carries no meaning by itself. No-color mode removes
 ANSI styling while retaining the same title, content-type label, values, and textual semantics:
 `[*]`/`[ ]` mark active/inactive regions, `>` marks selection or focus, `!` marks invalid input, `*`
-marks a primary control, and `[/]`, `[+]`, `[-]`, `[ssh]`, `Warning:`, `Error:`, the `│`/`█` track and
+marks a primary control or a favourite beside `[ssh]` in Tree, and `[/]`, `[+]`, `[-]`, `[ssh]`, `Warning:`, `Error:`, the `│`/`█` track and
 thumb, and `…` preserve node, severity, overflow position, and truncation meaning. Scrollbars are
 informational and remain keyboard-only; lower-priority legend actions remain discoverable in contextual
 Help rather than making the legend scrollable.
 
 | Keys | Action |
 |---|---|
-| Up/Down or `j`/`k` | Move through visible tree rows without wrapping. |
-| Left/Right or `h`/`l` | Collapse/go to parent or expand/go to first child. |
-| `g` / `G` | Select the first/root or last visible row. |
+| Up/Down or `j`/`k` | Move through rows of the current catalog view without wrapping. |
+| Left/Right or `h`/`l` in Tree | Collapse/go to parent or expand/go to first child. |
+| `g` / `G` | Select the first or last visible row. |
+| `[` / `]` or `F3` in catalog focus | Cycle backward or forward through Tree, Favourites, and Recent. |
+| `F4` | Add or remove the selected connection from Favourites. |
+| `/` in Tree | Search connection names with a regular expression, which can contain brackets. |
 | `Enter` / Space on folder | Toggle folder expansion. |
 | `Esc` | Close help, cancel, or go back. |
 | `?` | Toggle contextual help. |
@@ -672,14 +676,13 @@ Help rather than making the legend scrollable.
 | `p` in catalog focus | Open a forwarding draft for the selected connection; inert on folders/root. |
 | `t` in the browser | Focus Tunnels without changing catalog or tunnel selection. |
 | `r` in catalog focus | Reload the catalog; on an error it performs the offered retry/reload action. |
-| `Tab` / `Shift-Tab` or `F2` | Cycle Tree/Details/Tunnels focus, or move through form controls. |
+| `Tab` / `Shift-Tab` or `F2` | Cycle Catalog/Details/Tunnels focus forward or backward, or move through form controls. |
 | Up/Down or `j`/`k` in Tunnels | Select tunnel entries without wrapping. |
 | `Enter` in Tunnels | Inspect complete endpoints, warnings, state, and latest safe diagnostic. |
 | `s` in Tunnels | Confirm stop for a selected Starting/Active tunnel. |
 | `r` in Tunnels | Review the current saved connection and retry a selected Stopped/Failed tunnel. |
 | `d` in Tunnels | Dismiss a selected Stopped/Failed entry; never stop a live tunnel. |
-| `Esc` in Tunnels | Return to Tree without stopping anything. |
-| `F2` | Move to the previous form control when Shift-Tab is unavailable. |
+| `Esc` in Tunnels | Return to the catalog without stopping anything. |
 | `F1` | Open Help while an editable field owns printable keys. |
 | Left / Right | Cycle the visible `Agent`, `Key`, and `Password` method selector while Method is focused. |
 | Space | Toggle password remembering while that control is focused. |
@@ -696,9 +699,20 @@ failure and returns to the captured node when it still exists; `q` quits from th
 Retry never starts network activity until the refreshed target is explicitly confirmed. These meanings do
 not change the browser meanings of `d`, `r`, or `e` when no startup failure is open.
 
-The browser is one preorder tree rooted at `/`. The root starts expanded and selected; other folders
-start collapsed. Siblings place folders before connections and use case-sensitive binary name order,
-then ID. Move pickers disable a folder's own subtree. Destructive dialogs start on cancel and show the
+The catalog starts in `Tree`, a preorder tree rooted at `/`. The root starts expanded and selected.
+Other folders start collapsed. Siblings place folders before connections and use case-sensitive binary
+name order, then ID. `Favourites` lists marked connections by their current catalog paths in path
+order. `Recent` lists up to ten distinct connections in order of most recent interactive SSH opening,
+including shells opened by `orza connect`. Reopening a connection moves it to the top. Once the remote
+server accepts the shell, its opening counts regardless of how it ends. Canceled or failed SSH starts,
+`orza exec`, and tunnels do not add entries. Entering either list refreshes the catalog, and `r` can
+refresh it while you stay in the view.
+
+Favourites and last opening times persist by connection ID. Renaming or moving a connection keeps
+its state and changes its displayed path. Deleting a connection removes it from both lists. A new
+connection at a previously used path starts without activity.
+
+Move pickers disable a folder's own subtree. Destructive dialogs start on cancel and show the
 captured path and affected scope. Unsaved forms require confirmation before discard. Conflicts preserve
 the external change and offer reload instead of merging or overwriting it.
 
@@ -706,8 +720,9 @@ Contextual create and move operations also pin the parent/source/destination rev
 the repository transaction. Renaming or moving an ancestor while a form or credential prompt is open
 therefore produces a conflict rather than creating or moving under a path the user did not confirm.
 
-Before connecting, the TUI confirms the captured path and `host:port`; the application compares the
-captured revision again before network I/O so a concurrent edit cannot redirect an accepted target.
+Before connecting from any catalog view, the TUI confirms the path and `host:port`. The application
+checks the captured path and revision before network I/O. If the connection changes, the TUI shows the
+updated destination for a fresh confirmation.
 Bubble Tea then yields the terminal to SSH. A failure before the remote shell becomes
 active returns to a stable TUI error screen. Once active, the remote shell owns stdin/stdout/stderr.
 Terminal resize events are sent to its PTY. When the shell ends, the TUI restores the local terminal
@@ -715,7 +730,7 @@ and accepts keyboard input as soon as the browser returns.
 
 ### Forwarding And Shells
 
-Select a saved connection in Tree/Details and press `p`. The Details draft starts in Local mode with
+Select a saved connection in the catalog or Details and press `p`. The Details draft starts in Local mode with
 listen address `127.0.0.1`; provide a listen port and, for Local/Remote, destination host/port. Left/Right
 cycles Local/Remote/Dynamic while Mode owns focus. Tab and Shift-Tab/F2 traverse controls, F1 opens Help,
 Space toggles the separate external-access acknowledgement, and `Ctrl-S` or Enter on `[ Start forwarding ]`
@@ -781,8 +796,9 @@ password unless Password is selected when saving.
 
 ### Text And Secret Paste
 
-The focused text field shows `▏` at the insertion point in both color and no-color mode. Use Left,
-Right, Home, and End to move it within the field. During selection, it marks the end that moves.
+The focused text field shows a block cursor in both color and no-color mode. It moves over the
+characters without shifting them and sits on a blank cell at the end of the value or in an empty
+field. Use Left, Right, Home, and End to move it. Brackets show the selected range.
 
 Connection text fields (excluding the closed Method selector) and the folder-name field accept terminal-native bracketed paste. Paste is
 inserted at the cursor or replaces a Shift+arrow selection as one operation. CR, LF, NEL, `U+2028`, and

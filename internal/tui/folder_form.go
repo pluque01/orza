@@ -114,7 +114,7 @@ func (f *folderForm) modalLines(width int, semanticStyles ...styles) ([]string, 
 	fields = append(fields, displayField{label: "Name"})
 	group := newStructuredFieldGroup(fields, 2, width, true)
 	f.input.SetWidth(group.availableValueWidth())
-	group.fields[len(group.fields)-1].value = f.input.View()
+	group.fields[len(group.fields)-1].value = f.input.View().text
 	lines := group.render(style)
 	active := len(lines) - 1
 	lines[active] = "> " + strings.TrimPrefix(lines[active], "  ")

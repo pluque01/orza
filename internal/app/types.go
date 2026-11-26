@@ -57,6 +57,8 @@ type Connection struct {
 	AuthMethod    AuthMethod
 	IdentityFile  string
 	CredentialRef string
+	Favourite     bool
+	LastOpenedAt  time.Time
 }
 
 type Folder struct {
@@ -408,6 +410,8 @@ type SSHSessionRequest struct {
 	// Activate blocks immediately before the interactive session takes ownership
 	// of the local terminal. Presentations use it to release their input reader.
 	Activate func(context.Context) error
+	// Opened is called when the remote server accepts the interactive shell.
+	Opened   func(time.Time)
 	Terminal Terminal
 }
 
@@ -467,9 +471,10 @@ type SSHAttemptTarget struct {
 }
 
 type ConnectRequest struct {
-	Connection  ItemSelector
-	Expected    *Revision
-	DecideTrust TrustDecisionFunc
+	Connection   ItemSelector
+	Expected     *Revision
+	ExpectedPath string
+	DecideTrust  TrustDecisionFunc
 	// ReadSecret is an optional presentation boundary for terminal-owned,
 	// ephemeral authentication input. Returned bytes must not be retained.
 	ReadSecret func(context.Context, SecretRequest) ([]byte, error)
@@ -480,7 +485,8 @@ type ConnectRequest struct {
 // ConnectResult is a secret-free snapshot of the selected connection and its
 // terminal session result.
 type ConnectResult struct {
-	Connection Connection
-	Attempt    SSHAttemptTarget
-	Session    SSHSessionResult
+	Connection       Connection
+	Attempt          SSHAttemptTarget
+	Session          SSHSessionResult
+	RecentSaveFailed bool
 }

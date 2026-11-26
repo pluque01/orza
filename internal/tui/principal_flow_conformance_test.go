@@ -99,7 +99,7 @@ func sc006US1Cells() []sc006FlowCell {
 					detailFields = append(detailFields, target.infoField)
 				}
 				sc006ObserveModel(t, model, target.name, run, sc006Observation{
-					focus: []string{"[*] Tree"}, selection: []string{"> "}, details: details, detailFields: detailFields,
+					focus: []string{"[*] [Tree]"}, selection: []string{"> "}, details: details, detailFields: detailFields,
 					targetFields: []scStructuredFieldExpectation{{"Path", target.path(fixture)}}, actions: []string{"r Reload", "? Help", "q Quit"},
 				})
 				frames++
@@ -128,7 +128,7 @@ func sc006US1Cells() []sc006FlowCell {
 			frames++
 			sc009Update(t, model, keyPress("shift+tab"))
 			sc006ObserveModel(t, model, "Details leave", run, sc006Observation{
-				focus: []string{"[*] Tree"}, selection: []string{"> "}, details: []string{"Connection"},
+				focus: []string{"[*] [Tree]"}, selection: []string{"> "}, details: []string{"Connection"},
 				targetFields: []scStructuredFieldExpectation{{"Path", fixture.directConn.Path}}, actions: []string{"c Connect", "r Reload"},
 			})
 			frames++
@@ -193,9 +193,9 @@ func sc006US2Cells() []sc006FlowCell {
 				switch action.key {
 				case "n", "e":
 					sc009Update(t, model, keyPress("esc"))
-				case "f", "m", "c":
+				case "f", "m":
 					sc009Update(t, model, keyPress("esc"))
-				case "d":
+				case "c", "d":
 					sc009RunCommand(t, model, command)
 					sc009Update(t, model, keyPress("esc"))
 				case "r":
@@ -218,7 +218,7 @@ func sc006US2Cells() []sc006FlowCell {
 					kind = "Root"
 				}
 				sc006ObserveModel(t, model, action.context+" "+action.name, run, sc006Observation{
-					focus: []string{"[*] Tree"}, selection: []string{"> "}, details: []string{kind},
+					focus: []string{"[*] [Tree]"}, selection: []string{"> "}, details: []string{kind},
 					targetFields: []scStructuredFieldExpectation{{"Path", selected.Path}}, actions: []string{"r Reload", "? Help", "q Quit"},
 				})
 				frames++
@@ -404,7 +404,7 @@ func sc006OperationRestorationObservation(fixture operationConformanceFixture) s
 	case asyncOperationReload:
 		return sc006Observation{focus: []string{"[*] Details"}, selection: []string{"> "}, details: []string{"Connection"}, targetFields: []scStructuredFieldExpectation{{"Path", fixture.connection.Path}}, actions: []string{"r Reload", "q Quit"}}
 	default:
-		return sc006Observation{focus: []string{"[*] Tree"}, selection: []string{"> "}, details: []string{"Root"}, targetFields: []scStructuredFieldExpectation{{"Path", "/"}}, actions: []string{"r Reload", "q Quit"}}
+		return sc006Observation{focus: []string{"[*] [Tree]"}, selection: []string{"> "}, details: []string{"Root"}, targetFields: []scStructuredFieldExpectation{{"Path", "/"}}, actions: []string{"r Reload", "q Quit"}}
 	}
 }
 
@@ -430,7 +430,7 @@ func sc006ConnectionSaveFlow(t *testing.T, edit bool) int {
 			path, host = original.Path, "edited.test"
 		}
 		sc006ObserveModel(t, model, "connection save", run, sc006Observation{
-			focus: []string{"[*] Tree"}, selection: []string{"> "}, details: []string{"Connection"}, detailFields: []scStructuredFieldExpectation{{"Endpoint", host + ":22"}},
+			focus: []string{"[*] [Tree]"}, selection: []string{"> "}, details: []string{"Connection"}, detailFields: []scStructuredFieldExpectation{{"Endpoint", host + ":22"}},
 			targetFields: []scStructuredFieldExpectation{{"Path", path}}, actions: []string{"c Connect", "e Edit", "q Quit"},
 		})
 		frames++
@@ -480,7 +480,7 @@ func sc006ConnectionCancelFlow(t *testing.T, edit bool) int {
 		sc009Update(t, model, keyPress(key))
 		sc009Update(t, model, keyPress("esc"))
 		sc006ObserveModel(t, model, "connection cancel", run, sc006Observation{
-			focus: []string{"[*] Tree"}, selection: []string{"> "}, details: []string{kind},
+			focus: []string{"[*] [Tree]"}, selection: []string{"> "}, details: []string{kind},
 			targetFields: []scStructuredFieldExpectation{{"Path", path}}, actions: []string{"r Reload", "q Quit"},
 		})
 		frames++
@@ -497,7 +497,7 @@ func sc006ValidationFailureFlow(t *testing.T) int {
 		model.form.setFocus(fieldName)
 		sc009Update(t, model, keyPress("ctrl+s"))
 		sc006ObserveModel(t, model, "validation failure", run, sc006Observation{
-			focus: []string{"[*] Details"}, selection: []string{"> [/] /"}, detailFields: []scStructuredFieldExpectation{{"Name", "bad/name▏"}},
+			focus: []string{"[*] Details"}, selection: []string{"> [/] /"}, detailFields: []scStructuredFieldExpectation{{"Name", "bad/name"}},
 			error: []string{"Error:"}, actions: []string{"Ctrl+S Save", "Esc Cancel"},
 		})
 		frames++
@@ -537,25 +537,32 @@ func sc006ConflictFlow(t *testing.T, outcome string) int {
 		model.form.inputs[fieldHost].SetValue("pending.test")
 		model.form.setFocus(fieldHost)
 		model.installFormConflict(conflictTypeRevisionChanged)
+		if view := model.View(); view.Cursor != nil {
+			t.Fatalf("conflict controls retained the Host cursor: %+v", view.Cursor)
+		}
 		switch outcome {
 		case "reload":
 			model.connections = ConnectionFuncs{ListFunc: func(context.Context, app.ListConnectionsRequest) (app.ListConnectionsResult, error) {
 				return app.ListConnectionsResult{Connections: []app.Connection{connection}, CatalogRevision: 8}, nil
 			}}
 			sc009RunCommand(t, model, sc009Update(t, model, keyPress("r")))
+			assertTextCursor(t, model.View(), "pending.test", len("pending.t"))
 			sc006ObserveModel(t, model, "conflict Reload", run, sc006Observation{
-				focus: []string{"[*] Details"}, selection: []string{"> "}, details: []string{"Edit connection", "pending.t▏est"},
+				focus: []string{"[*] Details"}, selection: []string{"> "}, details: []string{"Edit connection", "pending.test"},
 				targetFields: []scStructuredFieldExpectation{{"Path", connection.Path}}, actions: []string{"Ctrl+S Save", "Esc Cancel"},
 			})
 		case "back":
 			sc009Update(t, model, keyPress("b"))
 			sc006ObserveModel(t, model, "conflict Back", run, sc006Observation{
-				focus: []string{"[*] Tree"}, selection: []string{"> "}, details: []string{"Root"}, targetFields: []scStructuredFieldExpectation{{"Path", "/"}}, actions: []string{"r Reload", "q Quit"},
+				focus: []string{"[*] [Tree]"}, selection: []string{"> "}, details: []string{"Root"}, targetFields: []scStructuredFieldExpectation{{"Path", "/"}}, actions: []string{"r Reload", "q Quit"},
 			})
 		case "cancel":
 			sc009Update(t, model, keyPress("esc"))
+			if view := model.View(); view.Cursor != nil {
+				t.Fatalf("compacted conflict controls retained the Host cursor: %+v", view.Cursor)
+			}
 			sc006ObserveModel(t, model, "conflict Cancel", run, sc006Observation{
-				focus: []string{"[*] Details"}, selection: []string{"> "}, details: []string{"Edit connection", "pending.t▏est"},
+				focus: []string{"[*] Details"}, selection: []string{"> "}, details: []string{"Edit connection", "pending.test"},
 				targetFields: []scStructuredFieldExpectation{{"Path", connection.Path}}, error: []string{"Warning: Save blocked"}, actions: []string{"r Reload", "b Back", "Esc Cancel warning"},
 			})
 		}
@@ -589,7 +596,7 @@ func sc006DirtyQuitFlow(t *testing.T, outcome string) int {
 				t.Fatalf("run %d: dirty Save did not defer Quit through reconciliation", run)
 			}
 			sc006ObserveModel(t, model, "dirty Quit Save", run, sc006Observation{
-				focus: []string{"[*] Tree"}, selection: []string{"> "}, details: []string{"Connection"}, detailFields: []scStructuredFieldExpectation{{"Endpoint", "pending.test:22"}},
+				focus: []string{"[*] [Tree]"}, selection: []string{"> "}, details: []string{"Connection"}, detailFields: []scStructuredFieldExpectation{{"Endpoint", "pending.test:22"}},
 				targetFields: []scStructuredFieldExpectation{{"Path", connection.Path}}, actions: []string{"c Connect", "q Quit"},
 			})
 		case "discard":
@@ -598,7 +605,7 @@ func sc006DirtyQuitFlow(t *testing.T, outcome string) int {
 				t.Fatalf("run %d: dirty Discard did not return Quit", run)
 			}
 			sc006ObserveModel(t, model, "dirty Quit Discard", run, sc006Observation{
-				focus: []string{"[*] Tree"}, selection: []string{"> "}, details: []string{"Connection"},
+				focus: []string{"[*] [Tree]"}, selection: []string{"> "}, details: []string{"Connection"},
 				targetFields: []scStructuredFieldExpectation{{"Path", connection.Path}}, actions: []string{"c Connect", "q Quit"},
 			})
 		case "cancel":
@@ -723,13 +730,13 @@ func sc006ModalObservation(fixture sc006ModalFixture, kind modalKind) sc006Obser
 func sc006BrowserObservation(model *Model) sc006Observation {
 	selected := model.browser.selectionNode()
 	if selected == nil {
-		return sc006Observation{focus: []string{"[*] Tree"}, selection: []string{"> "}, details: []string{"Root"}, targetFields: []scStructuredFieldExpectation{{"Path", "/"}}, actions: []string{"r Reload", "q Quit"}}
+		return sc006Observation{focus: []string{"[*] [Tree]"}, selection: []string{"> "}, details: []string{"Root"}, targetFields: []scStructuredFieldExpectation{{"Path", "/"}}, actions: []string{"r Reload", "q Quit"}}
 	}
 	kind := sc006KindLabel(selected.Kind)
 	if selected.ID == model.browser.snapshot.rootID {
 		kind = "Root"
 	}
-	focus := "[*] Tree"
+	focus := "[*] [Tree]"
 	if model.focusOwner == focusOwnerDetail {
 		focus = "[*] Details"
 	}

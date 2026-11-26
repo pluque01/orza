@@ -12,7 +12,7 @@ import (
 )
 
 const maxTextFieldRunes = 4096
-const textFieldCaret = '▏'
+const noTextCursor = -1
 
 const (
 	textFieldControlError = "Paste rejected: unsupported control character"
@@ -26,6 +26,7 @@ type textField struct {
 	anchor    int
 	selecting bool
 	err       string
+	leftCell  int
 }
 
 func newTextField() textField {
@@ -45,6 +46,7 @@ func (f *textField) SetValue(value string) {
 	f.input.SetValue(value)
 	f.clearSelection()
 	f.err = ""
+	f.leftCell = 0
 }
 
 func (f *textField) Position() int { return f.input.Position() }
@@ -267,82 +269,130 @@ func (f *textField) clearSelection() {
 	f.selecting = false
 }
 
-func (f *textField) View() string {
+type textFieldView struct {
+	text   string
+	cursor int
+}
+
+func (f *textField) View() textFieldView {
+	width := f.Width()
+	if width <= 0 {
+		return textFieldView{cursor: noTextCursor}
+	}
 	value := f.Value()
 	position := f.Position()
-	if !f.Focused() {
-		return f.viewport(value, position, false)
-	}
-
 	start, end := f.selection()
-	runes := []rune(value)
-	marked := make([]rune, 0, len(runes)+3)
-	marked = append(marked, runes[:start]...)
-	if start == end {
-		marked = append(marked, textFieldCaret)
-		marked = append(marked, runes[end:]...)
-		return f.viewport(string(marked), position, true)
+	if start != end {
+		runes := []rune(value)
+		value = string(runes[:start]) + "[" + string(runes[start:end]) + "]" + string(runes[end:])
+		position++
+		if f.Position() == end {
+			position++
+		}
 	}
 
-	cursor := start
-	if position == start {
-		marked = append(marked, textFieldCaret)
+	limit := len(value)*6 + 1
+	projected := safeText(value, limit)
+	prefix := safeText(string([]rune(value)[:position]), limit)
+	column, cell, cellWidth := textFieldCursorCell(projected, len(prefix))
+	focused := f.Focused()
+	if focused && cellWidth == 0 {
+		// The terminal cursor needs a real cell when the insertion point is
+		// at the end of the value, including an empty value.
+		projected += " "
+		cell, cellWidth = " ", 1
 	}
-	marked = append(marked, '[')
-	marked = append(marked, runes[start:end]...)
-	marked = append(marked, ']')
-	if position == end {
-		cursor = len(marked)
-		marked = append(marked, textFieldCaret)
+	w := makeTextFieldWindow(projected, width, f.leftCell)
+	if column < w.left || column+cellWidth > w.right {
+		// Keep the current window while the cursor fits. Scroll only when it
+		// leaves the window, putting the new location near the middle.
+		var offset int
+		switch {
+		case column+cellWidth <= width-1:
+		case ansi.StringWidth(projected)-column <= width-1:
+			offset = ansi.StringWidth(projected) - width + 1
+		default:
+			offset = max(0, column-max(0, width-2-cellWidth)/2)
+		}
+		w = makeTextFieldWindow(projected, width, offset)
 	}
-	marked = append(marked, runes[end:]...)
-	return f.viewport(string(marked), cursor, true)
+	f.leftCell = w.left
+	if !focused {
+		return textFieldView{text: w.text, cursor: noTextCursor}
+	}
+	if column < w.left || column+cellWidth > w.right {
+		// With too little room for both the current grapheme and clipping
+		// indicators, give the cursor cell priority.
+		if cellWidth > width {
+			cell, cellWidth = " ", 1
+		}
+		if cellWidth < width {
+			if column > 0 {
+				return textFieldView{text: "…" + cell, cursor: 1}
+			}
+			return textFieldView{text: cell + "…"}
+		}
+		return textFieldView{text: cell}
+	}
+	column -= w.left
+	if w.left > 0 {
+		column++ // The left clipping indicator occupies one cell.
+	}
+	return textFieldView{text: w.text, cursor: column}
 }
 
-func (f *textField) viewport(value string, cursor int, caret bool) string {
-	if f.Width() <= 0 {
-		return ""
-	}
-	width := f.Width()
-	runes := []rune(value)
-	cursor = min(max(0, cursor), len(runes))
-	projected := safeText(value, max(1, len(value)*6+1))
-	totalWidth := ansi.StringWidth(projected)
-	if totalWidth <= width {
-		return projected
-	}
-
-	prefix := safeText(string(runes[:cursor]), max(1, len(value)*6+1))
-	cursorWidth := ansi.StringWidth(prefix)
-	if caret && width <= 2 {
-		if width == 1 {
-			return string(textFieldCaret)
-		}
-		if cursorWidth == 0 {
-			return string(textFieldCaret) + "…"
-		}
-		return "…" + string(textFieldCaret)
-	}
-	if width == 1 {
-		return "…"
-	}
-	if cursorWidth < width-1 {
-		return ansi.Truncate(projected, width-1, "") + "…"
-	}
-	if totalWidth-cursorWidth < width-1 {
-		return "…" + trimTextFieldLeft(projected, totalWidth-width+1)
-	}
-	available := width - 2
-	start := min(max(1, cursorWidth-available/2), max(1, totalWidth-available-1))
-	return "…" + ansi.Truncate(trimTextFieldLeft(projected, start), available, "") + "…"
-}
-
-// trimTextFieldLeft drops any grapheme that crosses the left edge of the window.
-func trimTextFieldLeft(value string, cells int) string {
-	for cells > 0 && value != "" {
+// textFieldCursorCell locates the projected grapheme, including when the rune
+// insertion point falls between a base character and its combining marks.
+func textFieldCursorCell(value string, byteOffset int) (int, string, int) {
+	column := 0
+	for value != "" {
 		cluster, width := ansi.FirstGraphemeCluster(value, ansi.GraphemeWidth)
+		if byteOffset < len(cluster) && width > 0 {
+			return column, cluster, width
+		}
 		value = value[len(cluster):]
-		cells -= width
+		byteOffset -= len(cluster)
+		column += width
 	}
-	return value
+	return column, "", 0
+}
+
+type textFieldWindow struct {
+	text        string
+	left, right int // Columns in the full value, excluding the clipping indicators.
+}
+
+func makeTextFieldWindow(value string, width, offset int) textFieldWindow {
+	totalWidth := ansi.StringWidth(value)
+	if totalWidth <= width {
+		return textFieldWindow{text: value, right: totalWidth}
+	}
+	offset = min(offset, totalWidth-1)
+	left := 0
+	for left < offset && value != "" {
+		cluster, cells := ansi.FirstGraphemeCluster(value, ansi.GraphemeWidth)
+		value = value[len(cluster):]
+		left += cells
+	}
+	prefix := ""
+	if left > 0 {
+		prefix = "…"
+		width--
+	}
+	if totalWidth-left <= width {
+		return textFieldWindow{text: prefix + value, left: left, right: totalWidth}
+	}
+	if width <= 0 {
+		return textFieldWindow{text: prefix, left: left, right: left}
+	}
+	end, visible := 0, 0
+	for end < len(value) {
+		cluster, cells := ansi.FirstGraphemeCluster(value[end:], ansi.GraphemeWidth)
+		if visible+cells > width-1 {
+			break
+		}
+		end += len(cluster)
+		visible += cells
+	}
+	return textFieldWindow{text: prefix + value[:end] + "…", left: left, right: left + visible}
 }

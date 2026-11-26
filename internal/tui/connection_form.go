@@ -410,17 +410,17 @@ func (f *connectionForm) view(style styles, dimensions ...int) string {
 }
 
 func (f *connectionForm) project(style styles) viewportProjection {
-	lines, activeLine := f.content(style)
-	if f.height == 1 && f.focusedError() != "" {
-		return f.viewport.project(lines, f.height, f.width, activeLine-1)
+	lines, activeLine, cursor := f.content(style)
+	var projection viewportProjection
+	switch {
+	case f.height == 1 && f.focusedError() != "":
+		projection = f.viewport.project(lines, f.height, f.width, activeLine-1)
+	case f.errors[f.focus] != "" || f.focus <= fieldIdentity && f.focus != fieldAuth && f.inputs[f.focus].Error() != "", f.focus == fieldSave && f.formError != "":
+		projection = projectActiveBlock(lines, activeLine-1, activeLine, f.height, f.width)
+	default:
+		projection = f.viewport.project(lines, f.height, f.width, activeLine)
 	}
-	if f.errors[f.focus] != "" || f.focus <= fieldIdentity && f.focus != fieldAuth && f.inputs[f.focus].Error() != "" {
-		return projectActiveBlock(lines, activeLine-1, activeLine, f.height, f.width)
-	}
-	if f.focus == fieldSave && f.formError != "" {
-		return projectActiveBlock(lines, activeLine-1, activeLine, f.height, f.width)
-	}
-	return f.viewport.project(lines, f.height, f.width, activeLine)
+	return projection.withTextCursor(cursor.X, cursor.Y)
 }
 
 func projectActiveBlock(lines []string, activeStart, activeEnd, rows, width int) viewportProjection {
@@ -458,9 +458,10 @@ func projectActiveBlock(lines []string, activeStart, activeEnd, rows, width int)
 	return projection
 }
 
-func (f *connectionForm) content(style styles) ([]string, int) {
+func (f *connectionForm) content(style styles) ([]string, int, tea.Position) {
 	lines := []string{style.contentBadge(f.title())}
 	activeLine := 0
+	cursor := tea.Position{X: noTextCursor}
 	labelWidth := f.formLabelWidth()
 	if path, visible := f.catalogPath(); visible {
 		valueWidth := max(0, f.width-connectionFormMarkerWidth-labelWidth-1)
@@ -491,7 +492,11 @@ func (f *connectionForm) content(style styles) ([]string, int) {
 			}
 			line = style.item("[ Save connection ]", semantics)
 		default:
-			line = style.item(compactConnectionFormRow(style, formLabels[field], f.inputs[field].View(), labelWidth), semantics)
+			input := f.inputs[field].View()
+			line = style.item(compactConnectionFormRow(style, formLabels[field], input.text, labelWidth), semantics)
+			if input.cursor != noTextCursor {
+				cursor = tea.Position{X: connectionFormMarkerWidth + labelWidth + 1 + input.cursor, Y: len(lines)}
+			}
 		}
 		if field == f.focus {
 			activeLine = len(lines)
@@ -508,7 +513,7 @@ func (f *connectionForm) content(style styles) ([]string, int) {
 			}
 		}
 	}
-	return lines, activeLine
+	return lines, activeLine, cursor
 }
 
 func (f *connectionForm) title() string {

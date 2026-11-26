@@ -156,7 +156,7 @@ func TestUS3DetailIdentityRowsUseLocalEightCellValueBoundary(t *testing.T) {
 func TestUS5Reduced40x12KeepsIdentityAndSafetyBeforeOverflow(t *testing.T) {
 	model := New(Config{Width: 40, Height: 12, NoColor: true})
 	view := model.View().Content
-	for _, required := range []string{"[*] Tree", "[ ] Details", "> [/] /"} {
+	for _, required := range []string{"[*] [Tree]", "[ ] Details", "> [/] /"} {
 		if !strings.Contains(view, required) {
 			t.Fatalf("40x12 reduced frame omitted priority content %q:\n%s", required, view)
 		}

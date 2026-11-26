@@ -81,6 +81,7 @@ func (payload unsavedChangesPayload) validModalPayload() bool { return payload.v
 type connectConfirmation struct {
 	connection app.Connection
 	previous   *app.SSHAttemptTarget
+	changed    bool
 }
 
 func newConnectConfirmation(connection app.Connection) *connectConfirmation {
@@ -428,7 +429,11 @@ func connectConfirmationLines(confirmation *connectConfirmation, width int, moda
 		displayField{label: "ID", value: string(connection.ID)},
 		displayField{label: "Revision", value: fmt.Sprint(connection.Revision)},
 	)
-	lines := append([]string{"Connect to SSH target?"}, renderWrappedModalFields(modalRenderStyle(modalStyle), width, fields)...)
+	heading := "Connect to SSH target?"
+	if confirmation.changed {
+		heading = "Target changed. Confirm new target?"
+	}
+	lines := append([]string{heading}, renderWrappedModalFields(modalRenderStyle(modalStyle), width, fields)...)
 	return append(lines, modalControlLine("y Confirm"), modalControlLine("Enter/Esc Cancel"))
 }
 
@@ -515,15 +520,46 @@ func sshFailureModalControlLines(modal *errorModal) []string {
 }
 
 func renderModalOverlay(background string, state modalState, layout layoutState, style styles, help []string) string {
+	content, _ := projectModalOverlay(background, state, layout, style, help)
+	return content
+}
+
+func projectModalOverlay(background string, state modalState, layout layoutState, style styles, help []string) (string, *tea.Cursor) {
 	rect := layout.modalOverlay()
 	if rect.width <= 0 || rect.height <= 0 {
-		return background
+		return background, nil
 	}
 	contentWidth, contentHeight := rect.contentWidth(), rect.contentHeight()
 	lines, active := modalContent(state, style, contentWidth, help)
 	projection := projectModalViewport(state, lines, contentHeight, contentWidth, active, style)
 	panel := renderFocusedRegionPanelWithScrollbar(style.regionTitle(modalTitle(state.kind), true), projection.lines, rect, style, projection.scrollbar, projection.scrollbarStart, true)
-	return placeOverlay(background, panel, rect, layout.width, layout.height)
+	return placeOverlay(background, panel, rect, layout.width, layout.height), modalTextCursor(state, rect, projection)
+}
+
+func modalTextCursor(state modalState, rect layoutRect, projection viewportProjection) *tea.Cursor {
+	if state.helpVisible || state.trust != nil || state.operationStatus != "" || state.conflict != nil && state.conflict.blocked {
+		return nil
+	}
+	var form *folderForm
+	switch payload := state.payload.(type) {
+	case folderCreatePayload:
+		form = payload.form
+	case folderEditPayload:
+		form = payload.form
+	}
+	if form == nil || projection.activeLine == noActiveLine {
+		return nil
+	}
+	input := form.input.View()
+	if input.cursor == noTextCursor {
+		return nil
+	}
+	column := rect.contentWidth() - form.input.Width() + input.cursor
+	projection = projection.withTextCursor(column, projection.activeLine)
+	if projection.cursor == nil {
+		return nil
+	}
+	return panelTextCursor(rect, projection.cursor.X, projection.cursor.Y)
 }
 
 func projectModalViewport(state modalState, lines []string, rows, width, active int, style styles) viewportProjection {
@@ -711,6 +747,9 @@ func placeOverlay(background, overlay string, rect layoutRect, width, height int
 			line += strings.Repeat(" ", width-lineWidth)
 		}
 		left := ansi.Cut(line, 0, rect.x)
+		// A wide grapheme can cross the overlay edge. Keep the panel anchored
+		// to its layout column when the cut drops that grapheme.
+		left += strings.Repeat(" ", max(0, rect.x-ansi.StringWidth(left)))
 		right := ansi.Cut(line, rect.x+rect.width, width)
 		base[rect.y+row] = left + overlayLines[row] + right
 	}

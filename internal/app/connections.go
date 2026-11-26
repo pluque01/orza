@@ -90,6 +90,20 @@ func NewConnectionService(repository ConnectionRepository, credentials Credentia
 	return &ConnectionService{repository: repository, credentials: credentials}, nil
 }
 
+func (s *ConnectionService) ToggleFavourite(ctx context.Context, id NodeID) (bool, error) {
+	if err := contextError(ctx); err != nil {
+		return false, safeUseCaseError("toggle favourite", "", err)
+	}
+	if err := validateSelector(ItemSelector{ID: id}); err != nil {
+		return false, safeUseCaseError("toggle favourite", "", err)
+	}
+	favourite, err := s.repository.ToggleConnectionFavourite(ctx, id)
+	if err != nil {
+		return false, safeUseCaseError("toggle favourite", "", err)
+	}
+	return favourite, nil
+}
+
 func (s *ConnectionService) Create(ctx context.Context, request CreateConnectionRequest) (ConnectionResult, error) {
 	if err := contextError(ctx); err != nil {
 		return ConnectionResult{}, safeUseCaseError("create connection", request.Parent.Path, err)

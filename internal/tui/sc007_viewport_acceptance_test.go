@@ -84,7 +84,7 @@ func sc007ClosedSurfaces(t testing.TB) []sc007ClosedSurface {
 	form := validConnectionForm()
 	form.setAuthMethod(app.AuthMethodKey)
 	form.syncDependencies()
-	formLines, _ := form.content(styles)
+	formLines, _, _ := form.content(styles)
 
 	modalSurface := func(state modalState, selectOffset func(int)) func(int) viewportProjection {
 		return func(offset int) viewportProjection {
@@ -239,7 +239,7 @@ func TestSC007ScaleDetailsFormActionsAndHelpOverflowAcrossTwelveSizes(t *testing
 						if !slices.ContainsFunc(projection.lines, func(line string) bool { return strings.HasPrefix(line, ">") }) {
 							t.Fatalf("run %d %s field %v: focused field is not in projected form: %#v", run+1, size.name, field, projection.lines)
 						}
-						content, _ := formModel.form.content(formModel.styles)
+						content, _, _ := formModel.form.content(formModel.styles)
 						assertSC007Projection(t, size.name+" form", projection, content, layout.details.contentWidth())
 						assertSC007ViewOverflow(t, size.name+" form", view, projection)
 					}

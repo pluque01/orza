@@ -78,7 +78,7 @@ func TestUS5PerformanceAcceptance1100NodeFixture(t *testing.T) {
 	model.browser.setSnapshot(*snapshot, "")
 	model.syncDetail()
 	model.ownedSelectionID = model.browser.selectedID
-	panelModel := New(Config{Width: 80, Height: 24, NoColor: true})
+	panelModel := New(Config{Connections: ConnectionFuncs{GetFunc: testConnectionLookup(*snapshot.nodes[connectionID].connection)}, Width: 80, Height: 24, NoColor: true})
 	panelModel.browser.setSnapshot(*snapshot, "")
 	panelModel.syncDetail()
 	panelModel.ownedSelectionID = panelModel.browser.selectedID
@@ -127,7 +127,7 @@ func TestUS5PerformanceAcceptance1100NodeFixture(t *testing.T) {
 			panelModel.width, panelModel.height = 80, 24
 			panelModel.syncDetail()
 		}, run: func(int) {
-			updateModel(panelModel, keyPress("c"))
+			openConnectForTest(t, panelModel)
 			if panelModel.modal.kind != modalKindConnectConfirmation {
 				t.Fatal("connection confirmation operation did not open confirmation")
 			}

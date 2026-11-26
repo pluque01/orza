@@ -59,7 +59,7 @@ func newSCCatalogFixture(t testing.TB) scCatalogFixture {
 		t.Fatal("SC catalog fixture was rejected")
 	}
 
-	model := New(Config{Width: 160, Height: 24, NoColor: true})
+	model := New(Config{Connections: ConnectionFuncs{GetFunc: testConnectionLookup(directConn, deepConn)}, Width: 160, Height: 24, NoColor: true})
 	model.browser.setSnapshot(snapshot, "")
 	for _, folder := range []app.Folder{direct, nested, child} {
 		model.browser.expanded[folder.ID] = struct{}{}
@@ -224,6 +224,10 @@ func TestSC002DisplayedActionTerminalOutcomesAndAliasesTwentyRuns(t *testing.T) 
 						}
 						sc009Update(t, model, keyPress(cancelKey))
 					case "connect_enter", "connect_escape":
+						sc009RunCommand(t, model, command)
+						if model.modal.kind != modalKindConnectConfirmation {
+							t.Fatalf("run %d: connect did not reach confirmation", run)
+						}
 						cancelKey := "enter"
 						if action.end == "connect_escape" {
 							cancelKey = "esc"
@@ -447,6 +451,11 @@ func TestSC002DisplayedAndAbsentActionDispatchTwentyRuns(t *testing.T) {
 			}
 		}
 	}
+	connectOpened := func(t *testing.T, model *Model, command tea.Cmd) {
+		t.Helper()
+		command = sc009RunCommand(t, model, command)
+		modalOpened(modalKindConnectConfirmation)(t, model, command)
+	}
 
 	contexts := []struct {
 		name      string
@@ -475,7 +484,7 @@ func TestSC002DisplayedAndAbsentActionDispatchTwentyRuns(t *testing.T) {
 		{
 			name: "connection", selection: func(f scCatalogFixture) app.NodeID { return f.directConn.ID },
 			shown: []dispatchCase{
-				{actionConnect, "c", modalOpened(modalKindConnectConfirmation)}, {actionNewConnection, "n", formOpened},
+				{actionConnect, "c", connectOpened}, {actionNewConnection, "n", formOpened},
 				{actionNewFolder, "f", modalOpened(modalKindFolderCreate)}, {actionEdit, "e", formOpened},
 				{actionMove, "m", modalOpened(modalKindMovePicker)}, {actionDelete, "d", commandStarted},
 				{actionReload, "r", commandStarted}, {actionHelp, "?", modalOpened(modalKindHelp)}, {actionQuit, "q", quitStarted},
@@ -886,7 +895,7 @@ func TestSC006NoColorPrincipalBrowserAndConnectionFormFlowsTwentyRuns(t *testing
 			selectSCNode(model, id)
 			view := model.View().Content
 			assertSCNoANSI(t, view)
-			for _, cue := range []string{"[*] Tree", "[ ] Details", "> "} {
+			for _, cue := range []string{"[*] [Tree]", "[ ] Details", "> "} {
 				if !strings.Contains(view, cue) {
 					t.Fatalf("run %d node %q omitted no-color cue %q", run, id, cue)
 				}
@@ -900,15 +909,16 @@ func TestSC006NoColorPrincipalBrowserAndConnectionFormFlowsTwentyRuns(t *testing
 		updateModel(model, keyPress("tab"))
 		view := model.View().Content
 		assertSCNoANSI(t, view)
-		if !strings.Contains(view, "[*] Details") || !strings.Contains(view, "[ ] Tree") {
+		if !strings.Contains(view, "[*] Details") || !strings.Contains(view, "[ ] [Tree]") {
 			t.Fatalf("run %d: Details focus lacked textual ownership", run)
 		}
 		updateModel(model, keyPress("shift+tab"))
 
 		updateModel(model, keyPress("n"))
-		view = model.View().Content
+		createForm := model.View()
+		view = createForm.Content
 		assertSCNoANSI(t, view)
-		if !strings.Contains(view, "[*] Details") || !scContainsStructuredField(view, "Name", "▏") || !strings.Contains(view, "  * [ Save connection ]") {
+		if !strings.Contains(view, "[*] Details") || !scContainsStructuredField(view, "Name", "") || !strings.Contains(view, "  * [ Save connection ]") || createForm.Cursor == nil {
 			t.Fatalf("run %d: create form omitted focus/primary cues:\n%s", run, view)
 		}
 		updateModel(model, keyPress("ctrl+s"))
@@ -1112,6 +1122,7 @@ func scFixtureFolders(fixture scCatalogFixture, counters *scActionCounters) Fold
 func scFixtureConnections(fixture scCatalogFixture, counters *scActionCounters) ConnectionFuncs {
 	byID := map[app.NodeID]app.Connection{fixture.directConn.ID: fixture.directConn, fixture.deepConn.ID: fixture.deepConn}
 	return ConnectionFuncs{
+		GetFunc: testConnectionLookup(fixture.directConn, fixture.deepConn),
 		CreateFunc: func(context.Context, app.CreateConnectionRequest) (app.ConnectionResult, error) {
 			counters.create++
 			return app.ConnectionResult{}, app.ErrInvalidRequest

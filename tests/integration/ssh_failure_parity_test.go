@@ -273,6 +273,12 @@ func (parityConnectionRepository) MoveConnection(context.Context, app.MoveConnec
 func (parityConnectionRepository) DeleteConnection(context.Context, app.DeleteConnectionRequest) (app.DeleteConnectionResult, error) {
 	return app.DeleteConnectionResult{}, app.ErrInvalidRequest
 }
+func (parityConnectionRepository) ToggleConnectionFavourite(context.Context, app.NodeID) (bool, error) {
+	return false, app.ErrInvalidRequest
+}
+func (parityConnectionRepository) RecordConnectionOpened(context.Context, app.NodeID, time.Time) error {
+	return app.ErrInvalidRequest
+}
 
 type parityCredentialLifecycle struct{}
 

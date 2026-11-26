@@ -42,6 +42,8 @@ const (
 	operationMove
 	operationForgetHostKeyScope
 	operationForgetHostKey
+	operationToggleFavourite
+	operationPrepareConnect
 )
 
 type operationResultMsg struct {
@@ -56,6 +58,7 @@ type operationResultMsg struct {
 	folderScope    app.FolderDeleteScope
 	trustScope     app.ForgetHostKeyScope
 	trustResult    app.ForgetHostKeyResult
+	favourite      bool
 	snapshot       *catalogSnapshot
 	err            error
 }
@@ -132,6 +135,7 @@ type Model struct {
 	height               int
 	screen               screen
 	browser              browserModel
+	catalogViewRefresh   uint64
 	focusOwner           focusOwner
 	detailState          detailState
 	ownedSelectionID     app.NodeID
@@ -240,6 +244,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleCredentialSecretFinished(msg)
 	case operationResultMsg:
 		return m, m.handleOperation(msg)
+	case catalogViewRefreshedMsg:
+		m.handleCatalogViewRefresh(msg)
+		return m, nil
 	case sessionFinishedMsg:
 		return m, m.handleSession(msg)
 	case recoveryResolvedMsg:
@@ -449,7 +456,7 @@ func (m *Model) handleBrowserKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
-	if m.focusOwner == focusOwnerTree && key.Matches(msg, m.keys.Search) {
+	if m.focusOwner == focusOwnerTree && m.browser.view == catalogTree && key.Matches(msg, m.keys.Search) {
 		return m, m.openTreeSearch()
 	}
 	m.navigationNotice = navigationNoticeNone
@@ -464,6 +471,14 @@ func (m *Model) handleBrowserKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	switch descriptor.id {
+	case actionPreviousView, actionNextView:
+		delta := catalogView(1)
+		if descriptor.id == actionPreviousView {
+			delta = -1
+		}
+		m.browser.switchView(delta)
+		m.ownedSelectionID = m.browser.selectedID
+		return m, m.refreshCatalogView()
 	case actionShowDetails, actionShowTree:
 		if m.focusOwner == focusOwnerDetail {
 			m.focusOwner = focusOwnerTree
@@ -549,9 +564,11 @@ func (m *Model) handleBrowserKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	case actionConnect:
 		if selected := m.browser.selection(); selected != nil {
-			confirmation := newConnectConfirmation(*selected)
-			target := m.captureConnectionTarget(*selected)
-			m.openGenericModal(modalKindConnectConfirmation, &target, connectConfirmationPayload{confirmation: confirmation})
+			return m, m.prepareConnectCommand(*selected)
+		}
+	case actionFavourite:
+		if selected := m.browser.selection(); selected != nil {
+			return m, m.toggleFavouriteCommand(*selected)
 		}
 	case actionForgetHostKey:
 		if selected := m.browser.selection(); selected != nil {
@@ -1271,15 +1288,20 @@ func (m *Model) resolveRecoveryCommand(action recoveryAction) tea.Cmd {
 	modal.recovery = recoveryResolving
 	capturedID := modal.attempt.ID
 	return func() tea.Msg {
-		if m.connections == nil {
-			return recoveryResolvedMsg{id: id, action: action, err: errUnavailable}
-		}
-		result, err := m.connections.Get(operationCtx, app.ItemSelector{ID: capturedID})
-		if err == nil && result.Connection.ID != capturedID {
-			err = app.ErrConflict
-		}
+		result, err := m.resolveConnectionByID(operationCtx, capturedID)
 		return recoveryResolvedMsg{id: id, action: action, connection: result.Connection, err: err}
 	}
+}
+
+func (m *Model) resolveConnectionByID(ctx context.Context, id app.NodeID) (app.ConnectionResult, error) {
+	if m.connections == nil {
+		return app.ConnectionResult{}, errUnavailable
+	}
+	result, err := m.connections.Get(ctx, app.ItemSelector{ID: id})
+	if err == nil && result.Connection.ID != id {
+		err = app.ErrConflict
+	}
+	return result, err
 }
 
 func (m *Model) handleRecoveryResolved(msg recoveryResolvedMsg) tea.Cmd {
@@ -1509,16 +1531,21 @@ func (m *Model) catalogReloadCommandWithRetry(kind asyncOperationKind, target *c
 		return nil
 	}
 	return func() tea.Msg {
-		if m.folders != nil {
-			snapshot, err := loadCatalogSnapshot(operationCtx, m.folders)
-			return operationResultMsg{id: id, kind: operationReload, snapshot: snapshot, err: err}
-		}
-		if m.connections == nil {
-			return operationResultMsg{id: id, kind: operationReload, err: errUnavailable}
-		}
-		result, err := m.connections.List(operationCtx, app.ListConnectionsRequest{Folder: app.ItemSelector{Path: "/"}})
-		return operationResultMsg{id: id, kind: operationReload, list: result, err: err}
+		snapshot, list, err := m.readCatalog(operationCtx)
+		return operationResultMsg{id: id, kind: operationReload, snapshot: snapshot, list: list, err: err}
 	}
+}
+
+func (m *Model) readCatalog(ctx context.Context) (*catalogSnapshot, app.ListConnectionsResult, error) {
+	if m.folders != nil {
+		snapshot, err := loadCatalogSnapshot(ctx, m.folders)
+		return snapshot, app.ListConnectionsResult{}, err
+	}
+	if m.connections == nil {
+		return nil, app.ListConnectionsResult{}, errUnavailable
+	}
+	list, err := m.connections.List(ctx, app.ListConnectionsRequest{Folder: app.ItemSelector{Path: "/"}})
+	return nil, list, err
 }
 
 func loadCatalogSnapshot(ctx context.Context, folders FolderService) (*catalogSnapshot, error) {
@@ -1822,6 +1849,33 @@ func (m *Model) moveCommand(source app.Node, destination app.Folder) tea.Cmd {
 	}
 }
 
+func (m *Model) toggleFavouriteCommand(connection app.Connection) tea.Cmd {
+	target := m.captureConnectionTarget(connection)
+	id, ctx, ok := m.beginOperationWith(asyncOperationSave, &target, operationOwnerRoot)
+	if !ok {
+		return nil
+	}
+	return func() tea.Msg {
+		if m.connections == nil {
+			return operationResultMsg{id: id, kind: operationToggleFavourite, err: errUnavailable}
+		}
+		favourite, err := m.connections.ToggleFavourite(ctx, connection.ID)
+		return operationResultMsg{id: id, kind: operationToggleFavourite, favourite: favourite, err: err}
+	}
+}
+
+func (m *Model) prepareConnectCommand(connection app.Connection) tea.Cmd {
+	target := m.captureConnectionTarget(connection)
+	id, ctx, ok := m.beginOperationWith(asyncOperationReload, &target, operationOwnerRoot)
+	if !ok {
+		return nil
+	}
+	return func() tea.Msg {
+		result, err := m.resolveConnectionByID(ctx, connection.ID)
+		return operationResultMsg{id: id, kind: operationPrepareConnect, connection: result, err: err}
+	}
+}
+
 func (m *Model) handleOperation(msg operationResultMsg) tea.Cmd {
 	kind := asyncOperationSave
 	if msg.kind == operationReload {
@@ -1829,6 +1883,8 @@ func (m *Model) handleOperation(msg operationResultMsg) tea.Cmd {
 		if m.operation != nil && m.operation.kind == asyncOperationInitialLoad {
 			kind = asyncOperationInitialLoad
 		}
+	} else if msg.kind == operationPrepareConnect {
+		kind = asyncOperationReload
 	}
 	if !m.acceptsOperationResult(msg.id, kind) {
 		return nil
@@ -1845,12 +1901,19 @@ func (m *Model) handleOperation(msg operationResultMsg) tea.Cmd {
 		copy := m.operation.retry.clone()
 		retry = &copy
 	}
+	canceledPrepare := msg.kind == operationPrepareConnect && m.operation.stopReason == operationStopCanceled
 	commit := any(nil)
 	if msg.err == nil {
 		commit = msg
 	}
 	quit := m.completeOperation(msg.id, commit)
 	m.status = "READY"
+	if canceledPrepare {
+		if quit {
+			return m.requestTunnelQuit()
+		}
+		return nil
+	}
 	if failure := m.activeSSHFailure(); msg.kind == operationReload && failure != nil {
 		if msg.err != nil {
 			if app.ErrorKindOf(msg.err) == app.ErrorKindNotFound {
@@ -2035,6 +2098,19 @@ func (m *Model) handleOperation(msg operationResultMsg) tea.Cmd {
 		forgotten := msg.trustResult.Forgotten
 		payload.confirmation.completed = &forgotten
 		m.modal.payload = payload
+	case operationToggleFavourite:
+		if operationTarget != nil {
+			if node := m.browser.snapshot.nodes[operationTarget.id]; node.connection != nil {
+				node.connection.Favourite = msg.favourite
+				m.browser.rebuildRows()
+				m.ownedSelectionID = m.browser.selectedID
+				m.syncDetail()
+			}
+		}
+	case operationPrepareConnect:
+		connection := msg.connection.Connection
+		target := m.captureConnectionTarget(connection)
+		m.openGenericModal(modalKindConnectConfirmation, &target, connectConfirmationPayload{confirmation: newConnectConfirmation(connection)})
 	}
 	if quit {
 		return m.requestTunnelQuit()
@@ -2127,6 +2203,10 @@ func operationName(kind operationKind) string {
 		return "move catalog item"
 	case operationForgetHostKeyScope, operationForgetHostKey:
 		return "forget host key"
+	case operationToggleFavourite:
+		return "toggle favourite"
+	case operationPrepareConnect:
+		return "prepare connection"
 	default:
 		return "catalog operation"
 	}
@@ -2142,9 +2222,8 @@ func (m *Model) View() tea.View {
 		return view
 	}
 
-	content := m.browserShell(layout)
+	content, cursor := m.browserShell(layout)
 	if m.modal.isOpen() {
-		background := m.browserShell(layout)
 		modal := m.modal
 		tunnelPayload, isTunnel := modal.payload.(tunnelModalPayload)
 		if m.securityInput != nil && m.securityInput.trust != nil && (modal.kind == modalKindConnectConfirmation || isTunnel && tunnelPayload.action == "start") {
@@ -2156,20 +2235,27 @@ func (m *Model) View() tea.View {
 		if modal.helpVisible {
 			modal.helpDescriptors = &modalHelpDescriptors{values: m.currentHelpDescriptors()}
 		}
-		content = renderModalOverlay(background, modal, layout, m.styles, m.currentHelpLines())
+		content, cursor = projectModalOverlay(content, modal, layout, m.styles, m.currentHelpLines())
 	}
 	view := tea.NewView(fitContent(content, m.width, m.height))
+	view.Cursor = cursor
 	view.AltScreen = true
 	view.WindowTitle = "Orza"
 	return view
 }
 
-func (m *Model) browserShell(layout layoutState) string {
+func (m *Model) browserShell(layout layoutState) (string, *tea.Cursor) {
 	treeRows := layout.tree.contentHeight()
 	var searchLines []string
+	var cursor *tea.Cursor
 	if m.search != nil {
+		const label = "Filter: "
 		m.searchInputWidth(layout.tree.contentWidth())
-		searchLines = append(searchLines, "Filter: "+m.search.input.View())
+		input := m.search.input.View()
+		searchLines = append(searchLines, label+input.text)
+		if input.cursor != noTextCursor {
+			cursor = panelTextCursor(layout.tree, len(label)+input.cursor, 0)
+		}
 		treeRows = max(0, treeRows-len(searchLines))
 	}
 	treeProjection := m.browser.projectTree(m.styles, layout.tree.contentWidth(), treeRows)
@@ -2207,6 +2293,9 @@ func (m *Model) browserShell(layout layoutState) string {
 	} else if m.tunnelForm != nil {
 		projection := m.tunnelForm.project(m.styles, layout.details.contentWidth(), layout.details.contentHeight())
 		details, detailScrollbar = projection.lines, projection.scrollbar
+		if projection.cursor != nil {
+			cursor = panelTextCursor(layout.details, projection.cursor.X, projection.cursor.Y)
+		}
 	} else if m.screen == screenConnectionForm && m.form != nil {
 		conflict := m.formConflictLines(layout.details.contentWidth())
 		formHeight := max(1, layout.details.contentHeight()-len(conflict))
@@ -2218,6 +2307,9 @@ func (m *Model) browserShell(layout layoutState) string {
 		detailTrackStart = len(details)
 		details = append(details, projection.lines...)
 		detailScrollbar = projection.scrollbar
+		if projection.cursor != nil && len(conflict) == 0 {
+			cursor = panelTextCursor(layout.details, projection.cursor.X, projection.cursor.Y)
+		}
 	} else {
 		detailRows := layout.details.contentHeight()
 		if notice := m.navigationNotice.text(); notice != "" {
@@ -2232,6 +2324,9 @@ func (m *Model) browserShell(layout layoutState) string {
 
 	context := m.actionContext()
 	status := ""
+	if m.operation != nil || m.securityInput != nil && m.securityInput.preemptsApplicationInput() {
+		cursor = nil
+	}
 	if m.operation != nil {
 		context.state = actionStateOperation
 		status = m.operation.loadingStatus()
@@ -2252,7 +2347,8 @@ func (m *Model) browserShell(layout layoutState) string {
 		actions = packActions(status, m.visibleActionDescriptors(actionsFor(context)), layout.actions.width, layout.actions.height)
 	}
 	treeActive := m.focusOwner == focusOwnerTree
-	treePanel := renderFocusedRegionPanelWithScrollbar(m.styles.regionTitle("Tree", treeActive), tree, layout.tree, m.styles, treeProjection.scrollbar, 0, treeActive)
+	treeTitle := m.styles.catalogTitle(m.browser.view, treeActive, layout.tree.width-2)
+	treePanel := renderFocusedRegionPanelWithScrollbar(treeTitle, tree, layout.tree, m.styles, treeProjection.scrollbar, 0, treeActive)
 	detailActive := m.focusOwner == focusOwnerDetail || m.focusOwner == focusOwnerConnectionForm
 	detailTitle := m.styles.regionTitle("Details", detailActive)
 	formBadge := ""
@@ -2297,9 +2393,9 @@ func (m *Model) browserShell(layout layoutState) string {
 			for i := range base {
 				base[i] = left[i] + strings.Repeat(" ", wideGutterWidth) + right[i]
 			}
-			return strings.Join(append(base, actions...), "\n")
+			return strings.Join(append(base, actions...), "\n"), cursor
 		}
-		return treePanel + "\n" + detailPanel + "\n" + tunnelPanel + "\n" + strings.Join(actions, "\n")
+		return treePanel + "\n" + detailPanel + "\n" + tunnelPanel + "\n" + strings.Join(actions, "\n"), cursor
 	}
 	if m.modal.isOpen() {
 		actions = nil
@@ -2311,9 +2407,19 @@ func (m *Model) browserShell(layout layoutState) string {
 		for index := range base {
 			base[index] = left[index] + strings.Repeat(" ", wideGutterWidth) + right[index]
 		}
-		return strings.Join(append(base, actions...), "\n")
+		return strings.Join(append(base, actions...), "\n"), cursor
 	}
-	return treePanel + "\n" + detailPanel + "\n" + strings.Join(actions, "\n")
+	return treePanel + "\n" + detailPanel + "\n" + strings.Join(actions, "\n"), cursor
+}
+
+// panelTextCursor translates a content cell past the panel border and padding.
+func panelTextCursor(rect layoutRect, column, row int) *tea.Cursor {
+	if column < 0 || column >= rect.contentWidth() || row < 0 || row >= rect.contentHeight() {
+		return nil
+	}
+	cursor := tea.NewCursor(rect.x+2+column, rect.y+1+row)
+	cursor.Blink = false
+	return cursor
 }
 
 func (m *Model) searchInputWidth(width int) {
@@ -2355,7 +2461,7 @@ func bottomAlignActions(actions []string, height int) []string {
 }
 
 func (m *Model) actionContext() actionContext {
-	context := actionContext{state: actionStateNormal}
+	context := actionContext{state: actionStateNormal, view: m.browser.view}
 	if m.focusOwner == focusOwnerTunnels {
 		context.focus = actionFocusTunnels
 		if s, ok := m.selectedTunnelSnapshot(); ok {
@@ -2380,6 +2486,7 @@ func (m *Model) actionContext() actionContext {
 		context.canToggle = len(m.browser.snapshot.children[selected.node.ID]) != 0
 	case selected.connection != nil:
 		context.selection = actionSelectionConnection
+		context.favourite = selected.connection.Favourite
 	}
 	return context
 }
